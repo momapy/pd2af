@@ -19,6 +19,19 @@ wheels = [
 ]
 
 [[package]]
+name = "casq"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "loguru" },
+    { name = "networkx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e2/36/277af5669a1da625a56eb7c16af29bdad2c1cd606f7789fa403b27f722ec/casq-1.4.3.tar.gz", hash = "sha256:6736d348244826d1f625b539f74e5337a005c41bb3afdddf00244e0afd52253d", size = 619447, upload-time = "2026-01-16T17:56:36.526Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/c6/874ea348f326166c50f7e47afc2b76691ff8141a49feb80523db7a98df1d/casq-1.4.3-py3-none-any.whl", hash = "sha256:6b2e157c4e3bd7fb5c30105ada061520d9dca91d5e1233750a7e5634ea98b49d", size = 40110, upload-time = "2026-01-16T17:56:38.176Z" },
+]
+
+[[package]]
 name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -325,6 +338,19 @@ wheels = [
 ]
 
 [[package]]
+name = "loguru"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "win32-setctime", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559, upload-time = "2024-12-06T11:20:56.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c", size = 61595, upload-time = "2024-12-06T11:20:54.538Z" },
+]
+
+[[package]]
 name = "lxml"
 version = "6.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -485,6 +511,15 @@ skia = [
 ]
 
 [[package]]
+name = "networkx"
+version = "3.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
+]
+
+[[package]]
 name = "numpy"
 version = "2.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -559,6 +594,7 @@ name = "pd2af"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "casq" },
     { name = "clorm" },
     { name = "momapy", extra = ["skia"] },
     { name = "pydot" },
@@ -566,6 +602,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "casq", specifier = ">=1.4.3" },
     { name = "clorm", specifier = ">=1.6.1" },
     { name = "momapy", extras = ["skia"], specifier = ">=0.2.6" },
     { name = "pydot", specifier = ">=4.0.1" },
@@ -796,4 +833,13 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/3d/104d1ba2c0e535a0d9744e0a68f711d022c46ec7c7000f35eefd574ba197/uharfbuzz-0.53.2-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:b1b0dee5060df82e2c09130bbef1e80979ce6b26dcfe6f5d9b9a77bc0ed4d8da", size = 2755854, upload-time = "2025-12-28T01:03:11.424Z" },
     { url = "https://files.pythonhosted.org/packages/37/0b/903fc46bd2407baf1cf4c922450f843c293c7b0dab90e7e190be502837e2/uharfbuzz-0.53.2-cp310-abi3-win32.whl", hash = "sha256:8b6a12c50bd94e1a2e9bbf04a737299a76b5ebedcba4c2bf4494233d5b298748", size = 996506, upload-time = "2025-12-28T01:03:13.433Z" },
     { url = "https://files.pythonhosted.org/packages/a7/a4/eb61d2007531634589cce9ee9928c6b6514b8aba01c79cd9b9cbbeff42a7/uharfbuzz-0.53.2-cp310-abi3-win_amd64.whl", hash = "sha256:741134803e14cbece5fde6189fcd4d97ba817fd572b604a3b7f29eb2343e3d11", size = 1244515, upload-time = "2025-12-28T01:03:15.143Z" },
+]
+
+[[package]]
+name = "win32-setctime"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/8f/705086c9d734d3b663af0e9bb3d4de6578d08f46b1b101c2442fd9aecaa2/win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0", size = 4867, upload-time = "2024-12-07T15:28:28.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390", size = 4083, upload-time = "2024-12-07T15:28:26.465Z" },
 ]

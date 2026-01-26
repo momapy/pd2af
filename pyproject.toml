@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "casq>=1.4.3",
     "clorm>=1.6.1",
     "momapy[skia]>=0.2.6",
     "pydot>=4.0.1",

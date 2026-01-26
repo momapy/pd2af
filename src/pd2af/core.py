@@ -1,7 +1,6 @@
 import typing
 import importlib.resources
 import collections
-import dataclasses
 
 import clorm
 import clorm.clingo
@@ -10,9 +9,7 @@ import clingo.ast
 import momapy.core
 import momapy.geometry
 import momapy.builder
-import momapy.positioning
 import momapy.celldesigner.core
-from numpy import negative
 
 import pd2af.cd2asp
 import pd2af.utils
@@ -459,3 +456,58 @@ def transform_map(
         new_auto_cd_map = _make_new_auto_cd_map(cd_map, new_cd_model)
         new_maps.append(new_auto_cd_map)
     return new_maps
+
+
+def _make_new_casq_cd_map(cd_map, new_cd_model):
+    new_layout = cd_map.layout
+    new_layout_model_mapping_builder = momapy.core.LayoutModelMappingBuilder()
+    new_layout_elements = []
+    layout_elements_to_ignore = set()
+    for compartment in new_cd_model.compartments:
+        compartment_layouts = cd_map.layout_model_mapping.get_mapping(compartment)
+        if compartment_layouts is not None:
+            for compartment_layout in compartment_layouts:
+                new_layout_model_mapping_builder.add_mapping(
+                    compartment_layout, compartment
+                )
+                layout_elements_to_ignore.add(compartment_layout)
+    for species in new_cd_model.species:
+        species_layouts = cd_map.layout_model_mapping.get_mapping(species)
+        for species_layout in species_layouts:
+            new_layout_model_mapping_builder.add_mapping(species_layout, species)
+            layout_elements_to_ignore.add(species_layout)
+    for modulation in new_cd_model.modulations:
+        modulation_layout_sets = cd_map.layout_model_mapping.get_mapping(modulation)
+        if modulation_layout_sets is None:
+            modulation_layout_tuples = _make_modulation_layout_element_tuples(
+                cd_map, modulation
+            )
+            for modulation_layout_tuple in modulation_layout_tuples:
+                new_layout_elements.append(modulation_layout_tuple[0])
+            modulation_layout_sets = [
+                frozenset(modulation_layout_tuple)
+                for modulation_layout_tuple in modulation_layout_tuples
+            ]
+        for modulation_layout_set in modulation_layout_sets:
+            new_layout_model_mapping_builder.add_mapping(
+                modulation_layout_set, modulation
+            )
+            layout_elements_to_ignore.update(modulation_layout_set)
+    new_layout_builder = momapy.builder.builder_from_object(new_layout)
+    new_layout_builder.layout_elements += new_layout_elements
+    builder_to_object = {}
+    new_layout = momapy.builder.object_from_builder(
+        new_layout_builder, builder_to_object=builder_to_object
+    )
+    new_layout = pd2af.utils.highlight_layout_elements(
+        layout_elements_to_ignore, new_layout
+    )
+    new_layout_model_mapping = momapy.builder.object_from_builder(
+        new_layout_model_mapping_builder, builder_to_object=builder_to_object
+    )
+    new_map = momapy.celldesigner.core.CellDesignerMap(
+        model=new_cd_model,
+        layout=new_layout,
+        layout_model_mapping=new_layout_model_mapping,
+    )
+    return new_map
