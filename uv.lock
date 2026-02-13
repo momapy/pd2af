@@ -604,7 +604,7 @@ dependencies = [
 requires-dist = [
     { name = "casq", specifier = ">=1.4.3" },
     { name = "clorm", specifier = ">=1.6.1" },
-    { name = "momapy", extras = ["skia"], specifier = ">=0.2.6" },
+    { name = "momapy", extras = ["skia"], specifier = ">=0.2.7" },
     { name = "pydot", specifier = ">=4.0.1" },
 ]
 
