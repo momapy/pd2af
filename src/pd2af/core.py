@@ -11,73 +11,40 @@ import momapy.geometry
 import momapy.builder
 import momapy.celldesigner.core
 
+import momapy_kb.clingo.core
+import momapy_kb.clingo.celldesigner
+
 import pd2af.cd2asp
 import pd2af.utils
 
 
-class hasActivity(clorm.Predicate):
-    species: str
-    type_: clorm.Raw
-
-
-class reactionPath(clorm.Predicate):
-    start: str
-    end: str
-
-
-class posPath(clorm.Predicate):
-    start: str
-    end: str
-
-
-class from_(clorm.Predicate):
-    species: str
-    type_: clorm.Raw
-
-
 class activity(clorm.Predicate):
-    name: str
+    name: clorm.ConstantStr
 
 
-class _activity(clorm.Predicate):
-    name: str
-    from_: from_
+class positivelyInfluences(clorm.Predicate):
+    source: clorm.ConstantStr
+    target: clorm.ConstantStr
+
+
+class negativelyInfluences(clorm.Predicate):
+    source: clorm.ConstantStr
+    target: clorm.ConstantStr
+
+
+class triggers(clorm.Predicate):
+    source: clorm.ConstantStr
+    target: clorm.ConstantStr
 
 
 class new(clorm.Predicate):
-    object_: (
-        activity
-        | pd2af.cd2asp.positivelyInfluences
-        | pd2af.cd2asp.negativelyInfluences
-        | pd2af.cd2asp.triggers
-    )
-
-
-class delete(clorm.Predicate):
-    species: str
-    type: clorm.Raw
-
-
-class keep(clorm.Predicate):
-    object_: (
-        activity | pd2af.cd2asp.positivelyInfluences | pd2af.cd2asp.negativelyInfluences
-    )
-
-
-class nReactants(clorm.Predicate):
-    reaction: str
-    n: int
-
-
-class nParticipations(clorm.Predicate):
-    species: str
-    n: int
+    object_: activity | positivelyInfluences | negativelyInfluences | triggers
 
 
 predicate_to_model_element_class = {
-    pd2af.cd2asp.positivelyInfluences: momapy.celldesigner.core.PositiveInfluence,
-    pd2af.cd2asp.negativelyInfluences: momapy.celldesigner.core.Inhibition,
-    pd2af.cd2asp.triggers: momapy.celldesigner.core.Triggering,
+    positivelyInfluences: momapy.celldesigner.core.PositiveInfluence,
+    negativelyInfluences: momapy.celldesigner.core.Inhibition,
+    triggers: momapy.celldesigner.core.Triggering,
 }
 
 model_element_class_to_layout_element_class = {
@@ -88,8 +55,12 @@ model_element_class_to_layout_element_class = {
 }
 
 
+def cd_model_to_facts(cd_model):
+    return momapy_kb.clingo.core.make_facts_from_object(cd_model)
+
+
 def _make_fact_base_from_cd_model(cd_model):
-    facts = pd2af.cd2asp.cd_model_to_facts(cd_model)
+    facts = cd_model_to_facts(cd_model)
     return clorm.FactBase(facts)
 
 
@@ -100,14 +71,11 @@ def _make_control_from_cd_model(
         ["--warn=no-atom-undefined"],
         unifier=[
             new,
-            delete,
-            nReactants,
-            nParticipations,
         ],
     )
     fact_base = _make_fact_base_from_cd_model(cd_model)
     with clingo.ast.ProgramBuilder(control) as control_builder:
-        for ontology_rule in pd2af.cd2asp.ontology_rules:
+        for ontology_rule in momapy_kb.clingo.celldesigner.ontology_rules:
             clingo.ast.parse_string(ontology_rule, control_builder.add)
     if mode == "pd2af":
         program_path = importlib.resources.files("pd2af.data") / "pd2af.lp"
@@ -142,43 +110,16 @@ def _get_activity_atoms(model):
     return activity_atoms
 
 
-def _get_new_produces_atoms(model):
-    new_produces_atoms = [
-        atom.object_
-        for atom in model.query(new).all()
-        if isinstance(
-            atom.object_,
-            (pd2af.cd2asp.produces,),
-        )
-    ]
-    return new_produces_atoms
-
-
 def _get_influence_atoms(model):
     influence_atoms = [
         atom.object_
         for atom in model.query(new).all()
         if isinstance(
             atom.object_,
-            (pd2af.cd2asp.positivelyInfluences, pd2af.cd2asp.negativelyInfluences),
+            (positivelyInfluences, negativelyInfluences),
         )
     ]
     return influence_atoms
-
-
-def _get_delete_atoms(model):
-    delete_atoms = list(model.query(delete).all())
-    return delete_atoms
-
-
-def _get_n_reactants_atoms(model):
-    delete_atoms = list(model.query(nReactants).all())
-    return delete_atoms
-
-
-def _get_n_participations_atoms(model):
-    n_participations_atoms = list(model.query(nParticipations).all())
-    return n_participations_atoms
 
 
 def _get_model_element_ids_to_layout_elements_from_model_element_ids(ids, map_):
@@ -206,12 +147,17 @@ def _make_layout_elements_from_influence_atoms(
             for target_layout_element in active_species_ids_to_layout_elements[
                 target_species_id
             ]:
-                arc_class = predicate_to_arc_class[type(influence_atom)]
+                model_element_class = predicate_to_model_element_class[
+                    type(influence_atom)
+                ]
+                layout_element_class = model_element_class_to_layout_element_class[
+                    model_element_class
+                ]
                 segment = momapy.geometry.Segment(
                     source_layout_element.border(target_layout_element.center()),
                     target_layout_element.border(source_layout_element.center()),
                 )
-                arc = arc_class(
+                arc = layout_element_class(
                     source=source_layout_element,
                     target=target_layout_element,
                     segments=[segment],
@@ -227,9 +173,6 @@ def _get_id_to_model_element_from_ids(map_, ids):
             model_element = model_element[0]
         if model_element.id_ in ids:
             id_to_model_element[model_element.id_] = model_element
-    # for id_ in ids:
-    #     if id_ not in id_to_model_element:
-    #         id_to_model_element[id_] = None
     return id_to_model_element
 
 

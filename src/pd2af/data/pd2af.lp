@@ -1,15 +1,15 @@
 % active state (dashed)
-hasActivity(SPECIES, active):-species(SPECIES, _, "true").
+hasActivity(SPECIES, active):-species(SPECIES), hasActive(SPECIES, 1).
 % structural state with value "active"
-hasActivity(SPECIES, structural_state_active):-species(SPECIES, _, _), hasStructuralState(SPECIES, STRUCTURAL_STATE), structuralState(STRUCTURAL_STATE, "active").
+hasActivity(SPECIES, structural_state_active):-species(SPECIES), hasStructuralState(SPECIES, STRUCTURAL_STATE), hasValue(STRUCTURAL_STATE, "active").
 % phenotype
-hasActivity(PHENOTYPE, phenotype):-phenotype(PHENOTYPE, _, _).
+hasActivity(PHENOTYPE, phenotype):-phenotype(PHENOTYPE).
 % source of a modulation
-hasActivity(SOURCE, modulates(SOURCE, TARGET)):-modulates(SOURCE, TARGET), species(SOURCE, _, _).
+hasActivity(SOURCE, modulates(SOURCE, TARGET)):-species(SOURCE), modulation(MODULATION), hasSource(MODULATION, SOURCE).
 % inhibition by complexation
 %hasActivity(Y, inhibits_by_binding(X)):-species(X, _, _), heterodimerAssociation(Z), consumes(Z, X, _), consumes(Z, Y, _), X!=Y, 1{ hasActivity(X, active); hasActivity(X, structural_state_active); hasActivity(X,  modulates(_)); hasActivity(X,  modulated_by(_)); hasActivity(X,  modulates_reaction(_)); hasActivity(X, phenotype)}, {not hasActivity(W, _):produces(Z, W, _)}.
 
-new(activity(ENTITY)):-hasActivity(ENTITY, _).
+new(activity(SPECIES)):-hasActivity(SPECIES, _).
 
 % modulator to product
 posPath(START_SPECIES, END_SPECIES):-reaction(REACTION), catalyzes(START_SPECIES, REACTION), produces(REACTION, END_SPECIES, _), species(START_SPECIES, _, _), species(END_SPECIES, _, _).
