@@ -7,7 +7,7 @@ import momapy.rendering.core
 import pd2af.casq
 
 if __name__ == "__main__":
-    INPUT_FILE_PATH = "/home/rougny/research/commute/commute_dm/build/data/covid_dm/celldesigner/JNK_pathway.xml"
+    INPUT_FILE_PATH = "phenotype.xml"
 
     input_file_name = INPUT_FILE_PATH.split("/")[-1]
     output_file_name = f"{input_file_name.split('.')[0]}.pdf"

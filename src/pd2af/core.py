@@ -64,16 +64,14 @@ def _make_fact_base_from_cd_model(cd_model):
     return clorm.FactBase(facts)
 
 
-def _make_control_from_cd_model(
-    cd_model, mode: typing.Literal["pd2af", "casq"] = "pd2af"
-):
+def _make_control_from_cd_model(cd_model, mode, active):
     control = clorm.clingo.Control(
         ["--warn=no-atom-undefined"],
         unifier=[
             new,
         ],
     )
-    fact_base = _make_fact_base_from_cd_model(cd_model)
+    fact_base = _make_fact_base_from_cd_model(cd_model, active)
     with clingo.ast.ProgramBuilder(control) as control_builder:
         for ontology_rule in momapy_kb.clingo.celldesigner.ontology_rules:
             clingo.ast.parse_string(ontology_rule, control_builder.add)
@@ -88,9 +86,9 @@ def _make_control_from_cd_model(
     return control
 
 
-def _solve_from_cd_map(cd_map, mode: typing.Literal["pd2af", "casq"] = "pd2af"):
+def _solve_from_cd_map(cd_map, mode, active):
     cd_model = cd_map.model
-    control = _make_control_from_cd_model(cd_model, mode=mode)
+    control = _make_control_from_cd_model(cd_model, mode=mode, active=active)
     control.ground([("base", [])])
     models = []
     control.solve(on_model=lambda model: models.append(model.facts(atoms=True)))
@@ -388,9 +386,12 @@ def transform_map(
     cd_map,
     mode: typing.Literal["pd2af", "casq"] = "pd2af",
     layout_mode: typing.Literal["overlay", "auto", "all"] = "overlay",
+    active: list[str] | None = None,
 ):
+    if active is None:
+        active = []
     new_maps = []
-    clingo_model = _solve_from_cd_map(cd_map, mode=mode)
+    clingo_model = _solve_from_cd_map(cd_map, mode=mode, active=active)
     new_cd_model = _make_new_cd_model_from_clingo_model(cd_map, clingo_model)
     if layout_mode == "overlay" or layout_mode == "all":
         new_overlay_cd_map = _make_new_overlay_cd_map(cd_map, new_cd_model)
