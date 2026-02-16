@@ -7,7 +7,7 @@ import momapy.rendering.core
 import pd2af.core
 
 if __name__ == "__main__":
-    INPUT_FILE_PATH = "bug_cd.xml"
+    INPUT_FILE_PATH = "example.xml"
     input_file_name = INPUT_FILE_PATH.split("/")[-1]
     output_file_name = f"{input_file_name.split('.')[0]}.pdf"
     print("--------------------------------------------------------------------")
