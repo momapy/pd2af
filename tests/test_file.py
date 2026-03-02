@@ -8,9 +8,11 @@ import pd2af.core
 
 if __name__ == "__main__":
     INPUT_FILE_PATH = "example.xml"
+    # INPUT_FILE_PATH = "./data/celldesigner_pickle/pd_dm/FOXO3_activity.pickle"
+    # MODE = "pd2af-no-complex"
     MODE = "pd2af"
     ACTIVE = []
-    LAYOUT_MODE = "auto"
+    LAYOUT_MODE = "overlay"
     input_file_name = INPUT_FILE_PATH.split("/")[-1]
     output_file_name = f"{input_file_name.split('.')[0]}_{MODE}_mode.pdf"
     print("--------------------------------------------------------------------")

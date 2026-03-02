@@ -17,9 +17,19 @@ import momapy_kb.clingo.celldesigner
 import pd2af.cd2asp
 import pd2af.utils
 
+_mode_to_file_name = {
+    "pd2af": "pd2af.lp",
+    "casq": "casq.lp",
+    "pd2af-no-complex": "pd2af_no_complex.lp",
+}
+
 
 class activity(clorm.Predicate):
     name: clorm.ConstantStr
+
+
+pos_path = clorm.simple_predicate("posPath", 2)
+neg_path = clorm.simple_predicate("negPath", 2)
 
 
 class positivelyInfluences(clorm.Predicate):
@@ -55,40 +65,50 @@ model_element_class_to_layout_element_class = {
 }
 
 
-def cd_model_to_facts(cd_model):
-    return momapy_kb.clingo.core.make_facts_from_object(cd_model)
+def _get_layout_elements_from_model_element(
+    map_, model_element
+):  # TODO: delete when issue is solved in momapy
+    layout_elements = map_.layout_model_mapping.get_mapping(model_element)
+    if layout_elements is None:
+        for key in map_.layout_model_mapping.inverse.keys():
+            if isinstance(key, tuple) and key[0] == model_element:
+                layout_elements = map_.layout_model_mapping.get_mapping(key)
+                break
+    return layout_elements
 
 
-def _make_fact_base_from_cd_model(cd_model):
-    facts = cd_model_to_facts(cd_model)
+def _cd_model_to_facts(cd_model, id_to_model_element):
+    return momapy_kb.clingo.core.make_facts_from_object(cd_model, id_to_model_element)
+
+
+def _make_fact_base_from_cd_model(cd_model, id_to_model_element):
+    facts = _cd_model_to_facts(cd_model, id_to_model_element)
     return clorm.FactBase(facts)
 
 
-def _make_control_from_cd_model(cd_model, mode, active):
+def _make_control_from_cd_model(cd_model, id_to_model_element, mode, active):
     control = clorm.clingo.Control(
         ["--warn=no-atom-undefined"],
-        unifier=[
-            new,
-        ],
+        unifier=[new, neg_path, pos_path],
     )
-    fact_base = _make_fact_base_from_cd_model(cd_model, active)
+    fact_base = _make_fact_base_from_cd_model(cd_model, id_to_model_element)
     with clingo.ast.ProgramBuilder(control) as control_builder:
         for ontology_rule in momapy_kb.clingo.celldesigner.ontology_rules:
             clingo.ast.parse_string(ontology_rule, control_builder.add)
-    if mode == "pd2af":
-        program_path = importlib.resources.files("pd2af.data") / "pd2af.lp"
-    elif mode == "casq":
-        program_path = importlib.resources.files("pd2af.data") / "casq.lp"
-    else:
+    file_name = _mode_to_file_name.get(mode)
+    if file_name is None:
         raise ValueError(f"mode {mode} is not supported")
+    program_path = importlib.resources.files("pd2af.data") / file_name
     control.load(str(program_path))
     control.add_facts(fact_base)
     return control
 
 
-def _solve_from_cd_map(cd_map, mode, active):
+def _solve_from_cd_map(cd_map, id_to_model_element, mode, active):
     cd_model = cd_map.model
-    control = _make_control_from_cd_model(cd_model, mode=mode, active=active)
+    control = _make_control_from_cd_model(
+        cd_model, id_to_model_element, mode=mode, active=active
+    )
     control.ground([("base", [])])
     models = []
     control.solve(on_model=lambda model: models.append(model.facts(atoms=True)))
@@ -175,15 +195,15 @@ def _get_id_to_model_element_from_ids(map_, ids):
 
 
 def _make_influence_id_to_model_element_from_atoms(
-    influence_atoms, species_id_to_model_element
+    influence_atoms, id_to_model_element
 ):
     influence_id_to_model_element = {}
     for influence_atom in influence_atoms:
         influence_model_element_class = predicate_to_model_element_class[
             type(influence_atom)
         ]
-        source_model_element = species_id_to_model_element[influence_atom.source]
-        target_model_element = species_id_to_model_element[influence_atom.target]
+        source_model_element = id_to_model_element[influence_atom.source]
+        target_model_element = id_to_model_element[influence_atom.target]
         influence_model_element = influence_model_element_class(
             source=source_model_element,
             target=target_model_element,
@@ -194,17 +214,17 @@ def _make_influence_id_to_model_element_from_atoms(
     return influence_id_to_model_element
 
 
-def _make_new_cd_model_from_clingo_model(cd_map, clingo_model):
+def _make_new_cd_model_from_clingo_model(cd_map, clingo_model, id_to_model_element):
+    # for _ in clingo_model:
+    #     print(_)
     cd_model_builder = momapy.celldesigner.core.CellDesignerModelBuilder()
     activity_atoms = _get_activity_atoms(clingo_model)
     active_species_ids = [activity_atom.name for activity_atom in activity_atoms]
-    species_id_to_model_element = _get_id_to_model_element_from_ids(
-        cd_map, active_species_ids
-    )
-    species = species_id_to_model_element.values()
-    cd_model_builder.species = type(cd_model_builder.species)(
-        species_id_to_model_element.values()
-    )
+    species = [
+        id_to_model_element[active_species_id]
+        for active_species_id in active_species_ids
+    ]
+    cd_model_builder.species = type(cd_model_builder.species)(species)
     compartments = set(
         [species.compartment for species in species if species.compartment is not None]
     )
@@ -233,7 +253,7 @@ def _make_new_cd_model_from_clingo_model(cd_map, clingo_model):
     )
     influence_atoms = _get_influence_atoms(clingo_model)
     influence_id_to_model_element = _make_influence_id_to_model_element_from_atoms(
-        influence_atoms, species_id_to_model_element
+        influence_atoms, id_to_model_element
     )
     cd_model_builder.modulations = type(cd_model_builder.modulations)(
         influence_id_to_model_element.values()
@@ -246,11 +266,11 @@ def _make_modulation_layout_element_tuples(cd_map, modulation):
     layout_element_tuples = []
     source_model_element = modulation.source
     target_model_element = modulation.target
-    source_layout_elements = cd_map.layout_model_mapping.get_mapping(
-        source_model_element
+    source_layout_elements = _get_layout_elements_from_model_element(
+        cd_map, source_model_element
     )
-    target_layout_elements = cd_map.layout_model_mapping.get_mapping(
-        target_model_element
+    target_layout_elements = _get_layout_elements_from_model_element(
+        cd_map, target_model_element
     )
     for source_layout_element in source_layout_elements:
         for target_layout_element in target_layout_elements:
@@ -296,7 +316,7 @@ def _make_new_overlay_cd_map(cd_map, new_cd_model):
                 )
                 layout_elements_to_ignore.add(compartment_layout)
     for species in new_cd_model.species:
-        species_layouts = cd_map.layout_model_mapping.get_mapping(species)
+        species_layouts = _get_layout_elements_from_model_element(cd_map, species)
         for species_layout in species_layouts:
             new_layout_model_mapping_builder.add_mapping(species_layout, species)
             layout_elements_to_ignore.add(species_layout)
@@ -384,15 +404,20 @@ def _make_new_auto_cd_map(cd_map, new_cd_model):
 
 def transform_map(
     cd_map,
-    mode: typing.Literal["pd2af", "casq"] = "pd2af",
+    mode: typing.Literal["pd2af", "casq", "pd2af-no-complex"] = "pd2af",
     layout_mode: typing.Literal["overlay", "auto", "all"] = "overlay",
     active: list[str] | None = None,
 ):
     if active is None:
         active = []
     new_maps = []
-    clingo_model = _solve_from_cd_map(cd_map, mode=mode, active=active)
-    new_cd_model = _make_new_cd_model_from_clingo_model(cd_map, clingo_model)
+    id_to_model_element = {}
+    clingo_model = _solve_from_cd_map(
+        cd_map, id_to_model_element=id_to_model_element, mode=mode, active=active
+    )
+    new_cd_model = _make_new_cd_model_from_clingo_model(
+        cd_map, clingo_model, id_to_model_element
+    )
     if layout_mode == "overlay" or layout_mode == "all":
         new_overlay_cd_map = _make_new_overlay_cd_map(cd_map, new_cd_model)
         new_maps.append(new_overlay_cd_map)

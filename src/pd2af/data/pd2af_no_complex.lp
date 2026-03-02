@@ -10,57 +10,56 @@ hasActivity(SOURCE, modulates(SOURCE, TARGET)):-species(SOURCE), modulator(MODUL
 % inhibition by complexation
 %hasActivity(Y, inhibits_by_binding(X)):-species(X, _, _), heterodimerAssociation(Z), consumes(Z, X, _), consumes(Z, Y, _), X!=Y, 1{ hasActivity(X, active); hasActivity(X, structural_state_active); hasActivity(X,  modulates(_)); hasActivity(X,  modulated_by(_)); hasActivity(X,  modulates_reaction(_)); hasActivity(X, phenotype)}, {not hasActivity(W, _):produces(Z, W, _)}.
 
-new(activity(SPECIES)):-hasActivity(SPECIES, _).
+hasActiveSubunit(SPECIES):-complex(SPECIES), hasActivity(SPECIES, _), hasSubunit(SPECIES, SUBUNIT), hasActivity(SUBUNIT, _).
+new(activity(SPECIES)):-hasActivity(SPECIES, _), not hasActiveSubunit(SPECIES).
 
-% modulator to product
-posPath(START_SPECIES, END_SPECIES):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
+% positive modulator to product
+path(START_SPECIES, END_SPECIES, positive):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
                                       catalyzer(MODIFIER), hasReferredSpecies(MODIFIER, START_SPECIES),
                                       hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, END_SPECIES).
-posPath(START_SPECIES, END_SPECIES):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
+path(START_SPECIES, END_SPECIES, positive):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
                                       physicalStimulator(MODIFIER), hasReferredSpecies(MODIFIER, START_SPECIES),
                                       hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, END_SPECIES).
-posPath(START_SPECIES, END_SPECIES):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
+path(START_SPECIES, END_SPECIES, positive):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
                                       trigger(MODIFIER), hasReferredSpecies(MODIFIER, START_SPECIES),
                                       hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, END_SPECIES).
 
-% modulator to target
-posPath(START_SPECIES, END_SPECIES):-catalyzis(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
-posPath(START_SPECIES, END_SPECIES):-positiveInfluence(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
-posPath(START_SPECIES, END_SPECIES):-physicalStimulation(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
-posPath(START_SPECIES, END_SPECIES):-triggering(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
+% positive modulator to target
+path(START_SPECIES, END_SPECIES, positive):-catalyzis(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
+path(START_SPECIES, END_SPECIES, positive):-positiveInfluence(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
+path(START_SPECIES, END_SPECIES, positive):-physicalStimulation(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
+path(START_SPECIES, END_SPECIES, positive):-triggering(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
 
-% reactant to product (transitivity)
-posPath(START_SPECIES, END_SPECIES):-posPath(START_SPECIES, INTERMEDIATE_SPECIES), reaction(REACTION),
-                                      hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, INTERMEDIATE_SPECIES),
-                                      hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, END_SPECIES).
-
-% modulator to product
-negPath(START_SPECIES, END_SPECIES):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
+% negative modulator to product
+path(START_SPECIES, END_SPECIES, negative):-reaction(REACTION), hasModifier(REACTION, MODIFIER),
                                       inhibitor(MODIFIER), hasReferredSpecies(MODIFIER, START_SPECIES),
                                       hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, END_SPECIES).
 
-% modulator to target
-negPath(START_SPECIES, END_SPECIES):-inhibition(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
-negPath(START_SPECIES, END_SPECIES):-negativeInfluence(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
+% negative modulator to target
+path(START_SPECIES, END_SPECIES, negative):-inhibition(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
+path(START_SPECIES, END_SPECIES, negative):-negativeInfluence(MODULATION), hasSource(MODULATION, START_SPECIES), hasTarget(MODULATION, END_SPECIES).
 
 % reactant to product (transitivity)
-negPath(START_SPECIES, END_SPECIES):-negPath(START_SPECIES, INTERMEDIATE_SPECIES), reaction(REACTION),
+path(START_SPECIES, END_SPECIES, SIGN):-path(START_SPECIES, INTERMEDIATE_SPECIES, SIGN), reaction(REACTION),
                                       hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, INTERMEDIATE_SPECIES),
                                       hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, END_SPECIES).
 
+% complex to subunit
+path(START_SPECIES, SUBUNIT, SIGN):-path(START_SPECIES, END_SPECIES, SIGN), complex(END_SPECIES), hasSubunit(END_SPECIES, SUBUNIT).
+path(SUBUNIT, END_SPECIES, SIGN):-path(START_SPECIES, END_SPECIES, SIGN), complex(START_SPECIES), hasSubunit(START_SPECIES, SUBUNIT).
 
 % positive path to modulation
-new(positivelyInfluences(START_SPECIES, END_SPECIES)):-posPath(START_SPECIES, END_SPECIES), hasActivity(START_SPECIES, _), hasActivity(END_SPECIES, _).
+new(positivelyInfluences(START_SPECIES, END_SPECIES)):-path(START_SPECIES, END_SPECIES, positive), new(activity(START_SPECIES)), new(activity(END_SPECIES)).
 
 % negative path to modulation
-new(negativelyInfluences(START_SPECIES, END_SPECIES)):-negPath(START_SPECIES, END_SPECIES), hasActivity(START_SPECIES, _), hasActivity(END_SPECIES, _).
+new(negativelyInfluences(START_SPECIES, END_SPECIES)):-path(START_SPECIES, END_SPECIES, negative), new(activity(START_SPECIES)), new(activity(END_SPECIES)).
 
 % modulation of consumption
 new(negativelyInfluences(START_SPECIES, END_SPECIES)):-reaction(REACTION),
                                                         hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER), hasReferredSpecies(MODIFIER, START_SPECIES),
                                                         hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, END_SPECIES),
-                                                        hasActivity(START_SPECIES, _), hasActivity(END_SPECIES, _).
+                                                        new(activity(START_SPECIES)), new(activity(END_SPECIES)).
 new(negativelyInfluences(START_SPECIES, END_SPECIES)):-reaction(REACTION),
                                                         hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER), hasReferredSpecies(MODIFIER, START_SPECIES),
                                                         hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, END_SPECIES),
-                                                        hasActivity(START_SPECIES, _), hasActivity(END_SPECIES, _).
+                                                        new(activity(START_SPECIES)), new(activity(END_SPECIES)).

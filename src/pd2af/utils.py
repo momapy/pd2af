@@ -26,6 +26,9 @@ def highlight_layout_elements(layout_elements, layout):
     layout_element_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.ClassSelector("LayoutElement"), not_selector])
     )
+    text_layout_selector = momapy.styling.CompoundSelector(
+        tuple([momapy.styling.TypeSelector("TextLayout"), not_selector])
+    )
     production_layout_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.TypeSelector("ProductionLayout"), not_selector])
     )
@@ -60,7 +63,7 @@ def highlight_layout_elements(layout_elements, layout):
             layout_element_selector: momapy.styling.StyleCollection(
                 {
                     "stroke": None,
-                    "fill": momapy.drawing.NoneValue,
+                    "fill": momapy.coloring.white,
                     "path_stroke": None,
                     "end_arrowhead_stroke": None,
                     "start_arrowhead_stroke": None,
@@ -69,6 +72,12 @@ def highlight_layout_elements(layout_elements, layout):
                     "active_stroke": None,
                     "inner_stroke": None,
                     "group_stroke": momapy.coloring.lightgray,
+                }
+            ),
+            text_layout_selector: momapy.styling.StyleCollection(
+                {
+                    "stroke": momapy.drawing.NoneValue,
+                    "fill": momapy.coloring.lightgray,
                 }
             ),
             production_layout_selector: momapy.styling.StyleCollection(
