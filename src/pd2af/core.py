@@ -402,9 +402,17 @@ def _make_new_auto_cd_map(cd_map, new_cd_model):
     return new_map
 
 
+def _make_new_cd_map_no_layout(new_cd_model):
+    new_map = momapy.celldesigner.core.CellDesignerMap(
+        model=new_cd_model,
+    )
+    return new_map
+
+
 def transform_map(
     cd_map,
     mode: typing.Literal["pd2af", "casq", "pd2af-no-complex"] = "pd2af",
+    with_layout=True,
     layout_mode: typing.Literal["overlay", "auto", "all"] = "overlay",
     active: list[str] | None = None,
 ):
@@ -418,12 +426,16 @@ def transform_map(
     new_cd_model = _make_new_cd_model_from_clingo_model(
         cd_map, clingo_model, id_to_model_element
     )
-    if layout_mode == "overlay" or layout_mode == "all":
-        new_overlay_cd_map = _make_new_overlay_cd_map(cd_map, new_cd_model)
-        new_maps.append(new_overlay_cd_map)
-    if layout_mode == "auto" or layout_mode == "all":
-        new_auto_cd_map = _make_new_auto_cd_map(cd_map, new_cd_model)
-        new_maps.append(new_auto_cd_map)
+    if with_layout:
+        if layout_mode == "overlay" or layout_mode == "all":
+            new_overlay_cd_map = _make_new_overlay_cd_map(cd_map, new_cd_model)
+            new_maps.append(new_overlay_cd_map)
+        if layout_mode == "auto" or layout_mode == "all":
+            new_auto_cd_map = _make_new_auto_cd_map(cd_map, new_cd_model)
+            new_maps.append(new_auto_cd_map)
+    else:
+        new_map_no_layout = _make_new_cd_map_no_layout(new_cd_model)
+        new_maps.append(new_map_no_layout)
     return new_maps
 
 
