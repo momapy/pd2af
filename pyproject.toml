@@ -16,9 +16,23 @@ dependencies = [
 [project.scripts]
 pd2af = "pd2af.cli:main"
 
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
+test = ["pytest>=7"]
+
 [tool.uv.sources]
 momapy-kb = { path = "../momapy_kb", editable = true }
 aspcompose = { path = "../aspcompose", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
 
 [build-system]
 requires = ["hatchling"]
