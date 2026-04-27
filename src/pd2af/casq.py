@@ -6,9 +6,9 @@ import typing
 
 import momapy.io.core
 import momapy.builder
-import momapy.celldesigner.core
+import momapy.celldesigner
 
-import pd2af.core
+import pd2af.layouts
 
 
 def _get_id_to_layout_element(cd_map):
@@ -19,8 +19,8 @@ def _get_id_to_layout_element(cd_map):
 
 
 sif_predicate_to_influence_class = {
-    "POSITIVE": momapy.celldesigner.core.PositiveInfluence,
-    "NEGATIVE": momapy.celldesigner.core.NegativeInfluence,
+    "POSITIVE": momapy.celldesigner.PositiveInfluence,
+    "NEGATIVE": momapy.celldesigner.NegativeInfluence,
 }
 
 
@@ -54,7 +54,10 @@ def _make_influences(cd_map, sif_relation_tuples, id_to_layout_element):
 
 
 def _make_new_cd_model(cd_map, sif_relations):
-    cd_model_builder = momapy.celldesigner.core.CellDesignerModelBuilder()
+    cd_model_builder_cls = momapy.builder.get_or_make_builder_cls(
+        momapy.celldesigner.CellDesignerModel
+    )
+    cd_model_builder = cd_model_builder_cls()
     sif_relation_tuples = [
         tuple(sif_relation.split(" ")) for sif_relation in sif_relations
     ]
@@ -99,12 +102,11 @@ def _make_new_cd_model(cd_map, sif_relations):
     return cd_model
 
 
-def transform_map(
+def transform(
     input_file_path,
-    layout_mode: typing.Literal["overlay", "auto", "all"] = "overlay",
+    layout_mode: typing.Literal["plain", "overlay", "auto"] | None = "plain",
 ):
     cd_map = momapy.io.core.read(input_file_path).obj
-    new_maps = []
     _, output_file_path = tempfile.mkstemp(suffix=".sbml")
     output_file_path = pathlib.Path(output_file_path)
     output_file_parent = output_file_path.parent
@@ -119,10 +121,4 @@ def transform_map(
             line.rstrip("\n") for line in f.readlines() if not line.startswith("#")
         ]
     new_cd_model = _make_new_cd_model(cd_map, sif_relations)
-    if layout_mode == "overlay" or layout_mode == "all":
-        new_overlay_cd_map = pd2af.core._make_new_overlay_cd_map(cd_map, new_cd_model)
-        new_maps.append(new_overlay_cd_map)
-    if layout_mode == "auto" or layout_mode == "all":
-        new_auto_cd_map = pd2af.core._make_new_auto_cd_map(cd_map, new_cd_model)
-        new_maps.append(new_auto_cd_map)
-    return new_maps
+    return pd2af.layouts.build_map(cd_map, new_cd_model, layout_mode)

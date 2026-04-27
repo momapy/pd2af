@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "aspcompose",
   "casq>=1.4.3",
   "clorm>=1.6.1",
   "momapy-kb",
@@ -12,5 +13,13 @@ dependencies = [
   "pydot>=4.0.1",
 ]
 
+[project.scripts]
+pd2af = "pd2af.cli:main"
+
 [tool.uv.sources]
 momapy-kb = { path = "../momapy_kb", editable = true }
+aspcompose = { path = "../aspcompose", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

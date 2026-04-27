@@ -1,13 +1,13 @@
 import collections
 
-import momapy.core
+import momapy.core.layout
 import momapy.styling
 import momapy.coloring
 import momapy.drawing
 import momapy.builder
 import momapy.geometry
 import momapy.positioning
-import momapy.celldesigner.core
+import momapy.celldesigner
 import pydot
 
 _POINTS_PER_INCH = 96
@@ -170,12 +170,12 @@ def auto_layout(cd_map):
     id_to_layout_element = {}
     for layout_element_builder in new_layout_builder.layout_elements:
         if momapy.builder.isinstance_or_builder(
-            layout_element_builder, momapy.core.Node
+            layout_element_builder, momapy.core.layout.Node
         ) and not momapy.builder.isinstance_or_builder(
             layout_element_builder,
             (
-                momapy.celldesigner.core.RectangleCompartmentLayout,
-                momapy.celldesigner.core.OvalCompartmentLayout,
+                momapy.celldesigner.RectangleCompartmentLayout,
+                momapy.celldesigner.OvalCompartmentLayout,
             ),
         ):
             dot_node = pydot.Node(layout_element_builder.id_)
@@ -202,7 +202,7 @@ def auto_layout(cd_map):
             else:
                 dot_graph.add_node(dot_node)
         elif momapy.builder.isinstance_or_builder(
-            layout_element_builder, momapy.core.Arc
+            layout_element_builder, momapy.core.layout.Arc
         ):
             dot_graph.add_edge(
                 pydot.Edge(
@@ -231,7 +231,7 @@ def auto_layout(cd_map):
             )
     for layout_element_builder in new_layout_builder.layout_elements:
         if momapy.builder.isinstance_or_builder(
-            layout_element_builder, momapy.core.Arc
+            layout_element_builder, momapy.core.layout.Arc
         ):
             source_layout_element_builder = id_to_new_layout_element_builder[
                 layout_element_builder.source.id_
@@ -245,9 +245,13 @@ def auto_layout(cd_map):
             end_point = target_layout_element_builder.border(
                 source_layout_element_builder.center()
             )
-            layout_element_builder.segments = momapy.core.TupleBuilder(
-                [momapy.geometry.Segment(start_point, end_point)]
-            )
+            if start_point is None:
+                start_point = source_layout_element_builder.north_west()
+            if end_point is None:
+                end_point = target_layout_element_builder.north_east()
+            layout_element_builder.segments = [
+                momapy.geometry.Segment(start_point, end_point)
+            ]
     for (
         compartment_layout_element,
         included_layout_elements,
