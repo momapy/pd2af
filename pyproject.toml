@@ -22,6 +22,11 @@ test = ["pytest>=7"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "mkdocs-material>=9.6.16",
+    "mkdocstrings-python>=1.16.12",
+    "griffe-fieldz>=0.1.2",
+    "griffe-inherited-docstrings>=1.1.1",
+    "mkdocs-pygments>=0.0.2",
 ]
 test = ["pytest>=7"]
 

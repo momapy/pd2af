@@ -1,0 +1,67 @@
+site_name: pd2af
+site_url: https://adrienrougny.github.io/pd2af/
+extra:
+  version:
+    provider: mike
+    default: stable
+    alias: true
+nav:
+  - Home: index.md
+  - CLI reference: cli.md
+  - API reference:
+    - Overview: api_reference/index.md
+    - Core: api_reference/core.md
+    - CLI: api_reference/cli.md
+    - Solver: api_reference/solver.md
+    - Rules: api_reference/rules.md
+    - Predicates: api_reference/predicates.md
+    - Ontology: api_reference/ontology.md
+    - Layouts: api_reference/layouts.md
+    - CASQ: api_reference/casq.md
+    - Utils: api_reference/utils.md
+  - About: about.md
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            inherited_members: true
+            group_by_category: false
+            show_category_heading: false
+            show_root_heading: true
+            parameter_headings: false
+            show_signature_annotations: true
+            separate_signature: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_if_no_docstring: false
+            signature_crossrefs: true
+            merge_init_into_class: true
+            show_inheritance_diagram: false
+            summary: true
+            extensions:
+              - griffe_fieldz: {include_inherited: true}
+              - griffe_inherited_docstrings
+markdown_extensions:
+  - tables
+  - toc:
+      toc_depth: 3
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
