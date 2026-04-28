@@ -7,6 +7,7 @@ import momapy.geometry
 import momapy.positioning
 
 import pd2af.predicates
+import pd2af.solver
 import pd2af.utils
 
 
@@ -199,7 +200,12 @@ def make_auto(cd_map, new_cd_model):
             break
     species_to_layout_element = {}
     for species in new_cd_model.species:
-        species_layouts = _get_layout_elements_for_model_element(cd_map, species)
+        if pd2af.solver.is_synthesized_species(species):
+            species_layouts = None
+        else:
+            species_layouts = _get_layout_elements_for_model_element(
+                cd_map, species
+            )
         species_layout = None
         if species_layouts:
             species_layout = species_layouts[0]

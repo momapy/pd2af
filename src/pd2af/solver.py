@@ -22,6 +22,12 @@ _MODE_TO_PROFILE = {
 
 _NO_COMPARTMENT_SENTINEL = "no_compartment"
 
+_SYNTHESIZED_ID_PREFIX = "pure_af__"
+
+
+def is_synthesized_species(species):
+    return getattr(species, "id_", "").startswith(_SYNTHESIZED_ID_PREFIX)
+
 _TEMPLATE_TO_SPECIES_CLASS = {
     momapy.celldesigner.GenericProteinTemplate: momapy.celldesigner.GenericProtein,
     momapy.celldesigner.TruncatedProteinTemplate: momapy.celldesigner.TruncatedProtein,
@@ -133,7 +139,7 @@ def _make_synthetic_species(key, id_to_model_element, stripped_template_cache):
         template, template_id, stripped_template_cache
     )
     return species_cls(
-        id_=f"pure_af__{template_id}__{compartment_id}",
+        id_=f"{_SYNTHESIZED_ID_PREFIX}{template_id}__{compartment_id}",
         name=template.name,
         template=stripped_template,
         compartment=compartment,
