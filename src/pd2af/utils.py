@@ -180,7 +180,7 @@ def auto_layout(cd_map):
         ):
             dot_node = pydot.Node(layout_element_builder.id_)
             dot_node.set("width", layout_element_builder.width / _POINTS_PER_INCH)
-            dot_node.set("height", layout_element_builder.width / _POINTS_PER_INCH)
+            dot_node.set("height", layout_element_builder.height / _POINTS_PER_INCH)
             model_element = new_map_builder.layout_model_mapping.get_mapping(
                 layout_element_builder
             )
@@ -210,7 +210,8 @@ def auto_layout(cd_map):
                 )
             )
         id_to_layout_element[layout_element_builder.id_] = layout_element_builder
-    dot_graph.set("ranksep", 3.0)
+    dot_graph.set("ranksep", 1.0)
+    dot_graph.set("nodesep", 0.5)
     dot_graph.set("rankdir", "BT")
     dot = dot_graph.create_dot(prog="dot").decode("utf-8")
     dot_graph = pydot.graph_from_dot_data(dot)[0]
