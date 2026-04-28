@@ -342,15 +342,15 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
 _INFLUENCES_FROM_PATHS = RuleGroup(
     identifier="influences_from_paths",
     profiles=_ALL_PROFILES,
-    depends_on=frozenset({"paths_base", "activity_derivation", "activity_key"}),
+    depends_on=frozenset({"paths_base", "contributes_activity", "activity_key"}),
     rules=(
         Rule(
             identifier="influences_from_paths:positive",
             text=dedent("""\
                 new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
                     path(SOURCE, TARGET, positive),
-                    new(activity(SRC_KEY)),
-                    new(activity(TGT_KEY)),
+                    contributesActivity(SOURCE),
+                    contributesActivity(TARGET),
                     activityKey(SOURCE, SRC_KEY),
                     activityKey(TARGET, TGT_KEY)."""),
             documentation="If there is a positive path between two species and both contribute activities, then a positive influence between their activity keys is emitted.",
@@ -360,8 +360,8 @@ _INFLUENCES_FROM_PATHS = RuleGroup(
             text=dedent("""\
                 new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
                     path(SOURCE, TARGET, negative),
-                    new(activity(SRC_KEY)),
-                    new(activity(TGT_KEY)),
+                    contributesActivity(SOURCE),
+                    contributesActivity(TARGET),
                     activityKey(SOURCE, SRC_KEY),
                     activityKey(TARGET, TGT_KEY)."""),
             documentation="If there is a negative path between two species and both contribute activities, then a negative influence between their activity keys is emitted.",
@@ -372,7 +372,7 @@ _INFLUENCES_FROM_PATHS = RuleGroup(
 _INFLUENCES_CONSUMPTION = RuleGroup(
     identifier="influences_consumption",
     profiles=_ALL_PROFILES,
-    depends_on=frozenset({"activity_derivation", "activity_key"}),
+    depends_on=frozenset({"contributes_activity", "activity_key"}),
     rules=(
         Rule(
             identifier="influences_consumption:catalyzer_consumes_reactant",
@@ -384,8 +384,8 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
                     hasReferredSpecies(REACTANT, TARGET),
-                    new(activity(SRC_KEY)),
-                    new(activity(TGT_KEY)),
+                    contributesActivity(SOURCE),
+                    contributesActivity(TARGET),
                     activityKey(SOURCE, SRC_KEY),
                     activityKey(TARGET, TGT_KEY)."""),
             documentation="If a species is referred to by a catalyzer of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
@@ -400,8 +400,8 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
                     hasReferredSpecies(REACTANT, TARGET),
-                    new(activity(SRC_KEY)),
-                    new(activity(TGT_KEY)),
+                    contributesActivity(SOURCE),
+                    contributesActivity(TARGET),
                     activityKey(SOURCE, SRC_KEY),
                     activityKey(TARGET, TGT_KEY)."""),
             documentation="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
@@ -416,8 +416,8 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
                     hasReferredSpecies(REACTANT, TARGET),
-                    new(activity(SRC_KEY)),
-                    new(activity(TGT_KEY)),
+                    contributesActivity(SOURCE),
+                    contributesActivity(TARGET),
                     activityKey(SOURCE, SRC_KEY),
                     activityKey(TARGET, TGT_KEY)."""),
             documentation="If a species is referred to by a trigger of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
@@ -432,8 +432,8 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
                     hasReferredSpecies(REACTANT, TARGET),
-                    new(activity(SRC_KEY)),
-                    new(activity(TGT_KEY)),
+                    contributesActivity(SOURCE),
+                    contributesActivity(TARGET),
                     activityKey(SOURCE, SRC_KEY),
                     activityKey(TARGET, TGT_KEY)."""),
             documentation="If a species is referred to by an inhibitor of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a positive influence between their activity keys is emitted.",
