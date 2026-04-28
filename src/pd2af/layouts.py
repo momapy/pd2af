@@ -57,6 +57,51 @@ def _make_synthetic_species_layout(species):
     )
 
 
+def _resolve_species_layouts(cd_map, new_cd_model):
+    """Resolve `(species, layout, synthetic)` for each species in the new model.
+
+    `synthetic=True` means no original layout could be found (or it's a
+    pure-af synthesized species) and a fresh layout was created.
+    """
+    resolved = []
+    for species in new_cd_model.species:
+        if pd2af.solver.is_synthesized_species(species):
+            layout_elements = None
+        else:
+            layout_elements = _get_layout_elements_for_model_element(
+                cd_map, species
+            )
+        if layout_elements:
+            resolved.append((species, layout_elements[0], False))
+        else:
+            resolved.append((species, _make_synthetic_species_layout(species), True))
+    return resolved
+
+
+def _partition_top_level_species_layouts(resolved):
+    """Split resolved species layouts into top-level vs nested.
+
+    A species layout is "nested" if it appears as a descendant of another
+    kept species's layout — i.e. a subunit of a kept complex. Such a
+    species must not be promoted to a top-level layout element: its
+    position is governed by its parent complex layout. CellDesigner
+    layouts form a tree, so this partition is well-defined.
+    """
+    descendant_ids = set()
+    for _, layout, _ in resolved:
+        for descendant in layout.descendants():
+            descendant_ids.add(id(descendant))
+    top_level = []
+    nested = []
+    for entry in resolved:
+        _, layout, synthetic = entry
+        if not synthetic and id(layout) in descendant_ids:
+            nested.append(entry)
+        else:
+            top_level.append(entry)
+    return top_level, nested
+
+
 def _make_modulation_arc_tuple(modulation, source_layout, target_layout):
     cls = pd2af.predicates.model_element_class_to_layout_element_class[
         type(modulation)
@@ -198,26 +243,19 @@ def make_auto(cd_map, new_cd_model):
                 cd_map.layout_model_mapping, compartment_layout, mapping_builder
             )
             break
-    species_to_layout_element = {}
-    for species in new_cd_model.species:
-        if pd2af.solver.is_synthesized_species(species):
-            species_layouts = None
+    resolved = _resolve_species_layouts(cd_map, new_cd_model)
+    top_level, _ = _partition_top_level_species_layouts(resolved)
+    species_to_layout_element = {
+        species: layout for species, layout, _ in resolved
+    }
+    for species, species_layout, synthetic in top_level:
+        layout_builder.layout_elements.append(species_layout)
+        if synthetic:
+            mapping_builder.add_mapping(species_layout, species)
         else:
-            species_layouts = _get_layout_elements_for_model_element(
-                cd_map, species
-            )
-        species_layout = None
-        if species_layouts:
-            species_layout = species_layouts[0]
-            layout_builder.layout_elements.append(species_layout)
             _copy_subtree_singleton_mappings(
                 cd_map.layout_model_mapping, species_layout, mapping_builder
             )
-        else:
-            species_layout = _make_synthetic_species_layout(species)
-            layout_builder.layout_elements.append(species_layout)
-            mapping_builder.add_mapping(species_layout, species)
-        species_to_layout_element[species] = species_layout
     for modulation in new_cd_model.modulations:
         source_layout = species_to_layout_element[modulation.source]
         target_layout = species_to_layout_element[modulation.target]
@@ -247,10 +285,13 @@ def make_plain(cd_map, new_cd_model):
             _copy_subtree_singleton_mappings(
                 cd_map.layout_model_mapping, compartment_layout, mapping_builder
             )
-    for species in new_cd_model.species:
-        species_layouts = _get_layout_elements_for_model_element(cd_map, species)
-        for species_layout in species_layouts:
-            layout_builder.layout_elements.append(species_layout)
+    resolved = _resolve_species_layouts(cd_map, new_cd_model)
+    top_level, _ = _partition_top_level_species_layouts(resolved)
+    for species, species_layout, synthetic in top_level:
+        layout_builder.layout_elements.append(species_layout)
+        if synthetic:
+            mapping_builder.add_mapping(species_layout, species)
+        else:
             _copy_subtree_singleton_mappings(
                 cd_map.layout_model_mapping, species_layout, mapping_builder
             )

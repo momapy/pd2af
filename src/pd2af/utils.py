@@ -229,6 +229,16 @@ def auto_layout(cd_map):
             id_to_new_layout_element_builder[layout_element_builder.id_] = (
                 layout_element_builder
             )
+            # Descendants (e.g. subunit layouts inside a complex layout) are
+            # auto-translated by `_translate_layout_element` along with their
+            # parent. Register them so arcs whose source/target is a nested
+            # subunit can still resolve.
+            for descendant in layout_element_builder.descendants():
+                descendant_id = getattr(descendant, "id_", None)
+                if descendant_id is not None:
+                    id_to_new_layout_element_builder.setdefault(
+                        descendant_id, descendant
+                    )
     for layout_element_builder in new_layout_builder.layout_elements:
         if momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Arc
