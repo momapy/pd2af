@@ -8,8 +8,8 @@ dependencies = [
   "aspcompose",
   "casq>=1.4.3",
   "clorm>=1.6.1",
+  "momapy",
   "momapy-kb",
-  "momapy[skia]>=0.2.7",
   "pydot>=4.0.1",
 ]
 
@@ -28,6 +28,7 @@ test = ["pytest>=7"]
 [tool.uv.sources]
 momapy-kb = { path = "../momapy_kb", editable = true }
 aspcompose = { path = "../aspcompose", editable = true }
+momapy = { path = "../momapy", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
