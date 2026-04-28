@@ -10,6 +10,24 @@ import pd2af.predicates
 import pd2af.utils
 
 
+_SPECIES_CLASS_TO_LAYOUT_CLASS = {
+    momapy.celldesigner.GenericProtein: momapy.celldesigner.GenericProteinLayout,
+    momapy.celldesigner.TruncatedProtein: momapy.celldesigner.TruncatedProteinLayout,
+    momapy.celldesigner.Receptor: momapy.celldesigner.ReceptorLayout,
+    momapy.celldesigner.IonChannel: momapy.celldesigner.IonChannelLayout,
+    momapy.celldesigner.Gene: momapy.celldesigner.GeneLayout,
+    momapy.celldesigner.RNA: momapy.celldesigner.RNALayout,
+    momapy.celldesigner.AntisenseRNA: momapy.celldesigner.AntisenseRNALayout,
+    momapy.celldesigner.Phenotype: momapy.celldesigner.PhenotypeLayout,
+    momapy.celldesigner.Ion: momapy.celldesigner.IonLayout,
+    momapy.celldesigner.SimpleMolecule: momapy.celldesigner.SimpleMoleculeLayout,
+    momapy.celldesigner.Drug: momapy.celldesigner.DrugLayout,
+    momapy.celldesigner.Unknown: momapy.celldesigner.UnknownLayout,
+    momapy.celldesigner.Complex: momapy.celldesigner.ComplexLayout,
+    momapy.celldesigner.Degraded: momapy.celldesigner.DegradedLayout,
+}
+
+
 # TODO: delete when issue is solved in momapy
 def _get_layout_elements_for_model_element(map_, model_element):
     layout_elements = map_.layout_model_mapping.get_mapping(model_element)
@@ -19,6 +37,23 @@ def _get_layout_elements_for_model_element(map_, model_element):
                 layout_elements = map_.layout_model_mapping.get_mapping(key)
                 break
     return layout_elements
+
+
+def _make_synthetic_species_layout(species):
+    layout_cls = _SPECIES_CLASS_TO_LAYOUT_CLASS.get(type(species))
+    if layout_cls is None:
+        raise ValueError(
+            f"no default layout class registered for species type "
+            f"{type(species).__name__}"
+        )
+    label = momapy.core.layout.TextLayout(
+        text=species.name or "",
+        position=momapy.geometry.Point(0.0, 0.0),
+    )
+    return layout_cls(
+        position=momapy.geometry.Point(0.0, 0.0),
+        label=label,
+    )
 
 
 def _make_modulation_arc_tuple(modulation, source_layout, target_layout):
@@ -116,8 +151,16 @@ def make_overlay(cd_map, new_cd_model):
         for arc, source_layout, target_layout in _iter_modulation_arc_tuples(
             cd_map, modulation
         ):
+            # The shared `object_to_builder` is keyed by `id()`. The freshly
+            # built `Segment`/`Point` instances inside `arc` are short-lived
+            # and would have their addresses recycled across iterations,
+            # causing later `builder_from_object` calls to hit stale entries.
+            # A per-arc cache snapshot keeps the original-layout entries
+            # (so `arc.source`/`arc.target` reuse the cached builders) while
+            # confining the throwaway segment/point entries to this iteration.
+            per_arc_cache = dict(object_to_builder)
             arc_builder = momapy.builder.builder_from_object(
-                arc, object_to_builder=object_to_builder
+                arc, object_to_builder=per_arc_cache
             )
             source_builder = momapy.builder.builder_from_object(
                 source_layout, object_to_builder=object_to_builder
@@ -157,13 +200,18 @@ def make_auto(cd_map, new_cd_model):
     species_to_layout_element = {}
     for species in new_cd_model.species:
         species_layouts = _get_layout_elements_for_model_element(cd_map, species)
-        for species_layout in species_layouts:
+        species_layout = None
+        if species_layouts:
+            species_layout = species_layouts[0]
             layout_builder.layout_elements.append(species_layout)
             _copy_subtree_singleton_mappings(
                 cd_map.layout_model_mapping, species_layout, mapping_builder
             )
-            species_to_layout_element[species] = species_layout
-            break
+        else:
+            species_layout = _make_synthetic_species_layout(species)
+            layout_builder.layout_elements.append(species_layout)
+            mapping_builder.add_mapping(species_layout, species)
+        species_to_layout_element[species] = species_layout
     for modulation in new_cd_model.modulations:
         source_layout = species_to_layout_element[modulation.source]
         target_layout = species_to_layout_element[modulation.target]
