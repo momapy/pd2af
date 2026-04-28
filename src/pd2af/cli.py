@@ -8,10 +8,7 @@ import momapy.io.core
 import pd2af
 
 
-_MODE_CHOICES = {
-    "normal": "pd2af",
-    "no-complex": "pd2af-no-complex",
-}
+_MODE_CHOICES = ("normal", "no-complex", "pure-af")
 
 _LAYOUT_CHOICES = ("plain", "overlay", "auto")
 
@@ -44,7 +41,7 @@ def _run(args):
     cd_map = reader_result.obj
     new_map = pd2af.transform(
         cd_map,
-        mode=_MODE_CHOICES[args.mode],
+        mode=args.mode,
         layout_mode=args.layout,
     )
     if args.output is None:
@@ -70,9 +67,13 @@ def main(argv=None):
     parser.add_argument(
         "-m",
         "--mode",
-        choices=list(_MODE_CHOICES),
+        choices=_MODE_CHOICES,
         default="normal",
-        help="transformation mode (default: normal)",
+        help=(
+            "transformation mode (default: normal). 'pure-af' merges "
+            "proteoforms of the same template and compartment into a single "
+            "activity and requires `--layout auto`."
+        ),
     )
     parser.add_argument(
         "-l",

@@ -8,7 +8,7 @@ import pd2af.solver
 from tests._helpers import has_dot_binary
 
 
-def _solve_and_make_model(cd_map, mode="pd2af"):
+def _solve_and_make_model(cd_map, mode="normal"):
     clingo_model, id_to = pd2af.solver.solve(cd_map, mode=mode)
     return pd2af.solver.make_new_cd_model(clingo_model, id_to)
 

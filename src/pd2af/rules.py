@@ -1,18 +1,32 @@
-"""ASP rule composition for the pd2af and pd2af-no-complex modes.
+"""ASP rule composition for the pd2af transformation modes.
 
-The rules are organized as aspcompose groups. Two profiles (`default` and
-`no_complex`) compose the groups into the two supported mode programs. All
-path rules use a single `path(X, Y, SIGN)` predicate so transitivity and
-complex-subunit traversal can be written once and parameterized over `SIGN`.
+The rules are organized as aspcompose groups. Three profiles
+(`default`, `no_complex`, `pure_af`) compose the groups into the three
+supported mode programs. All path rules use a single
+`path(X, Y, SIGN)` predicate so transitivity and complex-subunit
+traversal can be written once and parameterized over `SIGN`.
+
+Activity identity is split into two profile-specific relations so the
+shared activity-derivation and influence rules remain
+profile-agnostic:
+
+* ``contributesActivity(SPECIES)`` — survives the profile filter and
+  contributes an activity to the AF.
+* ``activityKey(SPECIES, KEY)`` — this species's identity in the AF
+  (a ``kept_species/1`` term in default/no_complex; a
+  ``kept_species/1`` or ``derived_proteoform_class/2`` term in
+  pure_af).
 """
 
 from textwrap import dedent
 
 from aspcompose import CollectionPlan, Rule, RuleGroup, RuleRegistry
 
+_ALL_PROFILES = frozenset({"default", "no_complex", "pure_af"})
+
 _ACTIVITY_BASE = RuleGroup(
     identifier="activity_base",
-    profiles=frozenset({"default", "no_complex"}),
+    profiles=_ALL_PROFILES,
     rules=(
         Rule(
             identifier="activity_base:from_active_flag",
@@ -56,28 +70,13 @@ _ACTIVITY_BASE = RuleGroup(
     ),
 )
 
-_ACTIVITY_DERIVATION_FLAT = RuleGroup(
-    identifier="activity_derivation:flat",
-    slot="activity_derivation",
-    profiles=frozenset({"default"}),
+_HAS_ACTIVE_SUBUNIT = RuleGroup(
+    identifier="has_active_subunit",
+    profiles=frozenset({"no_complex", "pure_af"}),
     depends_on=frozenset({"activity_base"}),
     rules=(
         Rule(
-            identifier="activity_derivation:flat:promote_all",
-            text="new(activity(SPECIES)) :- hasActivity(SPECIES, _).",
-            documentation="If a species has activity, then it is a new activity node.",
-        ),
-    ),
-)
-
-_ACTIVITY_DERIVATION_NO_ACTIVE_SUBUNITS = RuleGroup(
-    identifier="activity_derivation:no_active_subunits",
-    slot="activity_derivation",
-    profiles=frozenset({"no_complex"}),
-    depends_on=frozenset({"activity_base"}),
-    rules=(
-        Rule(
-            identifier="activity_derivation:no_active_subunits:detect_active_subunit",
+            identifier="has_active_subunit:detect",
             text=dedent("""\
                 hasActiveSubunit(SPECIES) :-
                     complex(SPECIES),
@@ -86,20 +85,116 @@ _ACTIVITY_DERIVATION_NO_ACTIVE_SUBUNITS = RuleGroup(
                     hasActivity(SUBUNIT, _)."""),
             documentation="If a complex has activity and contains a subunit that also has activity, then it has an active subunit.",
         ),
+    ),
+)
+
+_CONTRIBUTES_ACTIVITY_FLAT = RuleGroup(
+    identifier="contributes_activity:flat",
+    slot="contributes_activity",
+    profiles=frozenset({"default"}),
+    depends_on=frozenset({"activity_base"}),
+    rules=(
         Rule(
-            identifier="activity_derivation:no_active_subunits:promote_unless_superseded",
+            identifier="contributes_activity:flat:promote_all",
+            text="contributesActivity(SPECIES) :- hasActivity(SPECIES, _).",
+            documentation="Every species with activity contributes an activity to the new AF.",
+        ),
+    ),
+)
+
+_CONTRIBUTES_ACTIVITY_NO_ACTIVE_SUBUNITS = RuleGroup(
+    identifier="contributes_activity:no_active_subunits",
+    slot="contributes_activity",
+    profiles=frozenset({"no_complex", "pure_af"}),
+    depends_on=frozenset({"activity_base", "has_active_subunit"}),
+    rules=(
+        Rule(
+            identifier="contributes_activity:no_active_subunits:promote_unless_superseded",
             text=dedent("""\
-                new(activity(SPECIES)) :-
+                contributesActivity(SPECIES) :-
                     hasActivity(SPECIES, _),
                     not hasActiveSubunit(SPECIES)."""),
-            documentation="If a species has activity and does not have an active subunit, then it is a new activity node.",
+            documentation="A species with activity contributes an activity to the new AF unless it is a complex that has an active subunit.",
+        ),
+    ),
+)
+
+_ACTIVITY_KEY_KEPT = RuleGroup(
+    identifier="activity_key:kept",
+    slot="activity_key",
+    profiles=frozenset({"default", "no_complex"}),
+    depends_on=frozenset({"activity_base"}),
+    rules=(
+        Rule(
+            identifier="activity_key:kept:identity",
+            text="activityKey(SPECIES, kept_species(SPECIES)) :- species(SPECIES).",
+            documentation="In default and no-complex modes, every species's activity key is itself.",
+        ),
+    ),
+)
+
+_ACTIVITY_KEY_PURE_AF = RuleGroup(
+    identifier="activity_key:pure_af",
+    slot="activity_key",
+    profiles=frozenset({"pure_af"}),
+    depends_on=frozenset({"activity_base"}),
+    rules=(
+        Rule(
+            identifier="activity_key:pure_af:has_some_template",
+            text="hasSomeTemplate(SPECIES) :- hasTemplate(SPECIES, _).",
+            documentation="A species has some template if it is linked to any template.",
+        ),
+        Rule(
+            identifier="activity_key:pure_af:has_some_compartment",
+            text="hasSomeCompartment(SPECIES) :- hasCompartment(SPECIES, _).",
+            documentation="A species has some compartment if it is linked to any compartment.",
+        ),
+        Rule(
+            identifier="activity_key:pure_af:templated_with_compartment",
+            text=dedent("""\
+                activityKey(SPECIES, derived_proteoform_class(TEMPLATE, COMPARTMENT)) :-
+                    hasTemplate(SPECIES, TEMPLATE),
+                    hasCompartment(SPECIES, COMPARTMENT)."""),
+            documentation="A templated species in a compartment has a derived-proteoform-class key keyed by template and compartment.",
+        ),
+        Rule(
+            identifier="activity_key:pure_af:templated_without_compartment",
+            text=dedent("""\
+                activityKey(SPECIES, derived_proteoform_class(TEMPLATE, no_compartment)) :-
+                    hasTemplate(SPECIES, TEMPLATE),
+                    not hasSomeCompartment(SPECIES)."""),
+            documentation="A templated species without a compartment has a derived-proteoform-class key with the sentinel `no_compartment`.",
+        ),
+        Rule(
+            identifier="activity_key:pure_af:templateless",
+            text=dedent("""\
+                activityKey(SPECIES, kept_species(SPECIES)) :-
+                    species(SPECIES),
+                    not hasSomeTemplate(SPECIES)."""),
+            documentation="A templateless species (phenotype, ion, simple molecule, complex, etc.) keeps its own key in pure-af mode.",
+        ),
+    ),
+)
+
+_ACTIVITY_DERIVATION = RuleGroup(
+    identifier="activity_derivation",
+    profiles=_ALL_PROFILES,
+    depends_on=frozenset({"contributes_activity", "activity_key"}),
+    rules=(
+        Rule(
+            identifier="activity_derivation:emit",
+            text=dedent("""\
+                new(activity(KEY)) :-
+                    contributesActivity(SPECIES),
+                    activityKey(SPECIES, KEY)."""),
+            documentation="If a species contributes an activity and has an activity key, then a new activity node with that key is emitted.",
         ),
     ),
 )
 
 _PATHS_BASE = RuleGroup(
     identifier="paths_base",
-    profiles=frozenset({"default", "no_complex"}),
+    profiles=_ALL_PROFILES,
     rules=(
         Rule(
             identifier="paths_base:catalyzer_to_product",
@@ -220,7 +315,7 @@ _PATHS_BASE = RuleGroup(
 
 _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     identifier="paths_complex_traversal",
-    profiles=frozenset({"no_complex"}),
+    profiles=frozenset({"no_complex", "pure_af"}),
     depends_on=frozenset({"paths_base"}),
     rules=(
         Rule(
@@ -246,90 +341,102 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
 
 _INFLUENCES_FROM_PATHS = RuleGroup(
     identifier="influences_from_paths",
-    profiles=frozenset({"default", "no_complex"}),
-    depends_on=frozenset({"paths_base", "activity_derivation"}),
+    profiles=_ALL_PROFILES,
+    depends_on=frozenset({"paths_base", "activity_derivation", "activity_key"}),
     rules=(
         Rule(
             identifier="influences_from_paths:positive",
             text=dedent("""\
-                new(positivelyInfluences(START_SPECIES, END_SPECIES)) :-
-                    path(START_SPECIES, END_SPECIES, positive),
-                    new(activity(START_SPECIES)),
-                    new(activity(END_SPECIES))."""),
-            documentation="If there is a positive path between two species and both are activity nodes, then the first positively influences the second.",
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    path(SOURCE, TARGET, positive),
+                    new(activity(SRC_KEY)),
+                    new(activity(TGT_KEY)),
+                    activityKey(SOURCE, SRC_KEY),
+                    activityKey(TARGET, TGT_KEY)."""),
+            documentation="If there is a positive path between two species and both contribute activities, then a positive influence between their activity keys is emitted.",
         ),
         Rule(
             identifier="influences_from_paths:negative",
             text=dedent("""\
-                new(negativelyInfluences(START_SPECIES, END_SPECIES)) :-
-                    path(START_SPECIES, END_SPECIES, negative),
-                    new(activity(START_SPECIES)),
-                    new(activity(END_SPECIES))."""),
-            documentation="If there is a negative path between two species and both are activity nodes, then the first negatively influences the second.",
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    path(SOURCE, TARGET, negative),
+                    new(activity(SRC_KEY)),
+                    new(activity(TGT_KEY)),
+                    activityKey(SOURCE, SRC_KEY),
+                    activityKey(TARGET, TGT_KEY)."""),
+            documentation="If there is a negative path between two species and both contribute activities, then a negative influence between their activity keys is emitted.",
         ),
     ),
 )
 
 _INFLUENCES_CONSUMPTION = RuleGroup(
     identifier="influences_consumption",
-    profiles=frozenset({"default", "no_complex"}),
-    depends_on=frozenset({"activity_derivation"}),
+    profiles=_ALL_PROFILES,
+    depends_on=frozenset({"activity_derivation", "activity_key"}),
     rules=(
         Rule(
             identifier="influences_consumption:catalyzer_consumes_reactant",
             text=dedent("""\
-                new(negativelyInfluences(START_SPECIES, END_SPECIES)) :-
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     catalyzer(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, END_SPECIES),
-                    new(activity(START_SPECIES)),
-                    new(activity(END_SPECIES))."""),
-            documentation="If a species is referred to by a catalyzer of a reaction, another species is referred to by a reactant of that reaction, and both are activity nodes, then the first negatively influences the second.",
+                    hasReferredSpecies(REACTANT, TARGET),
+                    new(activity(SRC_KEY)),
+                    new(activity(TGT_KEY)),
+                    activityKey(SOURCE, SRC_KEY),
+                    activityKey(TARGET, TGT_KEY)."""),
+            documentation="If a species is referred to by a catalyzer of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
         ),
         Rule(
             identifier="influences_consumption:physical_stimulator_consumes_reactant",
             text=dedent("""\
-                new(negativelyInfluences(START_SPECIES, END_SPECIES)) :-
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     physicalStimulator(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, END_SPECIES),
-                    new(activity(START_SPECIES)),
-                    new(activity(END_SPECIES))."""),
-            documentation="If a species is referred to by a physical stimulator of a reaction, another species is referred to by a reactant of that reaction, and both are activity nodes, then the first negatively influences the second.",
+                    hasReferredSpecies(REACTANT, TARGET),
+                    new(activity(SRC_KEY)),
+                    new(activity(TGT_KEY)),
+                    activityKey(SOURCE, SRC_KEY),
+                    activityKey(TARGET, TGT_KEY)."""),
+            documentation="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
         ),
         Rule(
             identifier="influences_consumption:trigger_consumes_reactant",
             text=dedent("""\
-                new(negativelyInfluences(START_SPECIES, END_SPECIES)) :-
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     trigger(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, END_SPECIES),
-                    new(activity(START_SPECIES)),
-                    new(activity(END_SPECIES))."""),
-            documentation="If a species is referred to by a trigger of a reaction, another species is referred to by a reactant of that reaction, and both are activity nodes, then the first negatively influences the second.",
+                    hasReferredSpecies(REACTANT, TARGET),
+                    new(activity(SRC_KEY)),
+                    new(activity(TGT_KEY)),
+                    activityKey(SOURCE, SRC_KEY),
+                    activityKey(TARGET, TGT_KEY)."""),
+            documentation="If a species is referred to by a trigger of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
         ),
         Rule(
             identifier="influences_consumption:inhibitor_spares_reactant",
             text=dedent("""\
-                new(positivelyInfluences(START_SPECIES, END_SPECIES)) :-
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     inhibitor(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, END_SPECIES),
-                    new(activity(START_SPECIES)),
-                    new(activity(END_SPECIES))."""),
-            documentation="If a species is referred to by an inhibitor of a reaction, another species is referred to by a reactant of that reaction, and both are activity nodes, then the first positively influences the second.",
+                    hasReferredSpecies(REACTANT, TARGET),
+                    new(activity(SRC_KEY)),
+                    new(activity(TGT_KEY)),
+                    activityKey(SOURCE, SRC_KEY),
+                    activityKey(TARGET, TGT_KEY)."""),
+            documentation="If a species is referred to by an inhibitor of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a positive influence between their activity keys is emitted.",
         ),
     ),
 )
@@ -340,8 +447,12 @@ def _build_registry() -> RuleRegistry:
     registry.register(
         [
             _ACTIVITY_BASE,
-            _ACTIVITY_DERIVATION_FLAT,
-            _ACTIVITY_DERIVATION_NO_ACTIVE_SUBUNITS,
+            _HAS_ACTIVE_SUBUNIT,
+            _CONTRIBUTES_ACTIVITY_FLAT,
+            _CONTRIBUTES_ACTIVITY_NO_ACTIVE_SUBUNITS,
+            _ACTIVITY_KEY_KEPT,
+            _ACTIVITY_KEY_PURE_AF,
+            _ACTIVITY_DERIVATION,
             _PATHS_BASE,
             _PATHS_COMPLEX_TRAVERSAL,
             _INFLUENCES_FROM_PATHS,

@@ -1,10 +1,11 @@
 """Smoke tests over the bundled CellDesigner maps.
 
-For every XML map under tests/maps/{pd_dm,covid_dm}, both transformation
-modes are exercised in the no-layout mode. Cases are parametrized so each
-map and mode is reported as its own pytest node id, e.g.::
+For every XML map under tests/maps/{pd_dm,covid_dm}, the `normal` and
+`no-complex` transformation modes are exercised in the no-layout mode.
+Cases are parametrized so each map and mode is reported as its own
+pytest node id, e.g.::
 
-    tests/test_maps.py::test_smoke[pd_dm/Glycolysis.xml-pd2af]
+    tests/test_maps.py::test_smoke[pd_dm/Glycolysis.xml-normal]
 """
 
 import os
@@ -28,7 +29,7 @@ def _collect_cases():
     cases = []
     for directory in (PD_DM_DIR, COVID_DM_DIR):
         for path in list_xml_files(directory):
-            for mode in ("pd2af", "pd2af-no-complex"):
+            for mode in ("normal", "no-complex"):
                 rel = os.path.relpath(path, MAPS_DIR)
                 cases.append(pytest.param(path, mode, id=f"{rel}-{mode}"))
     return cases

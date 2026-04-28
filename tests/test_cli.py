@@ -8,6 +8,8 @@ import momapy.io.core
 
 import pd2af.cli
 
+from tests._helpers import has_dot_binary
+
 
 class TestWriterForOutput:
     @pytest.mark.parametrize(
@@ -28,10 +30,11 @@ class TestWriterForOutput:
 
 
 class TestModeAndLayoutChoices:
-    def test_mode_choices_map_user_names_to_internal_modes(self):
-        assert pd2af.cli._MODE_CHOICES == {
-            "normal": "pd2af",
-            "no-complex": "pd2af-no-complex",
+    def test_mode_choices_lists_three_modes(self):
+        assert set(pd2af.cli._MODE_CHOICES) == {
+            "normal",
+            "no-complex",
+            "pure-af",
         }
 
     def test_layout_choices_includes_documented_modes(self):
@@ -63,6 +66,31 @@ class TestCliMainOutputFile:
         names = sorted(s.name for s in roundtrip.model.species)
         # Under no-complex, complex D drops out in favour of subunit C.
         assert "D" not in names
+
+    @pytest.mark.skipif(
+        not has_dot_binary(), reason="graphviz `dot` binary not on PATH"
+    )
+    def test_pure_af_mode_with_auto_layout(self, tmp_path, example_map_path):
+        out_path = tmp_path / "out.pickle"
+        pd2af.cli.main(
+            [
+                example_map_path,
+                "-m",
+                "pure-af",
+                "-l",
+                "auto",
+                "-o",
+                str(out_path),
+            ]
+        )
+        roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
+        names = sorted(s.name for s in roundtrip.model.species)
+        # Under pure-af (no-complex inheritance), D drops out.
+        assert "D" not in names
+
+    def test_pure_af_with_plain_layout_exits_nonzero(self, example_map_path):
+        with pytest.raises(ValueError):
+            pd2af.cli.main([example_map_path, "-m", "pure-af", "-l", "plain"])
 
     def test_invalid_mode_choice_exits(self, example_map_path, capsys):
         with pytest.raises(SystemExit):

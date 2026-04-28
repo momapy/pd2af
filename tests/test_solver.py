@@ -9,7 +9,7 @@ import pd2af.solver
 
 @pytest.fixture(scope="module")
 def solved_default(example_cd_map):
-    return pd2af.solver.solve(example_cd_map, mode="pd2af")
+    return pd2af.solver.solve(example_cd_map, mode="normal")
 
 
 @pytest.fixture(scope="module")
@@ -49,10 +49,12 @@ class TestSolve:
         self, example_cd_map
     ):
         clingo_model, id_to_model_element = pd2af.solver.solve(
-            example_cd_map, mode="pd2af-no-complex"
+            example_cd_map, mode="no-complex"
         )
         atoms = pd2af.solver._get_activity_atoms(clingo_model)
-        names = sorted(id_to_model_element[atom.name].name for atom in atoms)
+        names = sorted(
+            id_to_model_element[atom.key.species].name for atom in atoms
+        )
         assert "D" not in names
         assert "C" in names
 
@@ -97,4 +99,8 @@ class TestMakeNewCdModel:
 
 
 def test_supported_modes():
-    assert set(pd2af.solver._MODE_TO_PROFILE) == {"pd2af", "pd2af-no-complex"}
+    assert set(pd2af.solver._MODE_TO_PROFILE) == {
+        "normal",
+        "no-complex",
+        "pure-af",
+    }
