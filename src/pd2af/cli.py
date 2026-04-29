@@ -8,7 +8,12 @@ import momapy.io.core
 import pd2af
 
 
-_MODE_CHOICES = ("normal", "no-complex", "pure-af")
+_MODE_CHOICES = (
+    "normal",
+    "no-complex",
+    "keep-species",
+    "keep-species-no-complex",
+)
 
 _LAYOUT_CHOICES = ("plain", "overlay", "auto")
 
@@ -70,21 +75,27 @@ def main(argv=None):
         choices=_MODE_CHOICES,
         default="normal",
         help=(
-            "transformation mode (default: normal). 'pure-af' merges "
-            "proteoforms of the same template and compartment into a single "
-            "activity and requires `--layout auto`."
+            "transformation mode (default: normal). 'normal' and "
+            "'no-complex' merge proteoforms of the same template and "
+            "compartment into a single activity (true PD->AF transform) "
+            "and require `--layout auto`. 'keep-species' and "
+            "'keep-species-no-complex' keep each PD species as its own "
+            "activity. The '*-no-complex' variants drop complexes that "
+            "have an active subunit, routing influences through the "
+            "subunits."
         ),
     )
     parser.add_argument(
         "-l",
         "--layout",
         choices=_LAYOUT_CHOICES,
-        default="plain",
+        default="auto",
         help=(
-            "layout strategy: plain (reuse original positions, model "
-            "elements only, default), overlay (reuse full original layout "
-            "with non-model elements greyed out), or auto (graphviz "
-            "auto-layout, requires `dot`)"
+            "layout strategy: auto (graphviz auto-layout, requires `dot`, "
+            "default), plain (reuse original positions, model elements "
+            "only), or overlay (reuse full original layout with non-model "
+            "elements greyed out). 'normal' and 'no-complex' modes "
+            "require `auto`."
         ),
     )
     parser.add_argument(

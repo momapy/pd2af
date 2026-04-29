@@ -23,7 +23,7 @@ import momapy.io.core
 import pd2af
 
 cd_map = momapy.io.core.read("my_map.xml").obj
-af_map = pd2af.transform(cd_map, mode="normal", layout_mode="plain")
+af_map = pd2af.transform(cd_map, mode="normal", layout_mode="auto")
 momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
 ```
 
@@ -31,26 +31,32 @@ momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
 
 ```bash
 pd2af my_map.xml -o my_map_af.xml
-pd2af my_map.xml -m pure-af -l auto -o my_map_af.xml
+pd2af my_map.xml -m keep-species -l plain -o my_map_af.xml
 ```
 
 See [CLI reference](cli.md) for all options.
 
 ## Transformation modes
 
-pd2af supports three transformation modes, selectable with `-m` / `mode=`:
+pd2af supports four transformation modes on two orthogonal axes — how species are mapped to activities, and how complexes are handled. Selectable with `-m` / `mode=`:
 
-- **`normal`** (default) — emits one activity per distinct PD species (template + state + compartment). Influences are derived from PD reactions and modulations.
-- **`no-complex`** — like `normal`, but does not emit complex activities; complex membership is flattened into influences between subunit activities.
-- **`pure-af`** — merges all proteoforms of the same template (within a compartment) into a single activity. Requires `--layout auto` because positions from the original PD map can no longer be reused.
+|                       | keep complexes            | drop complexes (route through subunits) |
+|-----------------------|---------------------------|------------------------------------------|
+| **merge proteoforms** | `normal` *(default)*      | `no-complex`                             |
+| **keep each species** | `keep-species`            | `keep-species-no-complex`                |
+
+- **merge proteoforms** modes (`normal`, `no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout auto`.
+- **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
+- **drop complexes** variants (`no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
+- **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.
 
 ## Layout modes
 
 Selectable with `-l` / `layout_mode=`:
 
-- **`plain`** (default) — reuse original positions, only model elements are kept.
-- **`overlay`** — reuse the full original layout; non-model elements are greyed out.
-- **`auto`** — Graphviz `dot` auto-layout (required for `pure-af`).
+- **`auto`** (default) — Graphviz `dot` auto-layout. Required for `normal` and `no-complex`.
+- **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species` and `keep-species-no-complex`.
+- **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species` and `keep-species-no-complex`.
 
 ## Documentation
 

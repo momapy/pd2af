@@ -61,7 +61,7 @@ def _resolve_species_layouts(cd_map, new_cd_model):
     """Resolve `(species, layout, synthetic)` for each species in the new model.
 
     `synthetic=True` means no original layout could be found (or it's a
-    pure-af synthesized species) and a fresh layout was created.
+    merged-proteoform synthesized species) and a fresh layout was created.
     """
     resolved = []
     for species in new_cd_model.species:

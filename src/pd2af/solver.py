@@ -14,15 +14,17 @@ import pd2af.predicates
 import pd2af.rules
 
 
-_MODE_TO_PROFILE = {
-    "normal": "default",
-    "no-complex": "no_complex",
-    "pure-af": "pure_af",
-}
+_VALID_MODES = frozenset(
+    {"normal", "no-complex", "keep-species", "keep-species-no-complex"}
+)
 
 _NO_COMPARTMENT_SENTINEL = "no_compartment"
 
-_SYNTHESIZED_ID_PREFIX = "pure_af__"
+_SYNTHESIZED_ID_PREFIX = "merged__"
+
+
+def _mode_to_profile(mode):
+    return mode.replace("-", "_")
 
 
 def is_synthesized_species(species):
@@ -40,9 +42,9 @@ _TEMPLATE_TO_SPECIES_CLASS = {
 
 
 def _make_control(cd_model, id_to_model_element, mode):
-    profile = _MODE_TO_PROFILE.get(mode)
-    if profile is None:
+    if mode not in _VALID_MODES:
         raise ValueError(f"mode {mode!r} is not supported")
+    profile = _mode_to_profile(mode)
     control = clorm.clingo.Control(
         ["--warn=no-atom-undefined"],
         unifier=[pd2af.predicates.new],
@@ -62,7 +64,7 @@ def _make_control(cd_model, id_to_model_element, mode):
 
 
 def solve(cd_map, mode):
-    if mode not in _MODE_TO_PROFILE:
+    if mode not in _VALID_MODES:
         raise ValueError(f"mode {mode!r} is not supported")
     id_to_model_element = {}
     control = _make_control(cd_map.model, id_to_model_element, mode=mode)
@@ -105,7 +107,7 @@ def _stripped_template_for(template, template_id, cache):
         fields_to_clear["regions"] = frozenset()
     stripped = dataclasses.replace(
         template,
-        id_=f"pure_af_template__{template_id}",
+        id_=f"merged_template__{template_id}",
         **fields_to_clear,
     )
     cache[template_id] = stripped
@@ -118,12 +120,12 @@ def _make_synthetic_species(key, id_to_model_element, stripped_template_cache):
     template = id_to_model_element.get(template_id)
     if template is None:
         raise ValueError(
-            f"pure-af synthesized key references unknown template id {template_id!r}"
+            f"merged-proteoform key references unknown template id {template_id!r}"
         )
     species_cls = _TEMPLATE_TO_SPECIES_CLASS.get(type(template))
     if species_cls is None:
         raise ValueError(
-            f"pure-af mode does not know how to synthesize a species for template "
+            f"cannot synthesize a merged-proteoform species for template "
             f"class {type(template).__name__}"
         )
     if compartment_id == _NO_COMPARTMENT_SENTINEL:
@@ -132,7 +134,7 @@ def _make_synthetic_species(key, id_to_model_element, stripped_template_cache):
         compartment = id_to_model_element.get(compartment_id)
         if compartment is None:
             raise ValueError(
-                f"pure-af synthesized key references unknown compartment id "
+                f"merged-proteoform key references unknown compartment id "
                 f"{compartment_id!r}"
             )
     stripped_template = _stripped_template_for(

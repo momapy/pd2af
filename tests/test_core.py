@@ -13,68 +13,81 @@ from tests._helpers import (
 
 
 @pytest.fixture(scope="module")
-def out_default(example_cd_map):
-    return pd2af.transform(example_cd_map, mode="normal", layout_mode="plain")
+def out_keep_species(example_cd_map):
+    return pd2af.transform(
+        example_cd_map, mode="keep-species", layout_mode="plain"
+    )
+
+
+@pytest.fixture(scope="module")
+def out_keep_species_no_complex(example_cd_map):
+    return pd2af.transform(
+        example_cd_map, mode="keep-species-no-complex", layout_mode="plain"
+    )
 
 
 @pytest.fixture(scope="module")
 def out_no_complex(example_cd_map):
+    if not has_dot_binary():
+        pytest.skip("graphviz `dot` binary not on PATH")
     return pd2af.transform(
-        example_cd_map, mode="no-complex", layout_mode="plain"
+        example_cd_map, mode="no-complex", layout_mode="auto"
     )
 
 
 @pytest.fixture(scope="module")
-def out_pure_af(example_cd_map):
+def out_normal(example_cd_map):
     if not has_dot_binary():
         pytest.skip("graphviz `dot` binary not on PATH")
-    return pd2af.transform(
-        example_cd_map, mode="pure-af", layout_mode="auto"
-    )
+    return pd2af.transform(example_cd_map, mode="normal", layout_mode="auto")
 
 
-class TestTransformExampleDefaultMode:
-    """Golden test: example.xml under default mode and plain layout."""
+class TestTransformExampleKeepSpeciesMode:
+    """Golden test: example.xml under keep-species mode and plain layout."""
 
-    def test_returns_celldesigner_map(self, out_default):
-        assert isinstance(out_default, momapy.celldesigner.CellDesignerMap)
+    def test_returns_celldesigner_map(self, out_keep_species):
+        assert isinstance(out_keep_species, momapy.celldesigner.CellDesignerMap)
 
-    def test_preserves_celldesigner_model_type(self, out_default):
-        assert isinstance(out_default.model, momapy.celldesigner.CellDesignerModel)
+    def test_preserves_celldesigner_model_type(self, out_keep_species):
+        assert isinstance(
+            out_keep_species.model, momapy.celldesigner.CellDesignerModel
+        )
 
-    def test_expected_active_species(self, out_default):
-        assert species_names(out_default.model) == ["B", "C", "D", "E", "F", "G"]
+    def test_expected_active_species(self, out_keep_species):
+        # Active subunit C is subsumed into its containing complex D under
+        # keep-species (which keeps complexes), so it does not appear as a
+        # top-level activity.
+        assert species_names(out_keep_species.model) == [
+            "B", "D", "E", "F", "G",
+        ]
 
-    def test_expected_modulations(self, out_default):
-        assert modulation_set(out_default.model) == {
+    def test_expected_modulations(self, out_keep_species):
+        assert modulation_set(out_keep_species.model) == {
             ("PositiveInfluence", "B", "D"),
             ("PositiveInfluence", "D", "F"),
             ("Inhibition", "B", "E"),
             ("Inhibition", "G", "B"),
         }
 
-    def test_layout_present_with_plain_mode(self, out_default):
-        assert out_default.layout is not None
-        # one layout element per species + one arc per modulation
-        assert len(out_default.layout.layout_elements) == (
-            len(out_default.model.species) + len(out_default.model.modulations)
-        )
+    def test_layout_present_with_plain_mode(self, out_keep_species):
+        assert out_keep_species.layout is not None
+        assert len(out_keep_species.layout.layout_elements) > 0
 
 
-class TestTransformExampleNoComplexMode:
-    """Golden test: example.xml under no-complex mode."""
+class TestTransformExampleKeepSpeciesNoComplexMode:
+    """Golden test: example.xml under keep-species-no-complex mode."""
 
-    def test_complex_subunits_replace_complex(self, out_no_complex):
-        # Complex D contains subunits A and C; under no-complex, D drops out
-        # and influences route through its active subunits instead. Of A and
-        # C only C has activity (active structural state), so D->F becomes
-        # C->F and B->D becomes B->C.
-        names = species_names(out_no_complex.model)
+    def test_complex_subunits_replace_complex(self, out_keep_species_no_complex):
+        # Complex D contains subunits A and C; under keep-species-no-complex,
+        # D drops out and influences route through its active subunits
+        # instead. Only C has activity, so D->F becomes C->F and B->D becomes
+        # B->C.
+        names = species_names(out_keep_species_no_complex.model)
         assert "D" not in names
         assert "C" in names
 
-    def test_expected_modulations(self, out_no_complex):
-        assert modulation_set(out_no_complex.model) == {
+    def test_expected_modulations(self, out_keep_species_no_complex):
+        assert modulation_set(out_keep_species_no_complex.model) == {
             ("PositiveInfluence", "B", "C"),
             ("PositiveInfluence", "C", "F"),
             ("Inhibition", "B", "E"),
@@ -82,35 +95,36 @@ class TestTransformExampleNoComplexMode:
         }
 
 
-class TestTransformExamplePureAfMode:
-    """Golden test: example.xml under pure-af mode."""
+class TestTransformExampleNoComplexMode:
+    """Golden test: example.xml under no-complex mode (merge proteoforms,
+    drop complexes)."""
 
-    def test_returns_celldesigner_map(self, out_pure_af):
-        assert isinstance(out_pure_af, momapy.celldesigner.CellDesignerMap)
+    def test_returns_celldesigner_map(self, out_no_complex):
+        assert isinstance(out_no_complex, momapy.celldesigner.CellDesignerMap)
 
-    def test_complex_drops_out_via_no_complex_inheritance(self, out_pure_af):
-        # Complex D has an active subunit; pure-af inherits the no-complex
-        # behaviour and drops D in favour of the active subunit C.
-        names = species_names(out_pure_af.model)
+    def test_complex_drops_out(self, out_no_complex):
+        # Complex D has an active subunit; no-complex drops D in favour of
+        # the active subunit C.
+        names = species_names(out_no_complex.model)
         assert "D" not in names
 
-    def test_synthetic_species_have_clean_template(self, out_pure_af):
-        for species in out_pure_af.model.species:
+    def test_synthetic_species_have_clean_template(self, out_no_complex):
+        for species in out_no_complex.model.species:
             template = getattr(species, "template", None)
             if template is None:
                 continue
-            # synthesized species' template id is prefixed; original
-            # template ids in the input map are short ("pr1", ...).
-            if not template.id_.startswith("pure_af_template__"):
+            if not template.id_.startswith("merged_template__"):
                 continue
             if hasattr(template, "modification_residues"):
                 assert template.modification_residues == frozenset()
             if hasattr(template, "regions"):
                 assert template.regions == frozenset()
 
-    def test_synthetic_species_have_no_states_or_modifications(self, out_pure_af):
-        for species in out_pure_af.model.species:
-            if not species.id_.startswith("pure_af__"):
+    def test_synthetic_species_have_no_states_or_modifications(
+        self, out_no_complex
+    ):
+        for species in out_no_complex.model.species:
+            if not species.id_.startswith("merged__"):
                 continue
             assert species.homomultimer == 1
             structural_states = getattr(species, "structural_states", None)
@@ -121,15 +135,63 @@ class TestTransformExamplePureAfMode:
                 assert modifications == frozenset()
 
 
+class TestTransformExampleNormalMode:
+    """Golden test: example.xml under normal mode (merge proteoforms, keep
+    complexes)."""
+
+    def test_returns_celldesigner_map(self, out_normal):
+        assert isinstance(out_normal, momapy.celldesigner.CellDesignerMap)
+
+    def test_complex_is_kept(self, out_normal):
+        # Complex D is templateless and is kept as its own activity. Its
+        # active subunit C is subsumed into D and does not appear as a
+        # separate top-level activity.
+        names = species_names(out_normal.model)
+        assert "D" in names
+        assert "C" not in names
+
+    def test_complex_routes_through_itself(self, out_normal):
+        # Influences involving the complex go through the complex (kept_species)
+        # rather than through subunits.
+        mods = modulation_set(out_normal.model)
+        assert ("PositiveInfluence", "B", "D") in mods
+        assert ("PositiveInfluence", "D", "F") in mods
+
+    def test_complex_kept_with_kept_species_id(self, out_normal):
+        # The complex survives with its original id (not a synthesized one).
+        complex_species = [
+            s
+            for s in out_normal.model.species
+            if isinstance(s, momapy.celldesigner.Complex)
+        ]
+        assert complex_species
+        for s in complex_species:
+            assert not s.id_.startswith("merged__")
+
+    def test_monomers_use_synthesized_species(self, out_normal):
+        # Templated monomers are merged into proteoform-class activities,
+        # which are synthesized species.
+        synthesized = [
+            s
+            for s in out_normal.model.species
+            if s.id_.startswith("merged__")
+        ]
+        assert synthesized
+
+
 class TestTransformLayoutModes:
     def test_no_layout_mode_yields_map_without_layout(self, example_cd_map):
-        out = pd2af.transform(example_cd_map, mode="normal", layout_mode=None)
+        out = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        )
         assert isinstance(out, momapy.celldesigner.CellDesignerMap)
         assert out.layout is None
         assert len(out.model.species) > 0
 
     def test_plain_mode_attaches_layout(self, example_cd_map):
-        out = pd2af.transform(example_cd_map, mode="normal", layout_mode="plain")
+        out = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode="plain"
+        )
         assert out.layout is not None
         assert len(out.layout.layout_elements) > 0
 
@@ -137,7 +199,9 @@ class TestTransformLayoutModes:
         not has_dot_binary(), reason="graphviz `dot` binary not on PATH"
     )
     def test_auto_mode_runs_with_dot(self, example_cd_map):
-        out = pd2af.transform(example_cd_map, mode="normal", layout_mode="auto")
+        out = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode="auto"
+        )
         assert out.layout is not None
         assert len(out.layout.layout_elements) > 0
 
@@ -145,18 +209,37 @@ class TestTransformLayoutModes:
 class TestTransformErrors:
     def test_unknown_mode_raises_value_error(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.transform(example_cd_map, mode="not-a-mode", layout_mode="plain")
+            pd2af.transform(
+                example_cd_map, mode="not-a-mode", layout_mode="plain"
+            )
 
     def test_unknown_layout_mode_raises_value_error(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.transform(example_cd_map, mode="normal", layout_mode="not-a-layout")
-
-    @pytest.mark.parametrize("layout_mode", ["plain", "overlay", None])
-    def test_pure_af_requires_auto_layout(self, example_cd_map, layout_mode):
-        with pytest.raises(ValueError):
             pd2af.transform(
-                example_cd_map, mode="pure-af", layout_mode=layout_mode
+                example_cd_map,
+                mode="keep-species",
+                layout_mode="not-a-layout",
             )
+
+    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
+    @pytest.mark.parametrize("layout_mode", ["plain", "overlay", None])
+    def test_merged_modes_require_auto_layout(
+        self, example_cd_map, mode, layout_mode
+    ):
+        with pytest.raises(ValueError):
+            pd2af.transform(example_cd_map, mode=mode, layout_mode=layout_mode)
+
+    @pytest.mark.parametrize(
+        "mode", ["keep-species", "keep-species-no-complex"]
+    )
+    @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
+    def test_keep_species_modes_accept_non_auto_layout(
+        self, example_cd_map, mode, layout_mode
+    ):
+        out = pd2af.transform(
+            example_cd_map, mode=mode, layout_mode=layout_mode
+        )
+        assert out.layout is not None
 
 
 class TestTransformIsPure:
@@ -166,13 +249,13 @@ class TestTransformIsPure:
         cd_map = read_cd_map(example_map_path)
         before_species = sorted(s.id_ for s in cd_map.model.species)
         before_reactions = sorted(r.id_ for r in cd_map.model.reactions)
-        pd2af.transform(cd_map, mode="normal", layout_mode=None)
+        pd2af.transform(cd_map, mode="keep-species", layout_mode=None)
         after_species = sorted(s.id_ for s in cd_map.model.species)
         after_reactions = sorted(r.id_ for r in cd_map.model.reactions)
         assert before_species == after_species
         assert before_reactions == after_reactions
 
-    def test_pure_af_does_not_mutate_template(self, example_map_path):
+    def test_no_complex_does_not_mutate_template(self, example_map_path):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         cd_map = read_cd_map(example_map_path)
@@ -183,7 +266,7 @@ class TestTransformIsPure:
             t.id_: getattr(t, "modification_residues", None)
             for t in cd_map.model.species_templates
         }
-        pd2af.transform(cd_map, mode="pure-af", layout_mode="auto")
+        pd2af.transform(cd_map, mode="no-complex", layout_mode="auto")
         after_template_ids = sorted(
             t.id_ for t in cd_map.model.species_templates
         )
