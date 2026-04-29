@@ -12,6 +12,21 @@ import pydot
 
 _POINTS_PER_INCH = 96
 
+_ROOT_LAYOUT_SEP = 15.0
+
+
+def harmonize_root_layout(layout_builder):
+    """Set the root layout's fill to white and fit it tightly around its
+    children. Applied uniformly across all layout modes so the rendered
+    canvas has consistent background and padding."""
+    layout_builder.fill = momapy.coloring.white
+    momapy.positioning.set_fit(
+        layout_builder,
+        layout_builder.layout_elements,
+        xsep=_ROOT_LAYOUT_SEP,
+        ysep=_ROOT_LAYOUT_SEP,
+    )
+
 
 def highlight_layout_elements(layout_elements, layout):
     all_layout_elements = []
@@ -271,6 +286,6 @@ def auto_layout(cd_map):
             compartment_layout_element, included_layout_elements, xsep=10.0, ysep=10.0
         )
         compartment_layout_element.label.position = compartment_layout_element.position
-    momapy.positioning.set_fit(new_layout_builder, new_layout_builder.layout_elements)
+    harmonize_root_layout(new_layout_builder)
     new_map = momapy.builder.object_from_builder(new_map_builder)
     return new_map

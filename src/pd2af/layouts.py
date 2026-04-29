@@ -40,19 +40,23 @@ def _get_layout_elements_for_model_element(map_, model_element):
     return layout_elements
 
 
-def _make_synthetic_species_layout(species):
+def _make_synthetic_species_layout(species, index=0):
     layout_cls = _SPECIES_CLASS_TO_LAYOUT_CLASS.get(type(species))
     if layout_cls is None:
         raise ValueError(
             f"no default layout class registered for species type "
             f"{type(species).__name__}"
         )
+    # Offset by index so same-named synthetics aren't dataclass-equal
+    # (id_ has compare=False) and don't collide as layout_model_mapping
+    # keys; auto_layout reassigns positions, so the offset is invisible.
+    position = momapy.geometry.Point(float(index), 0.0)
     label = momapy.core.layout.TextLayout(
         text=species.name or "",
-        position=momapy.geometry.Point(0.0, 0.0),
+        position=position,
     )
     return layout_cls(
-        position=momapy.geometry.Point(0.0, 0.0),
+        position=position,
         label=label,
     )
 
@@ -64,6 +68,7 @@ def _resolve_species_layouts(cd_map, new_cd_model):
     merged-proteoform synthesized species) and a fresh layout was created.
     """
     resolved = []
+    synthetic_index = 0
     for species in new_cd_model.species:
         if pd2af.solver.is_synthesized_species(species):
             layout_elements = None
@@ -74,7 +79,14 @@ def _resolve_species_layouts(cd_map, new_cd_model):
         if layout_elements:
             resolved.append((species, layout_elements[0], False))
         else:
-            resolved.append((species, _make_synthetic_species_layout(species), True))
+            resolved.append(
+                (
+                    species,
+                    _make_synthetic_species_layout(species, synthetic_index),
+                    True,
+                )
+            )
+            synthetic_index += 1
     return resolved
 
 
@@ -155,6 +167,7 @@ def _add_modulation_mapping(
 
 
 def _finalize(new_cd_model, layout_builder, mapping_builder):
+    pd2af.utils.harmonize_root_layout(layout_builder)
     builder_to_object = {}
     layout = momapy.builder.object_from_builder(
         layout_builder, builder_to_object=builder_to_object
@@ -303,13 +316,6 @@ def make_plain(cd_map, new_cd_model):
             _add_modulation_mapping(
                 mapping_builder, arc, source_layout, target_layout, modulation
             )
-    layout_builder.fill = momapy.coloring.white
-    momapy.positioning.set_fit(
-        layout_builder,
-        layout_builder.layout_elements,
-        xsep=10.0,
-        ysep=10.0,
-    )
     return _finalize(new_cd_model, layout_builder, mapping_builder)
 
 
