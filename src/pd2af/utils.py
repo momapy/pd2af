@@ -183,6 +183,30 @@ def auto_layout(cd_map):
             else:
                 dot_graph.add_subgraph(compartment_dot_cluster)
     id_to_layout_element = {}
+    # Map every descendant id to its top-level Node ancestor (the one that
+    # gets added as a pydot node). Arc endpoints can reference descendants
+    # (e.g. a subunit inside a complex); those must be redirected to the
+    # top-level node so dot doesn't auto-create phantom nodes.
+    descendant_id_to_top_level_id = {}
+    for layout_element_builder in new_layout_builder.layout_elements:
+        if momapy.builder.isinstance_or_builder(
+            layout_element_builder, momapy.core.layout.Node
+        ) and not momapy.builder.isinstance_or_builder(
+            layout_element_builder,
+            (
+                momapy.celldesigner.RectangleCompartmentLayout,
+                momapy.celldesigner.OvalCompartmentLayout,
+            ),
+        ):
+            descendant_id_to_top_level_id[layout_element_builder.id_] = (
+                layout_element_builder.id_
+            )
+            for descendant in layout_element_builder.descendants():
+                descendant_id = getattr(descendant, "id_", None)
+                if descendant_id is not None:
+                    descendant_id_to_top_level_id.setdefault(
+                        descendant_id, layout_element_builder.id_
+                    )
     for layout_element_builder in new_layout_builder.layout_elements:
         if momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Node
@@ -219,11 +243,15 @@ def auto_layout(cd_map):
         elif momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Arc
         ):
-            dot_graph.add_edge(
-                pydot.Edge(
-                    layout_element_builder.source.id_, layout_element_builder.target.id_
-                )
+            source_id = descendant_id_to_top_level_id.get(
+                layout_element_builder.source.id_,
+                layout_element_builder.source.id_,
             )
+            target_id = descendant_id_to_top_level_id.get(
+                layout_element_builder.target.id_,
+                layout_element_builder.target.id_,
+            )
+            dot_graph.add_edge(pydot.Edge(source_id, target_id))
         id_to_layout_element[layout_element_builder.id_] = layout_element_builder
     dot_graph.set("ranksep", 1.0)
     dot_graph.set("nodesep", 0.5)
