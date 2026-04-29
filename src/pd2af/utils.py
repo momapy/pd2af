@@ -1,4 +1,5 @@
 import collections
+import dataclasses
 
 import momapy.core.layout
 import momapy.styling
@@ -9,6 +10,21 @@ import momapy.geometry
 import momapy.positioning
 import momapy.celldesigner
 import pydot
+
+
+@dataclasses.dataclass(frozen=True)
+class _NotInIdSetSelector(momapy.styling.Selector):
+    """Selects elements whose `id_` is not in `keep_ids` (or which have none).
+
+    Replaces a NotSelector wrapping one IdSelector per kept element: that
+    construction made selection O(N) per visited element and quadratic over
+    the whole layout. A frozenset lookup keeps it O(1)."""
+
+    keep_ids: frozenset
+
+    def select(self, obj, ancestors):
+        obj_id = getattr(obj, "id_", None)
+        return obj_id is None or obj_id not in self.keep_ids
 
 _POINTS_PER_INCH = 96
 
@@ -29,15 +45,12 @@ def harmonize_root_layout(layout_builder):
 
 
 def highlight_layout_elements(layout_elements, layout):
-    all_layout_elements = []
+    keep_ids = set()
     for layout_element in layout_elements:
-        all_layout_elements.append(layout_element)
-        all_layout_elements += layout_element.descendants()
-    id_selectors = [
-        momapy.styling.IdSelector(layout_element.id_)
-        for layout_element in all_layout_elements
-    ]
-    not_selector = momapy.styling.NotSelector(tuple(id_selectors))
+        keep_ids.add(layout_element.id_)
+        for descendant in layout_element.descendants():
+            keep_ids.add(descendant.id_)
+    not_selector = _NotInIdSetSelector(frozenset(keep_ids))
     layout_element_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.ClassSelector("LayoutElement"), not_selector])
     )
