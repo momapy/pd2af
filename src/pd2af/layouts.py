@@ -29,6 +29,22 @@ _SPECIES_CLASS_TO_LAYOUT_CLASS = {
 }
 
 
+def _compartments_outermost_first(compartments):
+    """Stable-sort compartments so that ancestors precede descendants in the
+    `outside` chain. Appending in this order makes outer compartments draw
+    behind nested ones rather than on top of them."""
+    def depth(compartment):
+        d = 0
+        seen = set()
+        current = compartment.outside
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            d += 1
+            current = current.outside
+        return d
+    return sorted(compartments, key=depth)
+
+
 # TODO: delete when issue is solved in momapy
 def _get_layout_elements_for_model_element(map_, model_element):
     layout_elements = map_.layout_model_mapping.get_mapping(model_element)
@@ -246,7 +262,7 @@ def make_auto(cd_map, new_cd_model):
     )
     layout_builder = layout_builder_cls()
     mapping_builder = momapy.core.mapping.LayoutModelMappingBuilder()
-    for compartment in new_cd_model.compartments:
+    for compartment in _compartments_outermost_first(new_cd_model.compartments):
         compartment_layouts = cd_map.layout_model_mapping.get_mapping(compartment)
         if compartment_layouts is None:
             continue
@@ -289,7 +305,7 @@ def make_plain(cd_map, new_cd_model):
     )
     layout_builder = layout_builder_cls()
     mapping_builder = momapy.core.mapping.LayoutModelMappingBuilder()
-    for compartment in new_cd_model.compartments:
+    for compartment in _compartments_outermost_first(new_cd_model.compartments):
         compartment_layouts = cd_map.layout_model_mapping.get_mapping(compartment)
         if compartment_layouts is None:
             continue
