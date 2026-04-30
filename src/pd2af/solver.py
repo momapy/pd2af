@@ -219,11 +219,16 @@ def make_new_cd_model(clingo_model, id_to_model_element):
     cd_model_builder.compartments = type(cd_model_builder.compartments)(
         compartments
     )
-    species_templates = set(
-        s.template
-        for s in species
-        if hasattr(s, "template") and s.template is not None
-    )
+    def _collect_templates(species_element, accumulator):
+        template = getattr(species_element, "template", None)
+        if template is not None:
+            accumulator.add(template)
+        for subunit in getattr(species_element, "subunits", ()) or ():
+            _collect_templates(subunit, accumulator)
+
+    species_templates = set()
+    for species_element in species:
+        _collect_templates(species_element, species_templates)
     cd_model_builder.species_templates = type(cd_model_builder.species_templates)(
         species_templates
     )
