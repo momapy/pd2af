@@ -1,3 +1,8 @@
+% Legacy CASQ ASP program, kept verbatim as a reference. The active
+% port lives in pd2af/rules.py under profile `casq`, expressed in the
+% current pd2af fact vocabulary (hasReactant/hasProduct/hasModifier/
+% hasReferredSpecies/etc.). This file is no longer loaded at runtime.
+
 activeParticipates(SPECIES, REACTION):-reaction(REACTION), species(SPECIES, _, _), consumes(REACTION, SPECIES, _).
 activeParticipates(SPECIES, REACTION):-reaction(REACTION), species(SPECIES, _, _), modulates(SPECIES, REACTION).
 participates(SPECIES, REACTION):-activeParticipates(SPECIES, REACTION).

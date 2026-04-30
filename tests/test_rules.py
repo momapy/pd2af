@@ -3,7 +3,13 @@ import pytest
 import pd2af.rules
 
 
-_PROFILES = ("normal", "no_complex", "keep_species", "keep_species_no_complex")
+_PROFILES = (
+    "normal",
+    "no_complex",
+    "keep_species",
+    "keep_species_no_complex",
+    "casq",
+)
 
 
 class TestBuildProgram:
@@ -67,12 +73,13 @@ def test_registry_validates():
     assert registry is not None
 
 
-def test_contributes_activity_slot_has_two_fillers():
+def test_contributes_activity_slot_has_three_fillers():
     registry = pd2af.rules._build_registry()
     fillers = registry.slots["contributes_activity"]
-    assert len(fillers) == 2
+    assert len(fillers) == 3
     assert "contributes_activity:flat" in fillers
     assert "contributes_activity:no_active_subunits" in fillers
+    assert "contributes_activity:casq" in fillers
 
 
 def test_activity_key_slot_has_two_fillers():
@@ -81,3 +88,32 @@ def test_activity_key_slot_has_two_fillers():
     assert len(fillers) == 2
     assert "activity_key:kept" in fillers
     assert "activity_key:merged" in fillers
+
+
+class TestCasqProfile:
+    def test_casq_includes_delete_and_bridged_product(self):
+        program = pd2af.rules.build_program("casq")
+        assert "delete(" in program
+        assert "rule_1" in program
+        assert "rule_2" in program
+        assert "rule_3" in program
+        assert "rule_4" in program
+        assert "bridgedProduct" in program
+
+    def test_casq_excludes_path_and_complex_traversal(self):
+        program = pd2af.rules.build_program("casq")
+        assert "path(START_SPECIES" not in program
+        assert "hasSubunit(END_SPECIES, SUBUNIT)" not in program
+        assert "hasContributingComplexAncestor" not in program
+        assert "hasActiveSubunit" not in program
+
+    def test_casq_uses_kept_species_keys_only(self):
+        program = pd2af.rules.build_program("casq")
+        assert "kept_species" in program
+        assert "derived_proteoform_class" not in program
+
+    def test_casq_does_not_emit_inhibitor_spares_reactant(self):
+        # casq.lp has no rule analogous to inhibitor-spares-reactant; that
+        # belongs to the path-based modes.
+        program = pd2af.rules.build_program("casq")
+        assert "inhibitor_spares_reactant" not in program

@@ -38,7 +38,7 @@ See [CLI reference](cli.md) for all options.
 
 ## Transformation modes
 
-pd2af supports four transformation modes on two orthogonal axes — how species are mapped to activities, and how complexes are handled. Selectable with `-m` / `mode=`:
+Selectable with `-m` / `mode=`. Four of the modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
@@ -50,13 +50,15 @@ pd2af supports four transformation modes on two orthogonal axes — how species 
 - **drop complexes** variants (`no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
 - **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.
 
+A fifth mode, **`casq`**, emits one activity per surviving PD species after applying CASQ-style deletion rules — heterodimer simplification, name-preserving step pruning, and transport collapse — with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only.
+
 ## Layout modes
 
 Selectable with `-l` / `layout_mode=`:
 
 - **`auto`** (default) — Graphviz `dot` auto-layout. Required for `normal` and `no-complex`.
-- **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species` and `keep-species-no-complex`.
-- **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species` and `keep-species-no-complex`.
+- **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
+- **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
 
 ## Documentation
 

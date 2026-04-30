@@ -9,7 +9,7 @@ The output map is written to stdout as a [momapy](https://github.com/adrienrougn
 ## Synopsis
 
 ```bash
-pd2af <input_file> [-m {normal,no-complex,keep-species,keep-species-no-complex}] [-l {plain,overlay,auto}] [-o <output_file>]
+pd2af <input_file> [-m {normal,no-complex,keep-species,keep-species-no-complex,casq}] [-l {plain,overlay,auto}] [-o <output_file>]
 ```
 
 ## Arguments
@@ -28,7 +28,7 @@ pd2af <input_file> [-m {normal,no-complex,keep-species,keep-species-no-complex}]
 
 ## Transformation modes (`-m`)
 
-The four modes lie on two orthogonal axes — species treatment and complex treatment:
+The first four modes lie on two orthogonal axes — species treatment and complex treatment:
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
@@ -41,6 +41,7 @@ The four modes lie on two orthogonal axes — species treatment and complex trea
 | `no-complex` | Like `normal`, but drop any complex that has an active subunit and route influences through the subunits. Requires `--layout auto`. |
 | `keep-species` | Emit one activity per distinct PD species (template + state + compartment). Keep complexes; active subunits of an activity-bearing complex are subsumed into the complex. CellDesigner-only. |
 | `keep-species-no-complex` | Like `keep-species`, but drop complexes with an active subunit. CellDesigner-only. |
+| `casq` | Emit one activity per surviving PD species after applying CASQ-style deletion rules (heterodimer simplification, name-preserving step pruning, transport collapse), with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only. |
 
 The merging modes (`normal`, `no-complex`) require `--layout auto` because positions from the original PD map cannot be reused for synthesized merged-proteoform activities.
 
@@ -49,8 +50,8 @@ The merging modes (`normal`, `no-complex`) require `--layout auto` because posit
 | Mode | Description |
 |------|-------------|
 | `auto` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. **Default**, and required for `normal` and `no-complex`. |
-| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species` and `keep-species-no-complex`. |
-| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species` and `keep-species-no-complex`. |
+| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, and `casq`. |
+| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex`, and `casq`. |
 
 ## Output writers
 
@@ -94,6 +95,12 @@ pd2af my_map.xml -m keep-species -l plain -o my_map_af.xml
 
 ```bash
 pd2af my_map.xml -m keep-species-no-complex -l overlay -o my_map_af.xml
+```
+
+### Use the casq mode
+
+```bash
+pd2af my_map.xml -m casq -l plain -o my_map_af.xml
 ```
 
 ## Getting help

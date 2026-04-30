@@ -10,7 +10,11 @@ _MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
 def transform(
     cd_map,
     mode: typing.Literal[
-        "normal", "no-complex", "keep-species", "keep-species-no-complex"
+        "normal",
+        "no-complex",
+        "keep-species",
+        "keep-species-no-complex",
+        "casq",
     ] = "normal",
     layout_mode: typing.Literal["plain", "overlay", "auto"] | None = "auto",
 ):

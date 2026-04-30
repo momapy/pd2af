@@ -13,6 +13,7 @@ _MODE_CHOICES = (
     "no-complex",
     "keep-species",
     "keep-species-no-complex",
+    "casq",
 )
 
 _LAYOUT_CHOICES = ("plain", "overlay", "auto")
@@ -82,7 +83,11 @@ def main(argv=None):
             "'keep-species-no-complex' keep each PD species as its own "
             "activity. The '*-no-complex' variants drop complexes that "
             "have an active subunit, routing influences through the "
-            "subunits."
+            "subunits. 'casq' emits one activity per surviving PD "
+            "species after applying CASQ-style deletion rules "
+            "(heterodimer simplification, name-preserving step pruning, "
+            "transport collapse) with single-hop rewiring across "
+            "deleted intermediates."
         ),
     )
     parser.add_argument(

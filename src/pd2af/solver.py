@@ -15,7 +15,7 @@ import pd2af.rules
 
 
 _VALID_MODES = frozenset(
-    {"normal", "no-complex", "keep-species", "keep-species-no-complex"}
+    {"normal", "no-complex", "keep-species", "keep-species-no-complex", "casq"}
 )
 
 _NO_COMPARTMENT_SENTINEL = "no_compartment"

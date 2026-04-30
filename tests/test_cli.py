@@ -30,12 +30,13 @@ class TestWriterForOutput:
 
 
 class TestModeAndLayoutChoices:
-    def test_mode_choices_lists_four_modes(self):
+    def test_mode_choices_lists_supported_modes(self):
         assert set(pd2af.cli._MODE_CHOICES) == {
             "normal",
             "no-complex",
             "keep-species",
             "keep-species-no-complex",
+            "casq",
         }
 
     def test_layout_choices_includes_documented_modes(self):
@@ -112,9 +113,9 @@ class TestCliMainOutputFile:
             pd2af.cli.main([example_map_path, "-m", mode, "-l", "plain"])
 
     @pytest.mark.parametrize(
-        "mode", ["keep-species", "keep-species-no-complex"]
+        "mode", ["keep-species", "keep-species-no-complex", "casq"]
     )
-    def test_keep_species_modes_accept_plain_layout(
+    def test_per_species_modes_accept_plain_layout(
         self, tmp_path, example_map_path, mode
     ):
         out_path = tmp_path / "out.pickle"

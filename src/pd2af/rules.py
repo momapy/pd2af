@@ -1,9 +1,9 @@
 """ASP rule composition for the pd2af transformation modes.
 
-The rules are organized as aspcompose groups. Four profiles
-(`normal`, `no_complex`, `keep_species`, `keep_species_no_complex`)
-compose the groups into the four supported mode programs. The
-profiles cover a 2x2 matrix on two orthogonal axes:
+The rules are organized as aspcompose groups. Five profiles
+(`normal`, `no_complex`, `keep_species`, `keep_species_no_complex`,
+`casq`) compose the groups into the supported mode programs. The
+first four profiles cover a 2x2 matrix on two orthogonal axes:
 
 * species treatment — ``normal``/``no_complex`` merge proteoforms of
   the same template (and compartment) into a single activity (true
@@ -14,6 +14,12 @@ profiles cover a 2x2 matrix on two orthogonal axes:
   any complex that has an active subunit and route influences through
   its subunits; ``normal``/``keep_species`` keep complexes as their
   own activities and route influences through them.
+
+The ``casq`` profile keeps each PD species as its own activity (like
+``keep_species``), prunes species via CASQ-style deletion rules
+(rule_1..rule_4) and emits influences directly from reaction
+modifier/reactant -> product and from modulation arcs, with
+single-hop rewiring across deleted intermediates.
 
 All path rules use a single ``path(X, Y, SIGN)`` predicate so
 transitivity and complex-subunit traversal can be written once and
@@ -26,9 +32,9 @@ profile-agnostic:
 * ``contributesActivity(SPECIES)`` — survives the profile filter and
   contributes an activity to the AF.
 * ``activityKey(SPECIES, KEY)`` — this species's identity in the AF
-  (a ``kept_species/1`` term in keep_species/keep_species_no_complex;
-  a ``kept_species/1`` or ``derived_proteoform_class/2`` term in
-  normal/no_complex).
+  (a ``kept_species/1`` term in keep_species/keep_species_no_complex
+  and casq; a ``kept_species/1`` or ``derived_proteoform_class/2``
+  term in normal/no_complex).
 """
 
 from textwrap import dedent
@@ -39,9 +45,11 @@ _ALL_PROFILES = frozenset(
     {"normal", "no_complex", "keep_species", "keep_species_no_complex"}
 )
 
+_CASQ_PROFILES = frozenset({"casq"})
+
 _ACTIVITY_BASE = RuleGroup(
     identifier="activity_base",
-    profiles=_ALL_PROFILES,
+    profiles=_ALL_PROFILES | _CASQ_PROFILES,
     rules=(
         Rule(
             identifier="activity_base:from_active_flag",
@@ -165,13 +173,13 @@ _CONTRIBUTES_ACTIVITY_NO_ACTIVE_SUBUNITS = RuleGroup(
 _ACTIVITY_KEY_KEPT = RuleGroup(
     identifier="activity_key:kept",
     slot="activity_key",
-    profiles=frozenset({"keep_species", "keep_species_no_complex"}),
+    profiles=frozenset({"keep_species", "keep_species_no_complex", "casq"}),
     depends_on=frozenset({"activity_base"}),
     rules=(
         Rule(
             identifier="activity_key:kept:identity",
             text="activityKey(SPECIES, kept_species(SPECIES)) :- species(SPECIES).",
-            documentation="In keep_species and keep_species_no_complex modes, every species's activity key is itself.",
+            documentation="In keep_species, keep_species_no_complex, and casq modes, every species's activity key is itself.",
         ),
     ),
 )
@@ -221,7 +229,7 @@ _ACTIVITY_KEY_MERGED = RuleGroup(
 
 _ACTIVITY_DERIVATION = RuleGroup(
     identifier="activity_derivation",
-    profiles=_ALL_PROFILES,
+    profiles=_ALL_PROFILES | _CASQ_PROFILES,
     depends_on=frozenset({"contributes_activity", "activity_key"}),
     rules=(
         Rule(
@@ -485,6 +493,368 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
 )
 
 
+_CASQ_PARTICIPATION = RuleGroup(
+    identifier="casq:participation",
+    profiles=_CASQ_PROFILES,
+    rules=(
+        Rule(
+            identifier="casq:participation:active_from_reactant",
+            text=dedent("""\
+                activeParticipates(SPECIES, REACTION) :-
+                    reaction(REACTION),
+                    hasReactant(REACTION, REACTANT),
+                    hasReferredSpecies(REACTANT, SPECIES)."""),
+            documentation="A species actively participates in a reaction if it is referred to by a reactant of that reaction.",
+        ),
+        Rule(
+            identifier="casq:participation:active_from_modifier",
+            text=dedent("""\
+                activeParticipates(SPECIES, REACTION) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER),
+                    hasReferredSpecies(MODIFIER, SPECIES)."""),
+            documentation="A species actively participates in a reaction if it is referred to by a modifier of that reaction.",
+        ),
+        Rule(
+            identifier="casq:participation:inherits_active",
+            text="participates(SPECIES, REACTION) :- activeParticipates(SPECIES, REACTION).",
+            documentation="Active participation implies participation.",
+        ),
+        Rule(
+            identifier="casq:participation:from_product",
+            text=dedent("""\
+                participates(SPECIES, REACTION) :-
+                    reaction(REACTION),
+                    hasProduct(REACTION, PRODUCT),
+                    hasReferredSpecies(PRODUCT, SPECIES)."""),
+            documentation="A species participates in a reaction if it is referred to by a product of that reaction.",
+        ),
+        Rule(
+            identifier="casq:participation:is_produced",
+            text=dedent("""\
+                isProducedSpecies(SPECIES) :-
+                    reaction(REACTION),
+                    hasProduct(REACTION, PRODUCT),
+                    hasReferredSpecies(PRODUCT, SPECIES)."""),
+            documentation="A species is produced if some reaction has a product referring to it.",
+        ),
+        Rule(
+            identifier="casq:participation:is_modifier",
+            text=dedent("""\
+                isModifierSpecies(SPECIES) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER),
+                    hasReferredSpecies(MODIFIER, SPECIES)."""),
+            documentation="A species is a modifier if some reaction has a modifier referring to it.",
+        ),
+    ),
+)
+
+_CASQ_DELETE = RuleGroup(
+    identifier="casq:delete",
+    profiles=_CASQ_PROFILES,
+    depends_on=frozenset({"casq:participation"}),
+    rules=(
+        Rule(
+            identifier="casq:delete:rule_1",
+            text=dedent("""\
+                delete(RECEPTOR, rule_1) :-
+                    heterodimerAssociation(REACTION),
+                    hasReactant(REACTION, RT_RECEPTOR),
+                    hasReferredSpecies(RT_RECEPTOR, RECEPTOR),
+                    receptor(RECEPTOR),
+                    hasReactant(REACTION, RT_PARTNER),
+                    hasReferredSpecies(RT_PARTNER, PARTNER),
+                    RECEPTOR != PARTNER,
+                    #count{ X : hasReactant(REACTION, RT), hasReferredSpecies(RT, X) } = 2,
+                    #count{ R1 : participates(RECEPTOR, R1) } = 1,
+                    #count{ R2 : participates(PARTNER, R2) } = 1."""),
+            documentation="A receptor in a 2-reactant heterodimer association where receptor and partner each participate in only this reaction is deleted (rule_1).",
+        ),
+        Rule(
+            identifier="casq:delete:rule_2",
+            text=dedent("""\
+                delete(SPECIES_1, rule_2) :-
+                    heterodimerAssociation(REACTION),
+                    hasReactant(REACTION, RT1), hasReferredSpecies(RT1, SPECIES_1),
+                    hasReactant(REACTION, RT2), hasReferredSpecies(RT2, SPECIES_2),
+                    SPECIES_1 != SPECIES_2,
+                    not receptor(SPECIES_1),
+                    not receptor(SPECIES_2),
+                    #count{ X : hasReactant(REACTION, RT), hasReferredSpecies(RT, X) } = 2,
+                    #count{ R1 : activeParticipates(SPECIES_1, R1) } = 1,
+                    #count{ R2 : activeParticipates(SPECIES_2, R2) } = 1."""),
+            documentation="In a 2-reactant heterodimer association where neither reactant is a receptor and each actively participates only in this reaction, both reactant species are deleted (rule_2). The rule fires symmetrically for each side.",
+        ),
+        Rule(
+            identifier="casq:delete:rule_3",
+            text=dedent("""\
+                delete(REACTANT, rule_3) :-
+                    reaction(REACTION),
+                    hasReactant(REACTION, RT), hasReferredSpecies(RT, REACTANT),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, PRODUCT),
+                    REACTANT != PRODUCT,
+                    hasName(REACTANT, NAME), hasName(PRODUCT, NAME),
+                    not isProducedSpecies(REACTANT),
+                    not isModifierSpecies(REACTANT),
+                    #count{ X : hasProduct(REACTION, P2), hasReferredSpecies(P2, X) } = 1,
+                    #count{ R : hasReactant(R, RT2), hasReferredSpecies(RT2, REACTANT) } = 1."""),
+            documentation="In a single-product reaction where reactant and product share a name, the reactant is deleted (rule_3) if it is not produced anywhere else, never appears as a modifier, and is consumed only by this reaction.",
+        ),
+        Rule(
+            identifier="casq:delete:rule_4",
+            text=dedent("""\
+                delete(REACTANT, rule_4) :-
+                    transport(REACTION),
+                    hasReactant(REACTION, RT), hasReferredSpecies(RT, REACTANT),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, PRODUCT),
+                    REACTANT != PRODUCT,
+                    hasName(REACTANT, NAME), hasName(PRODUCT, NAME),
+                    #count{ R : activeParticipates(REACTANT, R) } = 1,
+                    #count{ X : hasProduct(REACTION, P2), hasReferredSpecies(P2, X) } = 1."""),
+            documentation="In a single-product transport where reactant and product share a name and the reactant actively participates only in this reaction, the reactant is deleted (rule_4).",
+        ),
+    ),
+)
+
+_CASQ_BRIDGED_PRODUCT = RuleGroup(
+    identifier="casq:bridged_product",
+    profiles=_CASQ_PROFILES,
+    depends_on=frozenset({"casq:delete"}),
+    rules=(
+        Rule(
+            identifier="casq:bridged_product:from_rule_2",
+            text=dedent("""\
+                bridgedProduct(REACTION_1, PRODUCT) :-
+                    delete(SPECIES, rule_2),
+                    reaction(REACTION_1),
+                    hasProduct(REACTION_1, P1), hasReferredSpecies(P1, SPECIES),
+                    reaction(REACTION_2),
+                    hasReactant(REACTION_2, RT2), hasReferredSpecies(RT2, SPECIES),
+                    hasProduct(REACTION_2, P2), hasReferredSpecies(P2, PRODUCT)."""),
+            documentation="One-hop rewiring across a species deleted by rule_2: REACTION_1 produces SPECIES and REACTION_2 consumes SPECIES and produces PRODUCT, so REACTION_1 is treated as also producing PRODUCT.",
+        ),
+        Rule(
+            identifier="casq:bridged_product:from_rule_4",
+            text=dedent("""\
+                bridgedProduct(REACTION_1, PRODUCT) :-
+                    delete(SPECIES, rule_4),
+                    reaction(REACTION_1),
+                    hasProduct(REACTION_1, P1), hasReferredSpecies(P1, SPECIES),
+                    reaction(REACTION_2),
+                    hasReactant(REACTION_2, RT2), hasReferredSpecies(RT2, SPECIES),
+                    hasProduct(REACTION_2, P2), hasReferredSpecies(P2, PRODUCT)."""),
+            documentation="One-hop rewiring across a species deleted by rule_4 (analog of casq:bridged_product:from_rule_2 for transport-driven deletes).",
+        ),
+    ),
+)
+
+_CASQ_CONTRIBUTES_ACTIVITY = RuleGroup(
+    identifier="contributes_activity:casq",
+    slot="contributes_activity",
+    profiles=_CASQ_PROFILES,
+    depends_on=frozenset({"casq:delete"}),
+    rules=(
+        Rule(
+            identifier="contributes_activity:casq:not_deleted",
+            text=dedent("""\
+                contributesActivity(SPECIES) :-
+                    species(SPECIES),
+                    not delete(SPECIES, _)."""),
+            documentation="Every PD species that is not deleted by any CASQ rule contributes an activity to the new AF.",
+        ),
+    ),
+)
+
+_CASQ_INFLUENCES = RuleGroup(
+    identifier="casq:influences",
+    profiles=_CASQ_PROFILES,
+    depends_on=frozenset(
+        {"casq:bridged_product", "contributes_activity", "activity_key"}
+    ),
+    rules=(
+        Rule(
+            identifier="casq:influences:reactant_to_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasReactant(REACTION, RT), hasReferredSpecies(RT, SOURCE),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A reactant of a reaction positively influences a product of that reaction.",
+        ),
+        Rule(
+            identifier="casq:influences:reactant_to_bridged_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasReactant(REACTION, RT), hasReferredSpecies(RT, SOURCE),
+                    bridgedProduct(REACTION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="Same as casq:influences:reactant_to_product but routed through a deleted intermediate via bridgedProduct.",
+        ),
+        Rule(
+            identifier="casq:influences:catalyzer_to_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A catalyzer of a reaction positively influences a product of that reaction.",
+        ),
+        Rule(
+            identifier="casq:influences:catalyzer_to_bridged_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    bridgedProduct(REACTION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="Bridged variant of casq:influences:catalyzer_to_product.",
+        ),
+        Rule(
+            identifier="casq:influences:physical_stimulator_to_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A physical stimulator of a reaction positively influences a product of that reaction.",
+        ),
+        Rule(
+            identifier="casq:influences:physical_stimulator_to_bridged_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    bridgedProduct(REACTION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="Bridged variant of casq:influences:physical_stimulator_to_product.",
+        ),
+        Rule(
+            identifier="casq:influences:trigger_to_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A trigger of a reaction positively influences a product of that reaction.",
+        ),
+        Rule(
+            identifier="casq:influences:trigger_to_bridged_product",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    bridgedProduct(REACTION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="Bridged variant of casq:influences:trigger_to_product.",
+        ),
+        Rule(
+            identifier="casq:influences:inhibitor_to_product",
+            text=dedent("""\
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="An inhibitor of a reaction negatively influences a product of that reaction.",
+        ),
+        Rule(
+            identifier="casq:influences:inhibitor_to_bridged_product",
+            text=dedent("""\
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    reaction(REACTION),
+                    hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
+                    hasReferredSpecies(MODIFIER, SOURCE),
+                    bridgedProduct(REACTION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="Bridged variant of casq:influences:inhibitor_to_product.",
+        ),
+        Rule(
+            identifier="casq:influences:catalyzis_modulation",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    catalyzis(MODULATION),
+                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A catalyzis modulation arc emits a positive influence between its source and target activities.",
+        ),
+        Rule(
+            identifier="casq:influences:positive_influence_modulation",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    positiveInfluence(MODULATION),
+                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A positiveInfluence modulation arc emits a positive influence between its source and target activities.",
+        ),
+        Rule(
+            identifier="casq:influences:physical_stimulation_modulation",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    physicalStimulation(MODULATION),
+                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A physicalStimulation modulation arc emits a positive influence between its source and target activities.",
+        ),
+        Rule(
+            identifier="casq:influences:triggering_modulation",
+            text=dedent("""\
+                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    triggering(MODULATION),
+                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A triggering modulation arc emits a positive influence between its source and target activities.",
+        ),
+        Rule(
+            identifier="casq:influences:inhibition_modulation",
+            text=dedent("""\
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    inhibition(MODULATION),
+                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="An inhibition modulation arc emits a negative influence between its source and target activities.",
+        ),
+        Rule(
+            identifier="casq:influences:negative_influence_modulation",
+            text=dedent("""\
+                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                    negativeInfluence(MODULATION),
+                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
+                    contributesActivity(SOURCE), contributesActivity(TARGET),
+                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+            documentation="A negativeInfluence modulation arc emits a negative influence between its source and target activities.",
+        ),
+    ),
+)
+
+
 def _build_registry() -> RuleRegistry:
     registry = RuleRegistry()
     registry.register(
@@ -501,6 +871,11 @@ def _build_registry() -> RuleRegistry:
             _PATHS_COMPLEX_TRAVERSAL,
             _INFLUENCES_FROM_PATHS,
             _INFLUENCES_CONSUMPTION,
+            _CASQ_PARTICIPATION,
+            _CASQ_DELETE,
+            _CASQ_BRIDGED_PRODUCT,
+            _CASQ_CONTRIBUTES_ACTIVITY,
+            _CASQ_INFLUENCES,
         ]
     )
     issues = registry.validate()
