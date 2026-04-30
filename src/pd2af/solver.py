@@ -211,7 +211,7 @@ def make_new_cd_model(clingo_model, id_to_model_element):
         compartments_to_check = set(
             c.outside
             for c in compartments_to_check
-            if c not in compartments_to_check
+            if c.outside is not None and c.outside not in compartments
         )
         if not compartments_to_check:
             break

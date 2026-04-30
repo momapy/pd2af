@@ -79,7 +79,8 @@ def _make_new_cd_model(cd_map, sif_relations):
             [
                 compartment.outside
                 for compartment in compartments_to_check
-                if compartment not in compartments_to_check
+                if compartment.outside is not None
+                and compartment.outside not in compartments
             ]
         )
         if not compartments_to_check:
