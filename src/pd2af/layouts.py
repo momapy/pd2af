@@ -320,6 +320,9 @@ def make_plain(cd_map, new_cd_model):
             )
     resolved = _resolve_species_layouts(cd_map, new_cd_model)
     top_level, _ = _partition_top_level_species_layouts(resolved)
+    species_to_layout_element = {
+        species: layout for species, layout, _ in resolved
+    }
     for species, species_layout, synthetic in top_level:
         layout_builder.layout_elements.append(species_layout)
         if synthetic:
@@ -329,13 +332,15 @@ def make_plain(cd_map, new_cd_model):
                 cd_map.layout_model_mapping, species_layout, mapping_builder
             )
     for modulation in new_cd_model.modulations:
-        for arc, source_layout, target_layout in _iter_modulation_arc_tuples(
-            cd_map, modulation
-        ):
-            layout_builder.layout_elements.append(arc)
-            _add_modulation_mapping(
-                mapping_builder, arc, source_layout, target_layout, modulation
-            )
+        source_layout = species_to_layout_element[modulation.source]
+        target_layout = species_to_layout_element[modulation.target]
+        arc, source_layout, target_layout = _make_modulation_arc_tuple(
+            modulation, source_layout, target_layout
+        )
+        layout_builder.layout_elements.append(arc)
+        _add_modulation_mapping(
+            mapping_builder, arc, source_layout, target_layout, modulation
+        )
     return _finalize(new_cd_model, layout_builder, mapping_builder)
 
 
