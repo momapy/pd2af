@@ -131,17 +131,21 @@ def _partition_top_level_species_layouts(resolved):
 
 
 def _make_modulation_arc_tuple(modulation, source_layout, target_layout):
-    cls = pd2af.predicates.model_element_class_to_layout_element_class[
+    arc_class = pd2af.predicates.model_element_class_to_layout_element_class[
         type(modulation)
     ]
-    start_point = source_layout.border(target_layout.center())
-    end_point = target_layout.border(source_layout.center())
-    if start_point is None:
-        start_point = source_layout.north_west()
-    if end_point is None:
-        end_point = target_layout.north_east()
+    if source_layout is target_layout:
+        start_point = source_layout.anchor_point("north_north_west")
+        end_point = source_layout.anchor_point("north_north_east")
+    else:
+        start_point = source_layout.border(target_layout.center())
+        end_point = target_layout.border(source_layout.center())
+        if start_point is None:
+            start_point = source_layout.north_west()
+        if end_point is None:
+            end_point = target_layout.north_east()
     segment = momapy.geometry.Segment(start_point, end_point)
-    arc = cls(
+    arc = arc_class(
         source=source_layout,
         target=target_layout,
         segments=(segment,),
