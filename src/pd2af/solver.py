@@ -18,6 +18,8 @@ _VALID_MODES = frozenset(
     {"normal", "no-complex", "keep-species", "keep-species-no-complex", "casq"}
 )
 
+_FLAT_COMPLEX_MODES = frozenset({"normal", "no-complex"})
+
 _NO_COMPARTMENT_SENTINEL = "no_compartment"
 
 _SYNTHESIZED_ID_PREFIX = "merged__"
@@ -148,12 +150,28 @@ def _make_synthetic_species(key, id_to_model_element, stripped_template_cache):
     )
 
 
-def _resolve_activity_key(key, id_to_model_element, key_to_species, stripped_template_cache):
+def _flatten_complex(species):
+    if not isinstance(species, momapy.celldesigner.Complex):
+        return species
+    if not getattr(species, "subunits", None):
+        return species
+    return dataclasses.replace(species, subunits=frozenset())
+
+
+def _resolve_activity_key(
+    key,
+    id_to_model_element,
+    key_to_species,
+    stripped_template_cache,
+    flatten_complexes,
+):
     cached = key_to_species.get(key)
     if cached is not None:
         return cached
     if isinstance(key, pd2af.predicates.kept_species):
         species = id_to_model_element[key.species]
+        if flatten_complexes:
+            species = _flatten_complex(species)
     elif isinstance(key, pd2af.predicates.derived_proteoform_class):
         species = _make_synthetic_species(
             key, id_to_model_element, stripped_template_cache
@@ -164,7 +182,13 @@ def _resolve_activity_key(key, id_to_model_element, key_to_species, stripped_tem
     return species
 
 
-def _make_influences(influence_atoms, id_to_model_element, key_to_species, stripped_template_cache):
+def _make_influences(
+    influence_atoms,
+    id_to_model_element,
+    key_to_species,
+    stripped_template_cache,
+    flatten_complexes,
+):
     influences = {}
     for atom in influence_atoms:
         cls = pd2af.predicates.predicate_to_model_element_class[type(atom)]
@@ -173,19 +197,24 @@ def _make_influences(influence_atoms, id_to_model_element, key_to_species, strip
             id_to_model_element,
             key_to_species,
             stripped_template_cache,
+            flatten_complexes,
         )
         target = _resolve_activity_key(
             atom.target,
             id_to_model_element,
             key_to_species,
             stripped_template_cache,
+            flatten_complexes,
         )
         influence = cls(source=source, target=target)
         influences[influence.id_] = influence
     return influences
 
 
-def make_new_cd_model(clingo_model, id_to_model_element):
+def make_new_cd_model(clingo_model, id_to_model_element, mode):
+    if mode not in _VALID_MODES:
+        raise ValueError(f"mode {mode!r} is not supported")
+    flatten_complexes = mode in _FLAT_COMPLEX_MODES
     cd_model_builder_cls = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
     )
@@ -199,6 +228,7 @@ def make_new_cd_model(clingo_model, id_to_model_element):
             id_to_model_element,
             key_to_species,
             stripped_template_cache,
+            flatten_complexes,
         )
         for atom in activity_atoms
     ]
@@ -238,6 +268,7 @@ def make_new_cd_model(clingo_model, id_to_model_element):
         id_to_model_element,
         key_to_species,
         stripped_template_cache,
+        flatten_complexes,
     )
     cd_model_builder.modulations = type(cd_model_builder.modulations)(
         influences.values()

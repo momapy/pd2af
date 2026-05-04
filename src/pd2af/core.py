@@ -25,6 +25,6 @@ def transform(
         )
     clingo_model, id_to_model_element = pd2af.solver.solve(cd_map, mode=mode)
     new_cd_model = pd2af.solver.make_new_cd_model(
-        clingo_model, id_to_model_element
+        clingo_model, id_to_model_element, mode=mode
     )
     return pd2af.layouts.build_map(cd_map, new_cd_model, layout_mode)
