@@ -32,13 +32,42 @@ class OverlayPlacer(Placer):
         layout_builder = momapy.builder.builder_from_object(
             cd_map.layout, object_to_builder=self._object_to_builder
         )
-        mapping_builder = (
-            momapy.core.mapping.LayoutModelMappingBuilder.from_object(
-                cd_map.layout_model_mapping,
-                object_to_builder=self._object_to_builder,
-            )
-        )
+        # We deliberately avoid `LayoutModelMappingBuilder.from_object`:
+        # it round-trips model-side values through `builder_from_object`
+        # / `object_from_builder`, producing fresh frozen clones with
+        # different `id()`. In overlay-compatible modes the walker
+        # reuses input species objects by identity for the AF model,
+        # so cloned mapping values become invisible to the writer's
+        # identity lookup and `<listOfSpeciesAliases>` ends up empty.
+        # Build the mapping by hand: convert layout-side keys to
+        # builders, leave model-side values as the input frozen
+        # objects.
+        mapping_builder = momapy.core.mapping.LayoutModelMappingBuilder()
+        input_mapping = cd_map.layout_model_mapping
+        anchor_for_key_id = {}
+        for input_anchor, input_key in input_mapping._singleton_to_key.items():
+            anchor_for_key_id[id(input_key)] = input_anchor
+        for input_layout_key, input_model_value in input_mapping.items():
+            new_layout_key = self._convert_layout_side(input_layout_key)
+            input_anchor = anchor_for_key_id.get(id(input_layout_key))
+            if input_anchor is not None:
+                new_anchor = self._object_to_builder.get(
+                    id(input_anchor), input_anchor
+                )
+                mapping_builder.add_mapping(
+                    new_layout_key, input_model_value, anchor=new_anchor
+                )
+            else:
+                mapping_builder[new_layout_key] = input_model_value
         return layout_builder, mapping_builder
+
+    def _convert_layout_side(self, layout_key):
+        if isinstance(layout_key, frozenset):
+            return frozenset(
+                self._object_to_builder.get(id(element), element)
+                for element in layout_key
+            )
+        return self._object_to_builder.get(id(layout_key), layout_key)
 
     def _cloned_layouts_for(self, cd_map, input_element):
         """Return cloned BUILDERS for the input element's layouts."""
