@@ -20,8 +20,12 @@ class OverlayPlacer(Placer):
     def __init__(self):
         self._object_to_builder = {}
         self._kept_builders = set()
-        # Maps id(new_element) → cloned layout builder, used by modulation
-        # build steps to find arc endpoints.
+        # Maps id(new_element) → ORIGINAL (frozen) input layout. We keep
+        # the frozen one so `make_modulation_arc` builds an arc whose
+        # source/target are frozen objects; `builder_from_object` then
+        # reuses the cloned builders via the per-arc cache. Storing the
+        # builder here would produce a frozen arc with builder children
+        # and break the conversion to a builder tree.
         self._species_layout_for_new = {}
 
     def make_layout_builders(self, cd_map):
@@ -37,6 +41,7 @@ class OverlayPlacer(Placer):
         return layout_builder, mapping_builder
 
     def _cloned_layouts_for(self, cd_map, input_element):
+        """Return cloned BUILDERS for the input element's layouts."""
         layouts = get_input_layouts_for(cd_map, input_element)
         if not layouts:
             return ()
@@ -46,6 +51,10 @@ class OverlayPlacer(Placer):
             if builder is not None:
                 cloned.append(builder)
         return tuple(cloned)
+
+    def _original_layouts_for(self, cd_map, input_element):
+        """Return ORIGINAL frozen layouts for the input element."""
+        return get_input_layouts_for(cd_map, input_element) or ()
 
     def place(self, build_step: BuildStep, context: PlaceContext) -> None:
         if build_step.kind is BuildStepKind.COMPARTMENT:
@@ -63,15 +72,18 @@ class OverlayPlacer(Placer):
                 self._kept_builders.add(builder)
 
     def _place_species(self, build_step, context):
+        original = ()
         cloned = ()
         for input_species in build_step.provenances:
+            original = self._original_layouts_for(context.cd_map, input_species)
             cloned = self._cloned_layouts_for(context.cd_map, input_species)
-            if cloned:
+            if original:
                 break
-        if not cloned:
+        if not original:
             return
-        species_layout = cloned[0]
-        self._species_layout_for_new[id(build_step.new_element)] = species_layout
+        # Store the FROZEN original layout for modulation arc building;
+        # cloned builders go into kept_builders for the dim pass.
+        self._species_layout_for_new[id(build_step.new_element)] = original[0]
         for builder in cloned:
             self._kept_builders.add(builder)
 
