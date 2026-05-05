@@ -3,17 +3,10 @@ import typing
 import momapy.builder
 import momapy.celldesigner
 
+import pd2af.layouts
+import pd2af.model
+import pd2af.solver
 from pd2af.dedup import dedup_and_remap_model
-from pd2af.placers import PlaceContext, placer_for
-from pd2af.walkers import BuildStep, BuildStepKind, walker_for
-
-# Side-effect imports to register walkers/placers in their factories.
-import pd2af.walkers.keep_species  # noqa: F401
-import pd2af.walkers.normal  # noqa: F401
-import pd2af.placers.auto  # noqa: F401
-import pd2af.placers.no_layout  # noqa: F401
-import pd2af.placers.overlay  # noqa: F401
-import pd2af.placers.plain  # noqa: F401
 
 
 _MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
@@ -43,19 +36,6 @@ def _validate(mode, layout_mode):
         )
 
 
-def _add_to_model(model_builder, build_step: BuildStep):
-    element = build_step.new_element
-    if build_step.kind is BuildStepKind.COMPARTMENT:
-        model_builder.compartments.add(element)
-    elif build_step.kind is BuildStepKind.TEMPLATE:
-        model_builder.species_templates.add(element)
-    elif build_step.kind is BuildStepKind.SPECIES:
-        if build_step.parent is None:
-            model_builder.species.add(element)
-    elif build_step.kind is BuildStepKind.MODULATION:
-        model_builder.modulations.add(element)
-
-
 def _new_model_builder():
     cls = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
@@ -63,26 +43,8 @@ def _new_model_builder():
     return cls()
 
 
-def _finalize_map(model_builder, layout_builder, mapping_builder):
-    new_model = momapy.builder.object_from_builder(model_builder)
-    if layout_builder is None:
-        return momapy.celldesigner.CellDesignerMap(model=new_model)
-    builder_to_object = {}
-    new_layout = momapy.builder.object_from_builder(
-        layout_builder, builder_to_object=builder_to_object
-    )
-    new_mapping = momapy.builder.object_from_builder(
-        mapping_builder, builder_to_object=builder_to_object
-    )
-    return momapy.celldesigner.CellDesignerMap(
-        model=new_model,
-        layout=new_layout,
-        layout_model_mapping=new_mapping,
-    )
-
-
 def transform(
-    cd_map,
+    map_,
     mode: typing.Literal[
         "normal",
         "no-complex",
@@ -96,30 +58,42 @@ def transform(
 ):
     layout_mode = _normalize_layout_mode(layout_mode)
     _validate(mode, layout_mode)
-    walker = walker_for(mode)
-    placer = placer_for(layout_mode)
-    if walker is None:
-        raise ValueError(f"no walker registered for mode {mode!r}")
-    if placer is None:
-        raise ValueError(
-            f"no placer registered for layout_mode {layout_mode!r}"
-        )
+
+    clingo_model, clingo_id_to_model_element = pd2af.solver.solve(map_, mode)
+    resolution = pd2af.model.resolve(
+        clingo_model, clingo_id_to_model_element, mode
+    )
+    layout = pd2af.layouts.STRATEGIES[layout_mode]()
+
     model_builder = _new_model_builder()
-    layout_builder, mapping_builder = placer.make_layout_builders(cd_map)
-    place_context = PlaceContext(
-        cd_map=cd_map,
-        layout_mode=layout_mode,
-        new_layout_builder=layout_builder,
-        new_mapping_builder=mapping_builder,
-    )
-    for build_step in walker.walk(cd_map):
-        _add_to_model(model_builder, build_step)
-        placer.place(build_step, place_context)
-    placer.finalize(place_context, model_builder)
-    dedup_and_remap_model(model_builder, place_context.new_mapping_builder)
-    new_map = _finalize_map(
-        model_builder,
-        place_context.new_layout_builder,
-        place_context.new_mapping_builder,
-    )
-    return placer.post_finalize(place_context, new_map)
+    layout_builder, mapping_builder = layout.start(map_)
+
+    for compartment in resolution.compartments:
+        model_builder.compartments.add(compartment)
+        layout.on_compartment(
+            map_, compartment, layout_builder, mapping_builder
+        )
+
+    for template in resolution.templates:
+        model_builder.species_templates.add(template)
+
+    for species, existing_species, is_subunit in resolution.species:
+        if not is_subunit:
+            model_builder.species.add(species)
+        layout.on_species(
+            map_,
+            species,
+            existing_species,
+            is_subunit,
+            layout_builder,
+            mapping_builder,
+        )
+
+    layout.on_species_done(map_, layout_builder, mapping_builder)
+
+    for modulation in resolution.modulations:
+        model_builder.modulations.add(modulation)
+        layout.on_modulation(modulation, layout_builder, mapping_builder)
+
+    dedup_and_remap_model(model_builder, mapping_builder)
+    return layout.finish(map_, model_builder, layout_builder, mapping_builder)
