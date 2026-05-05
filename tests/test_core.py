@@ -222,8 +222,8 @@ class TestTransformErrors:
             )
 
     @pytest.mark.parametrize("mode", ["normal", "no-complex"])
-    @pytest.mark.parametrize("layout_mode", ["plain", "overlay", None])
-    def test_merged_modes_require_auto_layout(
+    @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
+    def test_merged_modes_reject_input_derived_layout(
         self, example_cd_map, mode, layout_mode
     ):
         with pytest.raises(ValueError):

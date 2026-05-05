@@ -4,7 +4,6 @@ import clorm
 import clorm.clingo
 import clingo.ast
 
-import momapy.builder
 import momapy.celldesigner
 
 import momapy_kb.clingo.core
@@ -18,8 +17,6 @@ _VALID_MODES = frozenset(
     {"normal", "no-complex", "keep-species", "keep-species-no-complex", "casq"}
 )
 
-_FLAT_COMPLEX_MODES = frozenset({"normal", "no-complex"})
-
 _NO_COMPARTMENT_SENTINEL = "no_compartment"
 
 _SYNTHESIZED_ID_PREFIX = "merged__"
@@ -28,9 +25,6 @@ _SYNTHESIZED_ID_PREFIX = "merged__"
 def _mode_to_profile(mode):
     return mode.replace("-", "_")
 
-
-def is_synthesized_species(species):
-    return getattr(species, "id_", "").startswith(_SYNTHESIZED_ID_PREFIX)
 
 _TEMPLATE_TO_SPECIES_CLASS = {
     momapy.celldesigner.GenericProteinTemplate: momapy.celldesigner.GenericProtein,
@@ -148,129 +142,3 @@ def _make_synthetic_species(key, id_to_model_element, stripped_template_cache):
         template=stripped_template,
         compartment=compartment,
     )
-
-
-def _flatten_complex(species):
-    if not isinstance(species, momapy.celldesigner.Complex):
-        return species
-    if not getattr(species, "subunits", None):
-        return species
-    return dataclasses.replace(species, subunits=frozenset())
-
-
-def _resolve_activity_key(
-    key,
-    id_to_model_element,
-    key_to_species,
-    stripped_template_cache,
-    flatten_complexes,
-):
-    cached = key_to_species.get(key)
-    if cached is not None:
-        return cached
-    if isinstance(key, pd2af.predicates.kept_species):
-        species = id_to_model_element[key.species]
-        if flatten_complexes:
-            species = _flatten_complex(species)
-    elif isinstance(key, pd2af.predicates.derived_proteoform_class):
-        species = _make_synthetic_species(
-            key, id_to_model_element, stripped_template_cache
-        )
-    else:
-        raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
-    key_to_species[key] = species
-    return species
-
-
-def _make_influences(
-    influence_atoms,
-    id_to_model_element,
-    key_to_species,
-    stripped_template_cache,
-    flatten_complexes,
-):
-    influences = {}
-    for atom in influence_atoms:
-        cls = pd2af.predicates.predicate_to_model_element_class[type(atom)]
-        source = _resolve_activity_key(
-            atom.source,
-            id_to_model_element,
-            key_to_species,
-            stripped_template_cache,
-            flatten_complexes,
-        )
-        target = _resolve_activity_key(
-            atom.target,
-            id_to_model_element,
-            key_to_species,
-            stripped_template_cache,
-            flatten_complexes,
-        )
-        influence = cls(source=source, target=target)
-        influences[influence.id_] = influence
-    return influences
-
-
-def make_new_cd_model(clingo_model, id_to_model_element, mode):
-    if mode not in _VALID_MODES:
-        raise ValueError(f"mode {mode!r} is not supported")
-    flatten_complexes = mode in _FLAT_COMPLEX_MODES
-    cd_model_builder_cls = momapy.builder.get_or_make_builder_cls(
-        momapy.celldesigner.CellDesignerModel
-    )
-    cd_model_builder = cd_model_builder_cls()
-    activity_atoms = _get_activity_atoms(clingo_model)
-    key_to_species = {}
-    stripped_template_cache = {}
-    species = [
-        _resolve_activity_key(
-            atom.key,
-            id_to_model_element,
-            key_to_species,
-            stripped_template_cache,
-            flatten_complexes,
-        )
-        for atom in activity_atoms
-    ]
-    cd_model_builder.species = type(cd_model_builder.species)(species)
-    compartments = set(
-        s.compartment for s in species if s.compartment is not None
-    )
-    compartments_to_check = compartments
-    while True:
-        compartments_to_check = set(
-            c.outside
-            for c in compartments_to_check
-            if c.outside is not None and c.outside not in compartments
-        )
-        if not compartments_to_check:
-            break
-        compartments |= compartments_to_check
-    cd_model_builder.compartments = type(cd_model_builder.compartments)(
-        compartments
-    )
-    def _collect_templates(species_element, accumulator):
-        template = getattr(species_element, "template", None)
-        if template is not None:
-            accumulator.add(template)
-        for subunit in getattr(species_element, "subunits", ()) or ():
-            _collect_templates(subunit, accumulator)
-
-    species_templates = set()
-    for species_element in species:
-        _collect_templates(species_element, species_templates)
-    cd_model_builder.species_templates = type(cd_model_builder.species_templates)(
-        species_templates
-    )
-    influence_atoms = _get_influence_atoms(clingo_model)
-    influences = _make_influences(
-        influence_atoms,
-        id_to_model_element,
-        key_to_species,
-        stripped_template_cache,
-        flatten_complexes,
-    )
-    cd_model_builder.modulations = type(cd_model_builder.modulations)(
-        influences.values()
-    )
-    return momapy.builder.object_from_builder(cd_model_builder)
