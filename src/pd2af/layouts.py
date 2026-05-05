@@ -25,7 +25,6 @@ _SPECIES_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.Drug: momapy.celldesigner.DrugLayout,
     momapy.celldesigner.Unknown: momapy.celldesigner.UnknownLayout,
     momapy.celldesigner.Complex: momapy.celldesigner.ComplexLayout,
-    momapy.celldesigner.Degraded: momapy.celldesigner.DegradedLayout,
 }
 
 
