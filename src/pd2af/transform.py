@@ -3,6 +3,7 @@ import typing
 import momapy.builder
 import momapy.celldesigner
 
+from pd2af.dedup import dedup_and_remap_model
 from pd2af.placers import PlaceContext, placer_for
 from pd2af.walkers import BuildStep, BuildStepKind, walker_for
 
@@ -115,6 +116,7 @@ def transform(
         _add_to_model(model_builder, build_step)
         placer.place(build_step, place_context)
     placer.finalize(place_context, model_builder)
+    dedup_and_remap_model(model_builder, place_context.new_mapping_builder)
     new_map = _finalize_map(
         model_builder,
         place_context.new_layout_builder,
