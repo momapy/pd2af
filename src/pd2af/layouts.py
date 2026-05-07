@@ -151,9 +151,14 @@ class PlainLayout:
     """Reuses input layouts wholesale for compartments and top-level
     species; synthesises fresh modulation arcs.
 
+    A model species can have several alias layouts in the input map
+    (e.g. one Complex drawn at two locations). All of them are emitted
+    into the output: the writer needs every alias declared so that
+    modulation arcs referencing any of them resolve on read-back.
+
     Species are buffered through :meth:`on_species` so that
     :meth:`on_species_done` can partition top-level vs. nested layouts
-    in a single pass: a species whose layout is a descendant of another
+    in a single pass: an alias whose layout is a descendant of another
     candidate's layout is nested and brought along by its parent rather
     than appended at the top level.
     """
@@ -187,48 +192,44 @@ class PlainLayout:
         layout_builder,
         mapping_builder,
     ):
-        species_layout = self._first_input_species_layout(
-            map_, existing_species
+        layouts = (
+            tuple(_get_input_layouts_for(map_, existing_species) or ())
+            if existing_species is not None
+            else ()
         )
         if is_subunit:
-            self._pending_subunits.append((species, species_layout))
+            self._pending_subunits.append((species, layouts))
         else:
-            self._pending_top_level.append((species, species_layout))
+            self._pending_top_level.append((species, layouts))
 
     def on_species_done(self, map_, layout_builder, mapping_builder):
         # Build the descendant id set of every candidate top-level
-        # species layout (collected up front so order is irrelevant). A
-        # candidate whose layout is in someone else's descendant set is
-        # "nested".
-        candidate_layouts = [
-            species_layout
-            for _, species_layout in self._pending_top_level
-            if species_layout is not None
-        ]
+        # alias layout (collected up front so order is irrelevant). An
+        # alias whose layout is in someone else's descendant set is
+        # "nested" — its parent (also a candidate) brings it along.
         descendant_ids = set()
-        for species_layout in candidate_layouts:
-            for descendant in species_layout.descendants():
-                descendant_ids.add(id(descendant))
-        for species, species_layout in self._pending_top_level:
-            if species_layout is None:
+        for _, layouts in self._pending_top_level:
+            for candidate_layout in layouts:
+                for descendant in candidate_layout.descendants():
+                    descendant_ids.add(id(descendant))
+        for species, layouts in self._pending_top_level:
+            if not layouts:
                 self._on_species_without_layout(
                     species, layout_builder, mapping_builder
                 )
                 continue
-            if id(species_layout) in descendant_ids:
-                # Nested: its parent's layout (also a candidate) brings
-                # it along as a descendant. Don't append here, but
-                # record the mapping for modulation lookup.
-                self._species_layout_for_new[id(species)] = species_layout
-                continue
-            layout_builder.layout_elements.append(species_layout)
-            _copy_subtree_singleton_mappings(
-                map_.layout_model_mapping, species_layout, mapping_builder
-            )
-            self._species_layout_for_new[id(species)] = species_layout
-        for species, species_layout in self._pending_subunits:
-            if species_layout is not None:
-                self._species_layout_for_new[id(species)] = species_layout
+            chosen_layout = layouts[0]
+            for alias_layout in layouts:
+                if id(alias_layout) in descendant_ids:
+                    continue
+                layout_builder.layout_elements.append(alias_layout)
+                _copy_subtree_singleton_mappings(
+                    map_.layout_model_mapping, alias_layout, mapping_builder
+                )
+            self._species_layout_for_new[id(species)] = chosen_layout
+        for species, layouts in self._pending_subunits:
+            if layouts:
+                self._species_layout_for_new[id(species)] = layouts[0]
 
     def on_modulation(
         self, modulation, layout_builder, mapping_builder
@@ -246,14 +247,6 @@ class PlainLayout:
     def finish(self, map_, model_builder, layout_builder, mapping_builder):
         pd2af.utils.harmonize_root_layout(layout_builder)
         return _finalize_map(model_builder, layout_builder, mapping_builder)
-
-    def _first_input_species_layout(self, map_, existing_species):
-        if existing_species is None:
-            return None
-        layouts = _get_input_layouts_for(map_, existing_species)
-        if layouts:
-            return layouts[0]
-        return None
 
     def _on_species_without_layout(
         self, species, layout_builder, mapping_builder

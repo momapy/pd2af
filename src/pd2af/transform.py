@@ -3,19 +3,19 @@ import typing
 import momapy.builder
 import momapy.celldesigner
 
+import pd2af.dedup
 import pd2af.layouts
 import pd2af.model
 import pd2af.solver
-from pd2af.dedup import dedup_and_remap_model
 
-
-_MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
 
 _VALID_MODES = frozenset(
     {"normal", "no-complex", "keep-species", "keep-species-no-complex", "casq"}
 )
 
 _VALID_LAYOUT_MODES = frozenset({"plain", "overlay", "auto", "none", None})
+
+_MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
 
 
 def _normalize_layout_mode(layout_mode):
@@ -61,7 +61,7 @@ def transform(
 
     clingo_model, clingo_id_to_model_element = pd2af.solver.solve(map_, mode)
     resolution = pd2af.model.resolve(
-        clingo_model, clingo_id_to_model_element, mode
+        clingo_model, clingo_id_to_model_element, mode, map_
     )
     layout = pd2af.layouts.STRATEGIES[layout_mode]()
 
@@ -95,5 +95,5 @@ def transform(
         model_builder.modulations.add(modulation)
         layout.on_modulation(modulation, layout_builder, mapping_builder)
 
-    dedup_and_remap_model(model_builder, mapping_builder)
+    pd2af.dedup.dedup_and_remap_model(model_builder, mapping_builder)
     return layout.finish(map_, model_builder, layout_builder, mapping_builder)

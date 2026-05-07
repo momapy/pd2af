@@ -1,47 +1,32 @@
 """ASP rule composition for the pd2af transformation modes.
 
-The rules are organized as aspcompose groups. Five profiles
-(`normal`, `no_complex`, `keep_species`, `keep_species_no_complex`,
-`casq`) compose the groups into the supported mode programs. The
-first four profiles cover a 2x2 matrix on two orthogonal axes:
+The non-CASQ rules are organised in three layers:
 
-* species treatment — ``normal``/``no_complex`` merge proteoforms of
-  the same template (and compartment) into a single activity (true
-  PD->AF transform, the only style expressible in SBGN PD);
-  ``keep_species``/``keep_species_no_complex`` keep each PD species
-  as its own activity (CellDesigner-only).
-* complex treatment — ``no_complex``/``keep_species_no_complex`` drop
-  any complex that has an active subunit and route influences through
-  its subunits; ``normal``/``keep_species`` keep complexes as their
-  own activities and route influences through them.
+* **topology** (shared across all non-CASQ profiles) — structural
+  helpers: ``isSubunit``, ``topLevelAncestor``, ``hasActiveDescendant``,
+  ``hasSomeCompartment``, ``hasSomeTemplate``, ``effectiveCompartment``.
+* **preparation** (one rule group per non-CASQ mode) — emits
+  ``activityCarrier(RAW_SPECIES, ACTIVITY_BEARER)`` and
+  ``activityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of three
+  per-species wrappers: ``kept_species/1``, ``new_species_from_subunit/1``,
+  or ``new_species_from_template/1``.
+* **derivation** (shared across all non-CASQ profiles) — emits
+  ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
+  ``new(negativelyInfluences(...))`` from ``activityCarrier`` /
+  ``activityKey``.
 
-The ``casq`` profile keeps each PD species as its own activity (like
-``keep_species``), prunes species via CASQ-style deletion rules
-(rule_1..rule_4) and emits influences directly from reaction
-modifier/reactant -> product and from modulation arcs, with
-single-hop rewiring across deleted intermediates.
-
-All path rules use a single ``path(X, Y, SIGN)`` predicate so
-transitivity and complex-subunit traversal can be written once and
-parameterized over ``SIGN``.
-
-Activity identity is split into two profile-specific relations so the
-shared activity-derivation and influence rules remain
-profile-agnostic:
-
-* ``contributesActivity(SPECIES)`` — survives the profile filter and
-  contributes an activity to the AF.
-* ``activityKey(SPECIES, KEY)`` — this species's identity in the AF
-  (a ``kept_species/1`` term in keep_species/keep_species_no_complex
-  and casq; a ``kept_species/1`` or ``derived_proteoform_class/2``
-  term in normal/no_complex).
+The ``casq`` profile keeps its own pipeline (deletion rules,
+bridged-product rewiring, direct reactant→product / modifier→product
+influence emission). It uses ``kept_species/1`` for every surviving
+species's activity key, sharing only the predicate type with the
+non-CASQ layers.
 """
 
 from textwrap import dedent
 
 from aspcompose import CollectionPlan, Rule, RuleGroup, RuleRegistry
 
-_ALL_PROFILES = frozenset(
+_NON_CASQ_PROFILES = frozenset(
     {"normal", "no_complex", "keep_species", "keep_species_no_complex"}
 )
 
@@ -49,7 +34,7 @@ _CASQ_PROFILES = frozenset({"casq"})
 
 _ACTIVITY_BASE = RuleGroup(
     identifier="activity_base",
-    profiles=_ALL_PROFILES | _CASQ_PROFILES,
+    profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
     docs="Base rules deriving `hasActivity(SPECIES, REASON)` from PD signals: the explicit `hasActive` flag, an active structural state, the phenotype glyph, and being the source/modulator of a modulation arc.",
     rules=(
         Rule(
@@ -94,166 +79,182 @@ _ACTIVITY_BASE = RuleGroup(
     ),
 )
 
-_HAS_ACTIVE_SUBUNIT = RuleGroup(
-    identifier="has_active_subunit",
-    profiles=frozenset({"no_complex", "keep_species_no_complex"}),
-    depends_on=frozenset({"activity_base"}),
-    docs="Flags a complex as having an active subunit when both the complex and one of its direct subunits have activity. Used by the no-complex profiles to drop such complexes in favor of their subunits.",
+_TOPOLOGY = RuleGroup(
+    identifier="topology",
+    profiles=_NON_CASQ_PROFILES,
+    docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendant`, `hasSomeTemplate`.",
     rules=(
         Rule(
-            identifier="has_active_subunit:detect",
-            text=dedent("""\
-                hasActiveSubunit(SPECIES) :-
-                    complex(SPECIES),
-                    hasActivity(SPECIES, _),
-                    hasSubunit(SPECIES, SUBUNIT),
-                    hasActivity(SUBUNIT, _)."""),
-            docs="If a complex has activity and contains a subunit that also has activity, then it has an active subunit.",
+            identifier="topology:is_subunit",
+            text="isSubunit(SUBUNIT) :- hasSubunit(_, SUBUNIT).",
+            docs="A species is a subunit if it appears on the right side of any `hasSubunit` relation.",
         ),
-    ),
-)
-
-_HAS_CONTRIBUTING_COMPLEX_ANCESTOR = RuleGroup(
-    identifier="has_contributing_complex_ancestor",
-    profiles=frozenset({"normal", "keep_species"}),
-    depends_on=frozenset({"activity_base"}),
-    docs="Computes the transitive `hasContributingComplexAncestor` relation, marking every (nested) subunit of an active complex so the keep-complex profiles can suppress those subunits in favor of the complex.",
-    rules=(
         Rule(
-            identifier="has_contributing_complex_ancestor:direct",
+            identifier="topology:has_active_descendant_direct",
             text=dedent("""\
-                hasContributingComplexAncestor(SUBUNIT) :-
+                hasActiveDescendant(COMPLEX) :-
                     complex(COMPLEX),
-                    hasActivity(COMPLEX, _),
-                    hasSubunit(COMPLEX, SUBUNIT)."""),
-            docs="If a complex has activity, then each of its direct subunits has a contributing complex ancestor.",
+                    hasSubunit(COMPLEX, SUBUNIT),
+                    hasActivity(SUBUNIT, _)."""),
+            docs="A complex has an active descendant if any direct subunit has activity.",
         ),
         Rule(
-            identifier="has_contributing_complex_ancestor:transitive",
+            identifier="topology:has_active_descendant_transitive",
             text=dedent("""\
-                hasContributingComplexAncestor(SUBUNIT) :-
-                    hasContributingComplexAncestor(COMPLEX),
-                    hasSubunit(COMPLEX, SUBUNIT)."""),
-            docs="The contributing-complex-ancestor relation is transitive through complex containment, so deeply nested subunits are also covered.",
+                hasActiveDescendant(COMPLEX) :-
+                    complex(COMPLEX),
+                    hasSubunit(COMPLEX, NESTED_COMPLEX),
+                    hasActiveDescendant(NESTED_COMPLEX)."""),
+            docs="The `hasActiveDescendant` relation is transitive through complex containment.",
         ),
-    ),
-)
-
-_CONTRIBUTES_ACTIVITY_FLAT = RuleGroup(
-    identifier="contributes_activity:flat",
-    slot="contributes_activity",
-    profiles=frozenset({"normal", "keep_species"}),
-    depends_on=frozenset({"activity_base", "has_contributing_complex_ancestor"}),
-    docs="`contributes_activity` slot for the keep-complex profiles: a species contributes an activity unless it sits inside a complex that itself contributes one (the complex stands in for its proteoform).",
-    rules=(
         Rule(
-            identifier="contributes_activity:flat:promote_unless_inside_contributing_complex",
-            text=dedent("""\
-                contributesActivity(SPECIES) :-
-                    hasActivity(SPECIES, _),
-                    not hasContributingComplexAncestor(SPECIES)."""),
-            docs="A species with activity contributes an activity to the new AF unless it is a subunit (direct or nested) of a complex that itself contributes activity — the complex represents the active proteoform.",
-        ),
-    ),
-)
-
-_CONTRIBUTES_ACTIVITY_NO_ACTIVE_SUBUNITS = RuleGroup(
-    identifier="contributes_activity:no_active_subunits",
-    slot="contributes_activity",
-    profiles=frozenset({"no_complex", "keep_species_no_complex"}),
-    depends_on=frozenset({"activity_base", "has_active_subunit"}),
-    docs="`contributes_activity` slot for the no-complex profiles: a species contributes an activity unless it is a complex that has an active subunit, in which case the subunit takes over.",
-    rules=(
-        Rule(
-            identifier="contributes_activity:no_active_subunits:promote_unless_superseded",
-            text=dedent("""\
-                contributesActivity(SPECIES) :-
-                    hasActivity(SPECIES, _),
-                    not hasActiveSubunit(SPECIES)."""),
-            docs="A species with activity contributes an activity to the new AF unless it is a complex that has an active subunit.",
-        ),
-    ),
-)
-
-_ACTIVITY_KEY_KEPT = RuleGroup(
-    identifier="activity_key:kept",
-    slot="activity_key",
-    profiles=frozenset({"keep_species", "keep_species_no_complex", "casq"}),
-    depends_on=frozenset({"activity_base"}),
-    docs="`activity_key` slot for the keep-species and casq profiles: each PD species is its own AF identity (`kept_species(SPECIES)`), so no proteoform merging happens.",
-    rules=(
-        Rule(
-            identifier="activity_key:kept:identity",
-            text="activityKey(SPECIES, kept_species(SPECIES)) :- species(SPECIES).",
-            docs="In keep_species, keep_species_no_complex, and casq modes, every species's activity key is itself.",
-        ),
-    ),
-)
-
-_ACTIVITY_KEY_MERGED = RuleGroup(
-    identifier="activity_key:merged",
-    slot="activity_key",
-    profiles=frozenset({"normal", "no_complex"}),
-    depends_on=frozenset({"activity_base"}),
-    docs="`activity_key` slot for the merge profiles: templated species are keyed by `(template, compartment)` so proteoforms collapse into a single AF activity, while templateless species keep their own identity.",
-    rules=(
-        Rule(
-            identifier="activity_key:merged:has_some_template",
+            identifier="topology:has_some_template",
             text="hasSomeTemplate(SPECIES) :- hasTemplate(SPECIES, _).",
             docs="A species has some template if it is linked to any template.",
         ),
+    ),
+)
+
+_PREPARATION_KEEP_SPECIES = RuleGroup(
+    identifier="preparation:keep_species",
+    profiles=frozenset({"keep_species"}),
+    depends_on=frozenset({"activity_base", "topology"}),
+    docs="`keep-species` preparation: every species (subunit or top-level) with activity contributes its own `kept_species(SELF)` activity; influences stay on the original species (no rerouting). A complex with any active descendant additionally inherits an activity, so the assembly is also represented in the AF.",
+    rules=(
         Rule(
-            identifier="activity_key:merged:has_some_compartment",
-            text="hasSomeCompartment(SPECIES) :- hasCompartment(SPECIES, _).",
-            docs="A species has some compartment if it is linked to any compartment.",
-        ),
-        Rule(
-            identifier="activity_key:merged:templated_with_compartment",
+            identifier="preparation:keep_species:complex_inherits_activity",
             text=dedent("""\
-                activityKey(SPECIES, derived_proteoform_class(TEMPLATE, COMPARTMENT)) :-
-                    hasTemplate(SPECIES, TEMPLATE),
-                    hasCompartment(SPECIES, COMPARTMENT)."""),
-            docs="A templated species in a compartment has a derived-proteoform-class key keyed by template and compartment.",
+                hasActivity(COMPLEX, has_active_descendant) :-
+                    complex(COMPLEX),
+                    hasActiveDescendant(COMPLEX)."""),
+            docs="A complex with any (transitive) active subunit is itself active in the AF view, with reason `has_active_descendant`.",
         ),
         Rule(
-            identifier="activity_key:merged:templated_without_compartment",
-            text=dedent("""\
-                activityKey(SPECIES, derived_proteoform_class(TEMPLATE, no_compartment)) :-
-                    hasTemplate(SPECIES, TEMPLATE),
-                    not hasSomeCompartment(SPECIES)."""),
-            docs="A templated species without a compartment has a derived-proteoform-class key with the sentinel `no_compartment`.",
+            identifier="preparation:keep_species:carrier",
+            text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+            docs="Each species is its own activity carrier (no rerouting).",
         ),
         Rule(
-            identifier="activity_key:merged:templateless",
+            identifier="preparation:keep_species:key",
             text=dedent("""\
                 activityKey(SPECIES, kept_species(SPECIES)) :-
-                    species(SPECIES),
-                    not hasSomeTemplate(SPECIES)."""),
-            docs="A templateless species (phenotype, ion, simple molecule, complex, etc.) keeps its own key when proteoforms are merged.",
+                    hasActivity(SPECIES, _)."""),
+            docs="Every species with activity is keyed by `kept_species(SELF)`.",
         ),
     ),
 )
 
-_ACTIVITY_DERIVATION = RuleGroup(
-    identifier="activity_derivation",
-    profiles=_ALL_PROFILES | _CASQ_PROFILES,
-    depends_on=frozenset({"contributes_activity", "activity_key"}),
-    docs="Profile-agnostic step that emits a `new(activity(KEY))` fact for every species that contributes an activity, using whichever `activityKey` the active profile supplies.",
+_PREPARATION_KEEP_SPECIES_NO_COMPLEX = RuleGroup(
+    identifier="preparation:keep_species_no_complex",
+    profiles=frozenset({"keep_species_no_complex"}),
+    depends_on=frozenset({"activity_base", "topology"}),
+    docs="`keep-species-no-complex` preparation: a complex with any active descendant is suppressed; every other species with activity contributes its own `kept_species(SELF)` activity. Subunits of suppressed complexes are promoted to top-level activities by reusing the subunit species itself; the layout strategy attaches them at top level.",
     rules=(
         Rule(
-            identifier="activity_derivation:emit",
+            identifier="preparation:keep_species_no_complex:suppressed",
             text=dedent("""\
-                new(activity(KEY)) :-
-                    contributesActivity(SPECIES),
-                    activityKey(SPECIES, KEY)."""),
-            docs="If a species contributes an activity and has an activity key, then a new activity node with that key is emitted.",
+                suppressed(COMPLEX) :-
+                    complex(COMPLEX),
+                    hasActiveDescendant(COMPLEX)."""),
+            docs="A complex with any (transitive) active descendant is suppressed.",
+        ),
+        Rule(
+            identifier="preparation:keep_species_no_complex:carrier",
+            text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+            docs="Each species is its own activity carrier.",
+        ),
+        Rule(
+            identifier="preparation:keep_species_no_complex:key",
+            text=dedent("""\
+                activityKey(SPECIES, kept_species(SPECIES)) :-
+                    hasActivity(SPECIES, _),
+                    not suppressed(SPECIES)."""),
+            docs="A non-suppressed species with activity is keyed by `kept_species(SELF)` (subunits of suppressed complexes are reused as-is at top level).",
+        ),
+    ),
+)
+
+_PREPARATION_NO_COMPLEX = RuleGroup(
+    identifier="preparation:no_complex",
+    profiles=frozenset({"no_complex"}),
+    depends_on=frozenset({"activity_base", "topology"}),
+    docs="`no-complex` preparation: a complex with any active descendant is suppressed; templated active species are keyed by `new_species_from_template(SELF)` (proteoforms collapse via Python interning); templateless active species keep their identity via `kept_species(SELF)`.",
+    rules=(
+        Rule(
+            identifier="preparation:no_complex:suppressed",
+            text=dedent("""\
+                suppressed(COMPLEX) :-
+                    complex(COMPLEX),
+                    hasActiveDescendant(COMPLEX)."""),
+            docs="A complex with any (transitive) active descendant is suppressed.",
+        ),
+        Rule(
+            identifier="preparation:no_complex:carrier",
+            text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+            docs="Each species is its own activity carrier.",
+        ),
+        Rule(
+            identifier="preparation:no_complex:key_templated",
+            text=dedent("""\
+                activityKey(SPECIES, new_species_from_template(SPECIES)) :-
+                    hasActivity(SPECIES, _),
+                    not suppressed(SPECIES),
+                    hasTemplate(SPECIES, _)."""),
+            docs="A non-suppressed templated active species is keyed by `new_species_from_template(SELF)`.",
+        ),
+        Rule(
+            identifier="preparation:no_complex:key_templateless",
+            text=dedent("""\
+                activityKey(SPECIES, kept_species(SPECIES)) :-
+                    hasActivity(SPECIES, _),
+                    not suppressed(SPECIES),
+                    not hasSomeTemplate(SPECIES)."""),
+            docs="A non-suppressed templateless active species (phenotype, ion, simple molecule, surviving complex, or templateless subunit) is keyed by `kept_species(SELF)`.",
+        ),
+    ),
+)
+
+_PREPARATION_NORMAL = RuleGroup(
+    identifier="preparation:normal",
+    profiles=frozenset({"normal"}),
+    depends_on=frozenset({"activity_base", "topology"}),
+    docs="`normal` preparation: every species (subunit or top-level) with activity contributes its own activity (templated → `new_species_from_template(SELF)` so proteoforms collapse via Python interning; templateless → `kept_species(SELF)`); influences stay on the original species (no rerouting). A complex with any active descendant additionally inherits an activity (templateless, so `kept_species(SELF)`).",
+    rules=(
+        Rule(
+            identifier="preparation:normal:complex_inherits_activity",
+            text=dedent("""\
+                hasActivity(COMPLEX, has_active_descendant) :-
+                    complex(COMPLEX),
+                    hasActiveDescendant(COMPLEX)."""),
+            docs="A complex with any (transitive) active subunit is itself active in the AF view, with reason `has_active_descendant`.",
+        ),
+        Rule(
+            identifier="preparation:normal:carrier",
+            text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+            docs="Each species is its own activity carrier (no rerouting).",
+        ),
+        Rule(
+            identifier="preparation:normal:key_templated",
+            text=dedent("""\
+                activityKey(SPECIES, new_species_from_template(SPECIES)) :-
+                    hasActivity(SPECIES, _),
+                    hasTemplate(SPECIES, _)."""),
+            docs="A templated species with activity is keyed by `new_species_from_template(SELF)`.",
+        ),
+        Rule(
+            identifier="preparation:normal:key_templateless",
+            text=dedent("""\
+                activityKey(SPECIES, kept_species(SPECIES)) :-
+                    hasActivity(SPECIES, _),
+                    not hasSomeTemplate(SPECIES)."""),
+            docs="A templateless species with activity is keyed by `kept_species(SELF)`.",
         ),
     ),
 )
 
 _PATHS_BASE = RuleGroup(
     identifier="paths_base",
-    profiles=_ALL_PROFILES,
+    profiles=_NON_CASQ_PROFILES,
     docs="Builds the signed `path(X, Y, SIGN)` relation from PD reactions and modulation arcs (catalyzer/stimulator/trigger/inhibitor → product, signed modulation arcs, and reactant-chained transitivity through reactions).",
     rules=(
         Rule(
@@ -400,106 +401,97 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     ),
 )
 
-_INFLUENCES_FROM_PATHS = RuleGroup(
-    identifier="influences_from_paths",
-    profiles=_ALL_PROFILES,
-    depends_on=frozenset({"paths_base", "contributes_activity", "activity_key"}),
-    docs="Emits `new(positivelyInfluences/2)` and `new(negativelyInfluences/2)` between activity keys whenever a signed path connects two species that both contribute activities.",
+_INFLUENCES_DERIVATION = RuleGroup(
+    identifier="influences_derivation",
+    profiles=_NON_CASQ_PROFILES,
+    docs="Profile-agnostic derivation: emits `new(activity(KEY))` for every activity key, and `new(positivelyInfluences/2)` / `new(negativelyInfluences/2)` from signed paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence consumed reactant; inhibitor positively influences spared reactant).",
     rules=(
         Rule(
-            identifier="influences_from_paths:positive",
-            text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
-                    path(SOURCE, TARGET, positive),
-                    contributesActivity(SOURCE),
-                    contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY),
-                    activityKey(TARGET, TGT_KEY)."""),
-            docs="If there is a positive path between two species and both contribute activities, then a positive influence between their activity keys is emitted.",
+            identifier="influences_derivation:activity",
+            text="new(activity(KEY)) :- activityKey(_, KEY).",
+            docs="Every species with an activity key emits an activity node with that key.",
         ),
         Rule(
-            identifier="influences_from_paths:negative",
+            identifier="influences_derivation:positive_path",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
-                    path(SOURCE, TARGET, negative),
-                    contributesActivity(SOURCE),
-                    contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY),
-                    activityKey(TARGET, TGT_KEY)."""),
-            docs="If there is a negative path between two species and both contribute activities, then a negative influence between their activity keys is emitted.",
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
+                    path(RAW_SOURCE, RAW_TARGET, positive),
+                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
+                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
+                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+            docs="A positive path between two raw species emits a positive influence between their activity-key images via their carriers.",
         ),
-    ),
-)
-
-_INFLUENCES_CONSUMPTION = RuleGroup(
-    identifier="influences_consumption",
-    profiles=_ALL_PROFILES,
-    depends_on=frozenset({"contributes_activity", "activity_key"}),
-    docs="Emits influences between modifier and reactant of the same reaction: catalyzer/stimulator/trigger negatively influence the reactant they consume, while inhibitor positively influences the reactant it spares.",
-    rules=(
         Rule(
-            identifier="influences_consumption:catalyzer_consumes_reactant",
+            identifier="influences_derivation:negative_path",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
+                    path(RAW_SOURCE, RAW_TARGET, negative),
+                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
+                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
+                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+            docs="A negative path between two raw species emits a negative influence between their activity-key images via their carriers.",
+        ),
+        Rule(
+            identifier="influences_derivation:catalyzer_consumes_reactant",
+            text=dedent("""\
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER),
-                    catalyzer(MODIFIER),
-                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
+                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, TARGET),
-                    contributesActivity(SOURCE),
-                    contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY),
-                    activityKey(TARGET, TGT_KEY)."""),
-            docs="If a species is referred to by a catalyzer of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
+                    hasReferredSpecies(REACTANT, RAW_TARGET),
+                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
+                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
+                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+            docs="A catalyzer of a reaction negatively influences each of its reactants (consumption).",
         ),
         Rule(
-            identifier="influences_consumption:physical_stimulator_consumes_reactant",
+            identifier="influences_derivation:physical_stimulator_consumes_reactant",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER),
-                    physicalStimulator(MODIFIER),
-                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
+                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, TARGET),
-                    contributesActivity(SOURCE),
-                    contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY),
-                    activityKey(TARGET, TGT_KEY)."""),
-            docs="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
+                    hasReferredSpecies(REACTANT, RAW_TARGET),
+                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
+                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
+                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+            docs="A physical stimulator of a reaction negatively influences each of its reactants (consumption).",
         ),
         Rule(
-            identifier="influences_consumption:trigger_consumes_reactant",
+            identifier="influences_derivation:trigger_consumes_reactant",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER),
-                    trigger(MODIFIER),
-                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
+                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, TARGET),
-                    contributesActivity(SOURCE),
-                    contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY),
-                    activityKey(TARGET, TGT_KEY)."""),
-            docs="If a species is referred to by a trigger of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a negative influence between their activity keys is emitted.",
+                    hasReferredSpecies(REACTANT, RAW_TARGET),
+                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
+                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
+                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+            docs="A trigger of a reaction negatively influences each of its reactants (consumption).",
         ),
         Rule(
-            identifier="influences_consumption:inhibitor_spares_reactant",
+            identifier="influences_derivation:inhibitor_spares_reactant",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER),
-                    inhibitor(MODIFIER),
-                    hasReferredSpecies(MODIFIER, SOURCE),
+                    hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
+                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, TARGET),
-                    contributesActivity(SOURCE),
-                    contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY),
-                    activityKey(TARGET, TGT_KEY)."""),
-            docs="If a species is referred to by an inhibitor of a reaction and another species is referred to by a reactant of that reaction, and both contribute activities, then a positive influence between their activity keys is emitted.",
+                    hasReferredSpecies(REACTANT, RAW_TARGET),
+                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
+                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
+                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+            docs="An inhibitor of a reaction positively influences each of its reactants (sparing).",
         ),
     ),
 )
@@ -664,20 +656,27 @@ _CASQ_BRIDGED_PRODUCT = RuleGroup(
     ),
 )
 
-_CASQ_CONTRIBUTES_ACTIVITY = RuleGroup(
-    identifier="contributes_activity:casq",
-    slot="contributes_activity",
+_CASQ_ACTIVITY = RuleGroup(
+    identifier="casq:activity",
     profiles=_CASQ_PROFILES,
     depends_on=frozenset({"casq:delete"}),
-    docs="`contributes_activity` slot for the casq profile: every PD species not marked for deletion by any CASQ rule contributes an activity to the AF.",
+    docs="`casq` activity emission: every PD species not marked for deletion contributes a `kept_species(SELF)` activity in the new AF map.",
     rules=(
         Rule(
-            identifier="contributes_activity:casq:not_deleted",
+            identifier="casq:activity:emit",
+            text=dedent("""\
+                new(activity(kept_species(SPECIES))) :-
+                    species(SPECIES),
+                    not delete(SPECIES, _)."""),
+            docs="Every PD species that is not deleted emits a `kept_species(SELF)` activity in the AF.",
+        ),
+        Rule(
+            identifier="casq:activity:contributes",
             text=dedent("""\
                 contributesActivity(SPECIES) :-
                     species(SPECIES),
                     not delete(SPECIES, _)."""),
-            docs="Every PD species that is not deleted by any CASQ rule contributes an activity to the new AF.",
+            docs="Every non-deleted species contributes an activity, used as a guard in the CASQ influence rules.",
         ),
     ),
 )
@@ -685,187 +684,169 @@ _CASQ_CONTRIBUTES_ACTIVITY = RuleGroup(
 _CASQ_INFLUENCES = RuleGroup(
     identifier="casq:influences",
     profiles=_CASQ_PROFILES,
-    depends_on=frozenset(
-        {"casq:bridged_product", "contributes_activity", "activity_key"}
-    ),
+    depends_on=frozenset({"casq:bridged_product", "casq:activity"}),
     docs="Casq-specific influence emission: directly wires reactant/catalyzer/stimulator/trigger → product (positive) and inhibitor → product (negative), plus modulation arcs, with a bridged-product variant for each modifier role to route across deleted intermediates.",
     rules=(
         Rule(
             identifier="casq:influences:reactant_to_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasReactant(REACTION, RT), hasReferredSpecies(RT, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A reactant of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:reactant_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasReactant(REACTION, RT), hasReferredSpecies(RT, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="Same as casq:influences:reactant_to_product but routed through a deleted intermediate via bridgedProduct.",
         ),
         Rule(
             identifier="casq:influences:catalyzer_to_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A catalyzer of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:catalyzer_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="Bridged variant of casq:influences:catalyzer_to_product.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulator_to_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A physical stimulator of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulator_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="Bridged variant of casq:influences:physical_stimulator_to_product.",
         ),
         Rule(
             identifier="casq:influences:trigger_to_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A trigger of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:trigger_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="Bridged variant of casq:influences:trigger_to_product.",
         ),
         Rule(
             identifier="casq:influences:inhibitor_to_product",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="An inhibitor of a reaction negatively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:inhibitor_to_bridged_product",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="Bridged variant of casq:influences:inhibitor_to_product.",
         ),
         Rule(
             identifier="casq:influences:catalyzis_modulation",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     catalyzis(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A catalyzis modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:positive_influence_modulation",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     positiveInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A positiveInfluence modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulation_modulation",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     physicalStimulation(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A physicalStimulation modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:triggering_modulation",
             text=dedent("""\
-                new(positivelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     triggering(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A triggering modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:inhibition_modulation",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     inhibition(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="An inhibition modulation arc emits a negative influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:negative_influence_modulation",
             text=dedent("""\
-                new(negativelyInfluences(SRC_KEY, TGT_KEY)) :-
+                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
                     negativeInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET),
-                    activityKey(SOURCE, SRC_KEY), activityKey(TARGET, TGT_KEY)."""),
+                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
             docs="A negativeInfluence modulation arc emits a negative influence between its source and target activities.",
         ),
     ),
@@ -877,21 +858,18 @@ def _build_registry() -> RuleRegistry:
     registry.register(
         [
             _ACTIVITY_BASE,
-            _HAS_ACTIVE_SUBUNIT,
-            _HAS_CONTRIBUTING_COMPLEX_ANCESTOR,
-            _CONTRIBUTES_ACTIVITY_FLAT,
-            _CONTRIBUTES_ACTIVITY_NO_ACTIVE_SUBUNITS,
-            _ACTIVITY_KEY_KEPT,
-            _ACTIVITY_KEY_MERGED,
-            _ACTIVITY_DERIVATION,
+            _TOPOLOGY,
+            _PREPARATION_KEEP_SPECIES,
+            _PREPARATION_KEEP_SPECIES_NO_COMPLEX,
+            _PREPARATION_NO_COMPLEX,
+            _PREPARATION_NORMAL,
             _PATHS_BASE,
             _PATHS_COMPLEX_TRAVERSAL,
-            _INFLUENCES_FROM_PATHS,
-            _INFLUENCES_CONSUMPTION,
+            _INFLUENCES_DERIVATION,
             _CASQ_PARTICIPATION,
             _CASQ_DELETE,
             _CASQ_BRIDGED_PRODUCT,
-            _CASQ_CONTRIBUTES_ACTIVITY,
+            _CASQ_ACTIVITY,
             _CASQ_INFLUENCES,
         ]
     )
