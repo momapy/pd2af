@@ -23,8 +23,10 @@ import momapy.celldesigner
 
 def dedup_and_remap_model(model_builder, mapping_builder):
     canonical_by_content = {}
+    species_identities_in_model = set()
 
     def collect(species):
+        species_identities_in_model.add(id(species))
         existing = canonical_by_content.get(species)
         species_id = species.id_ or ""
         existing_id = existing.id_ or "" if existing is not None else None
@@ -128,6 +130,16 @@ def dedup_and_remap_model(model_builder, mapping_builder):
                 continue
             new_value = modulation_remap.get(id(value))
             if new_value is None:
+                # Only remap species references that were actually
+                # registered during collect() (i.e. species that live
+                # in the new model). Ghost values — input species that
+                # the cloned input layout still references but that
+                # have no peer in the new model — must NOT be coerced
+                # onto a content-equal canonical: doing so creates two
+                # layouts mapped to the same model species, and the
+                # writer's reverse lookup is then non-deterministic.
+                if id(value) not in species_identities_in_model:
+                    continue
                 new_value = remap_species(value)
             if new_value is not value:
                 mapping_builder[key] = new_value

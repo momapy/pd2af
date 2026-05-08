@@ -20,8 +20,8 @@ collapse into activities:
 
 | mode                       | proteoforms                | complexes                                  |
 | -------------------------- | -------------------------- | ------------------------------------------ |
-| `normal`                   | merged per (template, compartment) | kept as flat complex marker        |
-| `no-complex`               | merged per (template, compartment) | broken into active subunits; kept flat if no active subunit |
+| `normal`                   | merged per (template, compartment) | kept (PD-style, with subunits)         |
+| `no-complex`               | merged per (template, compartment) | broken into active subunits; otherwise kept (PD-style) |
 | `keep-species`             | each PD species → own activity | kept (PD-style, with subunits)         |
 | `keep-species-no-complex`  | each PD species → own activity | broken into active subunits; otherwise kept (PD-style) |
 | `casq`                     | each PD species → own activity | (CASQ-specific pruning)                |
@@ -30,21 +30,6 @@ collapse into activities:
 future SBGN-AF output. `keep-species*` and `casq` deliberately deviate:
 they preserve PD structure for users who want a CD-native lossy
 reduction rather than a true AF view.
-
-## Implication: complexes are flat in `normal` and `no-complex`
-
-In the AF view, an activity originating from a complex is just an
-activity with "complex" provenance — there is no internal subunit
-structure. When we represent that activity as a CD complex species,
-the species must be flat: `subunits=frozenset()`.
-
-This is enforced in `solver.make_new_cd_model` for `normal` and
-`no-complex`. `keep-species*` and `casq` keep subunits intact.
-
-This also avoids a structural bug class: when a complex retains its
-subunits, those subunits drag in their original templates (`p_X`),
-which can collide with synthesized merged templates
-(`merged_template__id_Y`) under dataclass equality (see below).
 
 ## Model-element dedup invariant
 
@@ -66,10 +51,9 @@ remapping references — leaving callers (e.g. `subunits`,
 `modulation.source`, `proteinReference`) pointing at evicted elements,
 which causes `KeyError` on read-back of the written CellDesigner XML.
 
-The flat-complex rule in `normal`/`no-complex` removes the most common
-trigger of this bug, but if other shapes of the same problem appear,
-the right fix is a dedup-and-remap pass over the constructed model
-(mirroring `register_model_element`), not ad-hoc patching.
+The right fix when this shape of bug appears is a dedup-and-remap pass
+over the constructed model (mirroring `register_model_element`), not
+ad-hoc patching. See `pd2af.dedup`.
 
 ## Read-back as the integration test
 

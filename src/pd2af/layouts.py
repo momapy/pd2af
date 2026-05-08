@@ -1,7 +1,7 @@
 """Layout strategies for the four ``layout_mode`` values.
 
 Duck-typed event handlers — no ABC. Each strategy exposes the same
-methods invoked by :func:`pd2af.transform.transform`:
+methods invoked by :func:`pd2af.core.transform`:
 
 * ``start(map_)`` returns ``(layout_builder, mapping_builder)``.
 * ``on_compartment``, ``on_species``, ``on_modulation`` place each
@@ -147,7 +147,7 @@ class NoLayout:
         return momapy.celldesigner.CellDesignerMap(model=new_model)
 
 
-class PlainLayout:
+class PlainLayoutMaker:
     """Reuses input layouts wholesale for compartments and top-level
     species; synthesises fresh modulation arcs.
 
@@ -251,12 +251,12 @@ class PlainLayout:
     def _on_species_without_layout(
         self, species, layout_builder, mapping_builder
     ):
-        # Plain mode does not synthesise layouts. Hook for AutoLayout.
+        # Plain mode does not synthesise layouts. Hook for AutoLayoutMaker.
         return None
 
 
-class AutoLayout(PlainLayout):
-    """Like :class:`PlainLayout` but synthesises fallback layouts for
+class AutoLayoutMaker(PlainLayoutMaker):
+    """Like :class:`PlainLayoutMaker` but synthesises fallback layouts for
     species without input layouts and runs the auto-layout solver
     after finalisation."""
 
@@ -281,7 +281,7 @@ class AutoLayout(PlainLayout):
         return pd2af.utils.auto_layout(new_map)
 
 
-class OverlayLayout:
+class OverlayLayoutMaker:
     """Clones the full input layout up front, then dims layout elements
     no event consumed. Preserves the original "highlight what survives"
     rendering."""
@@ -442,7 +442,7 @@ def _finalize_map(model_builder, layout_builder, mapping_builder):
 
 STRATEGIES = {
     None: NoLayout,
-    "plain": PlainLayout,
-    "auto": AutoLayout,
-    "overlay": OverlayLayout,
+    "plain": PlainLayoutMaker,
+    "auto": AutoLayoutMaker,
+    "overlay": OverlayLayoutMaker,
 }

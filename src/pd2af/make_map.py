@@ -1,32 +1,10 @@
-"""Resolve clingo facts into AF model elements.
-
-Pure function — does not import :mod:`pd2af.solver`. Takes the solver's
-outputs (a clingo model and the id-to-model-element registry built when
-facts were generated) plus the original input map (used to walk
-ancestor-compartment lookups for synthesized subunit-promoted species)
-and returns a :class:`Resolution` describing the new model:
-compartments, templates, species, and modulations to place.
-
-The lockstep guarantee with :mod:`pd2af.layouts` is that the same
-``Species`` instance returned in :attr:`Resolution.species` is the one
-the layout strategy uses as the layout-model mapping value. Identity
-is shared end-to-end, which is what the CellDesigner writer's
-identity-keyed lookups (e.g. ``<listOfSpeciesAliases>``) need.
-"""
-
-import dataclasses
-
+import momapy.builder
 import momapy.celldesigner
-
 import pd2af.predicates
 
-
 _NO_COMPARTMENT_SENTINEL = "no_compartment"
-
 _TEMPLATE_MERGE_PREFIX = "new_species_from_template__"
-
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
-
 _TEMPLATE_TO_SPECIES_CLASS = {
     momapy.celldesigner.GenericProteinTemplate: momapy.celldesigner.GenericProtein,
     momapy.celldesigner.TruncatedProteinTemplate: momapy.celldesigner.TruncatedProtein,
@@ -38,68 +16,80 @@ _TEMPLATE_TO_SPECIES_CLASS = {
 }
 
 
-@dataclasses.dataclass(frozen=True)
-class Resolution:
-    """Plan for building the new AF map.
-
-    ``species`` entries are ``(species, existing_species_or_None,
-    is_subunit)`` triples. ``existing_species`` is the input-map species
-    whose layout is reusable for the new species, or ``None`` when the
-    species was synthesised (merged proteoform / promoted subunit).
-    ``is_subunit`` is ``True`` for subunits of kept complexes — those
-    go into the layout but not into ``model_builder.species``.
-    """
-
-    compartments: list
-    templates: list
-    species: list
-    modulations: list
+def _make_empty_map_builder():
+    map_builder = momapy.builder.get_or_make_builder_cls(
+        momapy.celldesigner.CellDesignerMap
+    )()
+    map_builder.model = momapy.builder.get_or_make_builder_cls(
+        momapy.celldesigner.CellDesignerModel
+    )()
+    map_builder.layout = momapy.builder.get_or_make_builder_cls(
+        momapy.celldesigner.CellDesignerLayout
+    )()
+    return map_builder
 
 
-def resolve(clingo_model, clingo_id_to_model_element, input_map):
+def _get_kept_and_new_keys_from_activity_atoms(activity_atoms):
+    kept_species_keys = set()
+    new_species_from_template_keys = set()
+    for activity_atom in activity_atoms:
+        key = activity_atom.key
+        if isinstance(key, pd2af.predicates.kept_species):
+            kept_species_keys.add(key)
+        else:
+            new_species_from_template_keys.add(key)
+    return kept_species_keys, new_species_from_template_keys
+
+
+def _get_existing_species_from_activity_atom(activity_atom, clingo_id_to_model_element):
+    key = activity_atom.key
+    clingo_id = key.species
+    existing_species = clingo_id_to_model_element[clingo_id]
+    return existing_species
+
+
+def make_new_map(clingo_model, clingo_id_to_model_element, input_map):
+    map_builder = _make_empty_map_builder()
     activity_atoms = _get_activity_atoms(clingo_model)
     influence_atoms = _get_influence_atoms(clingo_model)
-    key_to_resolution = {}
-    intern_table = {}
-    stripped_template_cache = {}
-    subunit_to_top_level = _build_subunit_to_top_level(input_map)
-    resolved_species = []
-    for atom in activity_atoms:
-        species, existing_species = _resolve_activity_key(
-            atom.key,
-            clingo_id_to_model_element,
-            key_to_resolution,
-            intern_table,
-            stripped_template_cache,
-            subunit_to_top_level,
-        )
-        resolved_species.append((species, existing_species))
-    immediate_compartments = {
-        species.compartment
-        for species, _ in resolved_species
-        if getattr(species, "compartment", None) is not None
-    }
-    compartments = _compartments_outermost_first(
-        _collect_ancestor_compartments(immediate_compartments)
+    key_to_model_element = {}
+    model_element_to_layout_elements = {}
+    kept_species_keys, kept_subunit_keys, new_species_from_template_keys = (
+        _get_keys_from_activity_atoms(activity_atoms)
     )
-    species_iterable = (species for species, _ in resolved_species)
-    templates = list(_collect_templates_from_species(species_iterable))
-    species_entries, canonical_species = _walk_species(resolved_species)
-    modulations = []
-    for atom in influence_atoms:
-        modulation_class = pd2af.predicates.predicate_to_model_element_class[type(atom)]
+    for key in kept_species_keys:
+        existing_species = clingo_id_to_model_element[key.species]
+        map_builder.model.species.add(existing_species)
+        species = existing_species
+        species_template = species.template if hasattr(species, "template") else None
+        species, species_template, compartment = (
+            _make_model_elements_from_activity_atom(
+                activity_atom, existing_species, key_to_model_element
+            )
+        )
+        _register_map_elements(map_builder, species)
+        if species_template is not None:
+            _register_map_elements(map_builder, species)
+        species_layout_elements = _make_species_layout_elements_from_activity_atom(
+            activity_atom, existing_species, model_element_to_layout_elements
+        )
+        compartments.add(species.compartment)
+    for activity_atom in influence_atoms:
+        modulation_class = pd2af.predicates.predicate_to_model_element_class[
+            type(activity_atom)
+        ]
         source_species, _ = _resolve_activity_key(
-            atom.source,
+            activity_atom.source,
             clingo_id_to_model_element,
-            key_to_resolution,
+            key_to_model_element,
             intern_table,
             stripped_template_cache,
             subunit_to_top_level,
         )
         target_species, _ = _resolve_activity_key(
-            atom.target,
+            activity_atom.target,
             clingo_id_to_model_element,
-            key_to_resolution,
+            key_to_model_element,
             intern_table,
             stripped_template_cache,
             subunit_to_top_level,
