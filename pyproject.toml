@@ -5,10 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "aspcompose",
+  "aspcompose>=0.1.0",
   "clorm>=1.6.1",
-  "momapy",
-  "momapy-kb",
+  "momapy>=0.11.1",
+  "momapy-kb[clingo]>=0.3.0",
   "pydot>=4.0.1",
 ]
 
@@ -28,11 +28,6 @@ dev = [
     "mkdocs-pygments>=0.0.2",
 ]
 test = ["pytest>=7"]
-
-[tool.uv.sources]
-momapy-kb = { path = "../momapy_kb", editable = true }
-aspcompose = { path = "../aspcompose", editable = true }
-momapy = { path = "../momapy", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
