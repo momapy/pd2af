@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "aspcompose",
-  "casq>=1.4.3",
   "clorm>=1.6.1",
   "momapy",
   "momapy-kb",
