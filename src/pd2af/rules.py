@@ -3,13 +3,12 @@
 The non-CASQ rules are organised in three layers:
 
 * **topology** (shared across all non-CASQ profiles) — structural
-  helpers: ``isSubunit``, ``topLevelAncestor``, ``hasActiveDescendant``,
-  ``hasSomeCompartment``, ``hasSomeTemplate``, ``effectiveCompartment``.
+  helpers: ``isSubunit``, ``hasActiveDescendant``, ``hasSomeTemplate``.
 * **preparation** (one rule group per non-CASQ mode) — emits
   ``activityCarrier(RAW_SPECIES, ACTIVITY_BEARER)`` and
-  ``activityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of three
-  per-species wrappers: ``kept_species/1``, ``new_species_from_subunit/1``,
-  or ``new_species_from_template/1``.
+  ``activityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of two
+  per-species wrappers: ``kept_species/1`` or
+  ``new_species_from_template/1``.
 * **derivation** (shared across all non-CASQ profiles) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``activityCarrier`` /
