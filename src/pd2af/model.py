@@ -1,24 +1,21 @@
-"""Resolve clingo facts into AF model elements.
+"""Construct AF model elements from clingo activity keys.
 
-Pure function — does not import :mod:`pd2af.solver`. Takes the solver's
-outputs (a clingo model and the id-to-model-element registry built when
-facts were generated) plus the original input map (used to walk
-ancestor-compartment lookups for synthesized subunit-promoted species)
-and returns a :class:`Resolution` describing the new model:
-compartments, templates, species, and modulations to place.
+Stateless ``get_or_make_*`` helpers. Each helper interns the constructed
+element through a shared content-keyed cache (``register_or_reuse``),
+so that two content-equal elements collapse to a single Python identity
+end-to-end. The coordinator in :mod:`pd2af.build` owns the cache and
+orchestrates the layer-ordered canonicalisation.
 
-The lockstep guarantee with :mod:`pd2af.layouts` is that the same
-``Species`` instance returned in :attr:`Resolution.species` is the one
-the layout strategy uses as the layout-model mapping value. Identity
-is shared end-to-end, which is what the CellDesigner writer's
-identity-keyed lookups (e.g. ``<listOfSpeciesAliases>``) need.
+The canonicity policy is "first-registered wins". Combined with the
+coordinator's layer order (kept_species → kept_subunit →
+promoted_subunit → new_species_from_template), this guarantees that
+a kept input-map element is always the canonical instance for its
+content class, never displaced by a freshly synthesized one.
 """
 
 import dataclasses
 
 import momapy.celldesigner
-
-import pd2af.predicates
 
 
 _NO_COMPARTMENT_SENTINEL = "no_compartment"
@@ -38,213 +35,63 @@ _TEMPLATE_TO_SPECIES_CLASS = {
 }
 
 
-@dataclasses.dataclass(frozen=True)
-class Resolution:
-    """Plan for building the new AF map.
-
-    ``species`` entries are ``(species, existing_species_or_None,
-    is_subunit)`` triples. ``existing_species`` is the input-map species
-    whose layout is reusable for the new species, or ``None`` when the
-    species was synthesised (merged proteoform / promoted subunit).
-    ``is_subunit`` is ``True`` for subunits of kept complexes — those
-    go into the layout but not into ``model_builder.species``.
+def register_or_reuse(element, cache):
+    """Intern ``element`` by content in ``cache``. First-registered wins:
+    if a content-equal element is already cached, return it; otherwise
+    record ``element`` as the canonical instance and return it.
     """
-
-    compartments: list
-    templates: list
-    species: list
-    modulations: list
-
-
-def resolve(clingo_model, clingo_id_to_model_element, input_map):
-    activity_atoms = _get_activity_atoms(clingo_model)
-    influence_atoms = _get_influence_atoms(clingo_model)
-    key_to_resolution = {}
-    intern_table = {}
-    stripped_template_cache = {}
-    subunit_to_top_level = _build_subunit_to_top_level(input_map)
-    resolved_species = []
-    for atom in activity_atoms:
-        species, existing_species = _resolve_activity_key(
-            atom.key,
-            clingo_id_to_model_element,
-            key_to_resolution,
-            intern_table,
-            stripped_template_cache,
-            subunit_to_top_level,
-        )
-        resolved_species.append((species, existing_species))
-    immediate_compartments = {
-        species.compartment
-        for species, _ in resolved_species
-        if getattr(species, "compartment", None) is not None
-    }
-    compartments = _compartments_outermost_first(
-        _collect_ancestor_compartments(immediate_compartments)
-    )
-    species_iterable = (species for species, _ in resolved_species)
-    templates = list(_collect_templates_from_species(species_iterable))
-    species_entries, canonical_species = _walk_species(resolved_species)
-    modulations = []
-    for atom in influence_atoms:
-        modulation_class = pd2af.predicates.predicate_to_model_element_class[type(atom)]
-        source_species, _ = _resolve_activity_key(
-            atom.source,
-            clingo_id_to_model_element,
-            key_to_resolution,
-            intern_table,
-            stripped_template_cache,
-            subunit_to_top_level,
-        )
-        target_species, _ = _resolve_activity_key(
-            atom.target,
-            clingo_id_to_model_element,
-            key_to_resolution,
-            intern_table,
-            stripped_template_cache,
-            subunit_to_top_level,
-        )
-        source_species = canonical_species.get(source_species, source_species)
-        target_species = canonical_species.get(target_species, target_species)
-        modulations.append(
-            modulation_class(source=source_species, target=target_species)
-        )
-    return Resolution(
-        compartments=compartments,
-        templates=templates,
-        species=species_entries,
-        modulations=modulations,
-    )
+    existing = cache.get(element)
+    if existing is not None:
+        return existing
+    cache[element] = element
+    return element
 
 
-def _get_activity_atoms(clingo_model):
-    return [
-        atom.object_
-        for atom in clingo_model.query(pd2af.predicates.new).all()
-        if isinstance(atom.object_, pd2af.predicates.activity)
-    ]
-
-
-def _get_influence_atoms(clingo_model):
-    return [
-        atom.object_
-        for atom in clingo_model.query(pd2af.predicates.new).all()
-        if isinstance(
-            atom.object_,
-            (
-                pd2af.predicates.positivelyInfluences,
-                pd2af.predicates.negativelyInfluences,
-            ),
-        )
-    ]
-
-
-def _resolve_activity_key(
-    key,
-    clingo_id_to_model_element,
-    key_to_resolution,
-    intern_table,
-    stripped_template_cache,
-    subunit_to_top_level,
-):
-    cached = key_to_resolution.get(key)
-    if cached is not None:
-        return cached
-    if isinstance(key, pd2af.predicates.kept_species):
-        input_species = clingo_id_to_model_element[key.species]
-        species = input_species
-        existing_species = input_species
-    elif isinstance(key, pd2af.predicates.new_species_from_template):
-        input_species = clingo_id_to_model_element[key.species]
-        candidate = _build_from_template(
-            input_species, subunit_to_top_level, stripped_template_cache
-        )
-        species = _intern_species(candidate, intern_table)
-        existing_species = None
-    else:
-        raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
-    resolution = (species, existing_species)
-    key_to_resolution[key] = resolution
-    return resolution
-
-
-def _intern_species(species, intern_table):
-    """Content-dedup species across all activity-key branches; smaller
-    ``id_`` wins on collision. Mirrors
-    ``momapy.io.utils.register_model_element`` so two content-equal
-    activity sources resolve to a single identity end-to-end (model
-    set, modulation source/target, layout-model mapping value)."""
-    existing = intern_table.get(species)
-    if existing is None:
-        intern_table[species] = species
-        return species
-    species_id = species.id_ or ""
-    existing_id = existing.id_ or ""
-    if species_id < existing_id:
-        intern_table[species] = species
-        return species
-    return existing
-
-
-def _walk_species(resolved_species):
-    """Linearise the species list to the order the layout strategy
-    consumes: top-level first, then subunits of kept complexes.
-
-    Content-based dedup with a ``canonical_species`` map. In two
-    passes:
-
-    1. **Subunits-of-kept-complexes first.** Every subunit reachable
-       through a resolved complex's subtree is registered into
-       ``canonical_species`` and emitted as an ``is_subunit=True``
-       entry. This pins the canonical identity of each proteoform to
-       the subunit-inside-complex.
-    2. **Top-level entries.** A resolved species that is content-equal
-       to an already-registered subunit (e.g. a subunit promoted from
-       a suppressed complex) is skipped — modulation source/target
-       are remapped through ``canonical_species`` so arcs land on the
-       subunit's alias inside the kept complex (where the layout is
-       structurally correct).
+def get_or_make_kept_species(input_species, cache):
+    """Canonical species for a ``kept_species``/``kept_subunit``/
+    ``promoted_subunit`` key. The input species is the canonical
+    instance — register it so later content-equal candidates collapse
+    onto it.
     """
-    species_entries = []
-    canonical_species = {}
-    for species, _existing in resolved_species:
-        for subunit in getattr(species, "subunits", ()) or ():
-            if subunit in canonical_species:
-                continue
-            canonical_species[subunit] = subunit
-            species_entries.append((subunit, subunit, True))
-    for species, existing_species in resolved_species:
-        if species in canonical_species:
-            continue
-        canonical_species[species] = species
-        species_entries.append((species, existing_species, False))
-    return species_entries, canonical_species
+    return register_or_reuse(input_species, cache)
 
 
-def _stripped_template_for(template, cache):
-    cached = cache.get(id(template))
-    if cached is not None:
-        return cached
+def get_or_make_stripped_template(input_template, cache):
+    """Strip proteoform decorations from ``input_template`` and intern
+    by content. Two distinct input templates that strip to the same
+    content yield a single canonical stripped template.
+
+    Kept templates must already be registered in the cache (per pipeline
+    step (3), kept templates are collected before stripped ones are
+    built). When a stripped candidate is content-equal to a kept
+    template, ``register_or_reuse`` returns the kept canonical and no
+    duplicate enters the cache.
+    """
     fields_to_clear = {}
-    if hasattr(template, "modification_residues"):
+    if hasattr(input_template, "modification_residues"):
         fields_to_clear["modification_residues"] = frozenset()
-    if hasattr(template, "regions"):
+    if hasattr(input_template, "regions"):
         fields_to_clear["regions"] = frozenset()
-    stripped = dataclasses.replace(
-        template,
-        id_=f"{_STRIPPED_TEMPLATE_PREFIX}{template.id_}",
+    candidate = dataclasses.replace(
+        input_template,
+        id_=f"{_STRIPPED_TEMPLATE_PREFIX}{input_template.id_}",
         **fields_to_clear,
     )
-    cache[id(template)] = stripped
-    return stripped
+    return register_or_reuse(candidate, cache)
 
 
-def _build_from_template(species, subunit_to_top_level, stripped_template_cache):
-    template = species.template
+def get_or_make_synthesized_species(
+    input_species, stripped_template, compartment, cache
+):
+    """Build a synthesized species from a stripped template and a
+    compartment. Two ``new_species_from_template`` keys whose (template,
+    compartment) cells coincide yield a single canonical species.
+    """
+    template = input_species.template
     if template is None:
         raise ValueError(
             f"new_species_from_template key references species "
-            f"{species.id_!r} which has no template"
+            f"{input_species.id_!r} which has no template"
         )
     species_class = _TEMPLATE_TO_SPECIES_CLASS.get(type(template))
     if species_class is None:
@@ -252,20 +99,36 @@ def _build_from_template(species, subunit_to_top_level, stripped_template_cache)
             f"cannot synthesize a templated species for template class "
             f"{type(template).__name__}"
         )
-    stripped_template = _stripped_template_for(template, stripped_template_cache)
-    compartment = _ancestor_compartment(species, subunit_to_top_level)
     compartment_id = (
         compartment.id_ if compartment is not None else _NO_COMPARTMENT_SENTINEL
     )
-    return species_class(
+    candidate = species_class(
         id_=f"{_TEMPLATE_MERGE_PREFIX}{template.id_}__{compartment_id}",
         name=template.name,
         template=stripped_template,
         compartment=compartment,
     )
+    return register_or_reuse(candidate, cache)
 
 
-def _build_subunit_to_top_level(input_map):
+def get_or_make_modulation(modulation_class, source, target, cache):
+    """Build a modulation and intern by content."""
+    candidate = modulation_class(source=source, target=target)
+    return register_or_reuse(candidate, cache)
+
+
+def get_parent_complex_compartment(subunit, subunit_to_top_level):
+    """Resolve a subunit's effective compartment by walking to its
+    containing top-level species. Subunits typically have no
+    ``compartment`` attribute of their own.
+    """
+    if getattr(subunit, "compartment", None) is not None:
+        return subunit.compartment
+    top_level = subunit_to_top_level.get(id(subunit), subunit)
+    return getattr(top_level, "compartment", None)
+
+
+def build_subunit_to_top_level(input_map):
     """Map every subunit (transitively) to its top-level species in the
     input map. Top-level species map to themselves so the lookup is
     total over all model species.
@@ -282,14 +145,7 @@ def _build_subunit_to_top_level(input_map):
     return subunit_to_top_level
 
 
-def _ancestor_compartment(species, subunit_to_top_level):
-    if getattr(species, "compartment", None) is not None:
-        return species.compartment
-    top_level = subunit_to_top_level.get(id(species), species)
-    return getattr(top_level, "compartment", None)
-
-
-def _compartments_outermost_first(compartments):
+def compartments_outermost_first(compartments):
     def depth(compartment):
         result = 0
         seen = set()
@@ -303,14 +159,15 @@ def _compartments_outermost_first(compartments):
     return sorted(compartments, key=depth)
 
 
-def _collect_ancestor_compartments(compartments):
+def collect_ancestor_compartments(compartments):
     expanded = set(compartments)
     frontier = expanded
     while True:
         next_frontier = set(
             compartment.outside
             for compartment in frontier
-            if compartment.outside is not None and compartment.outside not in expanded
+            if compartment.outside is not None
+            and compartment.outside not in expanded
         )
         if not next_frontier:
             break
@@ -319,7 +176,7 @@ def _collect_ancestor_compartments(compartments):
     return expanded
 
 
-def _collect_templates_from_species(species_iterable):
+def collect_templates_from_species(species_iterable):
     collected = set()
 
     def visit(species):
