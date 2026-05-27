@@ -14,6 +14,27 @@ class kept_species(clorm.Predicate):
     species: clorm.ConstantStr
 
 
+class kept_subunit(clorm.Predicate):
+    """Activity-key wrapper: a PD subunit of a kept complex contributes
+    its own activity but is *not* added to ``model.species`` — it is
+    already carried inside its parent complex's ``.subunits``.
+
+    The single argument is the synthetic ASP ID of the subunit species.
+    Emitted by ``normal`` and ``keep-species`` modes.
+    """
+    species: clorm.ConstantStr
+
+
+class promoted_subunit(clorm.Predicate):
+    """Activity-key wrapper: a PD subunit of a dissolved complex is
+    promoted to a top-level activity (added to ``model.species``).
+
+    The single argument is the synthetic ASP ID of the subunit species.
+    Emitted by ``no-complex`` and ``keep-species-no-complex`` modes.
+    """
+    species: clorm.ConstantStr
+
+
 class new_species_from_template(clorm.Predicate):
     """Activity-key wrapper: a PD species is replaced by a synthesized
     species whose template has been stripped of proteoform decorations
@@ -27,7 +48,9 @@ class new_species_from_template(clorm.Predicate):
     species: clorm.ConstantStr
 
 
-_ACTIVITY_KEY = kept_species | new_species_from_template
+_ACTIVITY_KEY = (
+    kept_species | kept_subunit | promoted_subunit | new_species_from_template
+)
 
 
 class activity(clorm.Predicate):
