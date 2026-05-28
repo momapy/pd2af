@@ -72,15 +72,11 @@ def build_map(map_, layout_mode, clingo_model, clingo_id_to_model_element):
     compartments = _canonicalise_compartments(
         ingredients, clingo_id_to_model_element, subunit_to_top_level
     )
-    templates = _canonicalise_templates(
-        ingredients, clingo_id_to_model_element, cache
-    )
+    templates = _canonicalise_templates(ingredients, clingo_id_to_model_element, cache)
     species_emissions, key_to_species = _canonicalise_species(
         ingredients, clingo_id_to_model_element, subunit_to_top_level, cache
     )
-    modulations = _canonicalise_modulations(
-        ingredients, key_to_species, cache
-    )
+    modulations = _canonicalise_modulations(ingredients, key_to_species, cache)
 
     return _build_and_drive_layout(
         map_,
@@ -92,14 +88,8 @@ def build_map(map_, layout_mode, clingo_model, clingo_id_to_model_element):
     )
 
 
-# ---------------------------------------------------------------------------
-# (1) ingredients pass
-
-
 def _collect_ingredients(clingo_model):
-    activity_atoms_by_key_class = {
-        key_class: [] for key_class in _SPECIES_LAYER_ORDER
-    }
+    activity_atoms_by_key_class = {key_class: [] for key_class in _SPECIES_LAYER_ORDER}
     influence_atoms = []
     for atom in clingo_model.query(pd2af.predicates.new).all():
         payload = atom.object_
@@ -117,10 +107,6 @@ def _collect_ingredients(clingo_model):
         activity_atoms_by_key_class=activity_atoms_by_key_class,
         influence_atoms=influence_atoms,
     )
-
-
-# ---------------------------------------------------------------------------
-# (2) canonical compartments
 
 
 def _canonicalise_compartments(
@@ -148,10 +134,6 @@ def _compartment_for_input_species(input_species, subunit_to_top_level):
     )
 
 
-# ---------------------------------------------------------------------------
-# (3) canonical templates
-
-
 def _canonicalise_templates(ingredients, clingo_id_to_model_element, cache):
     canonical_templates = []
     seen_template_identities = set()
@@ -170,9 +152,7 @@ def _canonicalise_templates(ingredients, clingo_id_to_model_element, cache):
         for atom in ingredients.activity_atoms_by_key_class[key_class]:
             input_species = clingo_id_to_model_element[atom.key.species]
             for input_template in _walk_templates(input_species):
-                canonical = pd2af.model.register_or_reuse(
-                    input_template, cache
-                )
+                canonical = pd2af.model.register_or_reuse(input_template, cache)
                 record(canonical)
 
     # Stripped templates: one per content cell. Built from each
@@ -188,9 +168,7 @@ def _canonicalise_templates(ingredients, clingo_id_to_model_element, cache):
                 f"new_species_from_template key references species "
                 f"{input_species.id_!r} which has no template"
             )
-        canonical = pd2af.model.get_or_make_stripped_template(
-            input_template, cache
-        )
+        canonical = pd2af.model.get_or_make_stripped_template(input_template, cache)
         record(canonical)
 
     return canonical_templates
@@ -202,10 +180,6 @@ def _walk_templates(species):
         yield template
     for subunit in getattr(species, "subunits", ()) or ():
         yield from _walk_templates(subunit)
-
-
-# ---------------------------------------------------------------------------
-# (4) canonical species
 
 
 def _canonicalise_species(
@@ -230,9 +204,7 @@ def _canonicalise_species(
     return species_emissions, key_to_species
 
 
-def _resolve_activity_key(
-    key, clingo_id_to_model_element, subunit_to_top_level, cache
-):
+def _resolve_activity_key(key, clingo_id_to_model_element, subunit_to_top_level, cache):
     if isinstance(key, _KEPT_KEY_CLASSES):
         input_species = clingo_id_to_model_element[key.species]
         return pd2af.model.get_or_make_kept_species(input_species, cache)
@@ -250,17 +222,11 @@ def _resolve_activity_key(
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 
-# ---------------------------------------------------------------------------
-# (5) canonical modulations
-
-
 def _canonicalise_modulations(ingredients, key_to_species, cache):
     modulations = []
     seen_modulation_identities = set()
     for atom in ingredients.influence_atoms:
-        modulation_class = pd2af.predicates.predicate_to_model_element_class[
-            type(atom)
-        ]
+        modulation_class = pd2af.predicates.predicate_to_model_element_class[type(atom)]
         source = key_to_species[atom.source]
         target = key_to_species[atom.target]
         canonical = pd2af.model.get_or_make_modulation(
@@ -273,18 +239,12 @@ def _canonicalise_modulations(ingredients, key_to_species, cache):
     return modulations
 
 
-# ---------------------------------------------------------------------------
-# Pass 2 — builder-append + layout construction
-
-
 @dataclasses.dataclass
 class _LayoutState:
     map_: object
     layout_builder: object = None
     mapping_builder: object = None
-    model_element_to_layout_elements: dict = dataclasses.field(
-        default_factory=dict
-    )
+    model_element_to_layout_elements: dict = dataclasses.field(default_factory=dict)
     object_to_builder: dict = dataclasses.field(default_factory=dict)
     kept: set = dataclasses.field(default_factory=set)
     synthetic_index: int = 0
@@ -303,19 +263,15 @@ def _build_and_drive_layout(
     )()
     state = _LayoutState(map_=map_)
 
-    # Phase 0 — set up layout + mapping builders.
     if layout_mode in ("plain", "auto"):
         state.layout_builder, state.mapping_builder = (
             pd2af.layouts.new_layout_and_mapping_builders()
         )
     elif layout_mode == "overlay":
         state.layout_builder, state.mapping_builder = (
-            pd2af.layouts.clone_input_layout_and_mapping(
-                map_, state.object_to_builder
-            )
+            pd2af.layouts.clone_input_layout_and_mapping(map_, state.object_to_builder)
         )
 
-    # Phase 1 — compartments.
     for compartment in compartments:
         model_builder.compartments.add(compartment)
         if layout_mode is None:
@@ -341,11 +297,9 @@ def _build_and_drive_layout(
                     )
                 state.kept.add(clone)
 
-    # Phase 2 — templates.
     for template in templates:
         model_builder.species_templates.add(template)
 
-    # Phase 3 — species.
     for key_class, species in species_emissions:
         is_kept_subunit = key_class is pd2af.predicates.kept_subunit
         if not is_kept_subunit:
@@ -355,9 +309,7 @@ def _build_and_drive_layout(
 
         has_input = key_class in _KEPT_KEY_CLASSES
         input_layouts = (
-            map_.layout_model_mapping.get_mapping(species)
-            if has_input
-            else None
+            map_.layout_model_mapping.get_mapping(species) if has_input else None
         )
 
         if layout_mode in ("plain", "auto"):
@@ -397,7 +349,6 @@ def _build_and_drive_layout(
                     input_layouts
                 )
 
-    # Phase 4 — modulations.
     for modulation in modulations:
         model_builder.modulations.add(modulation)
         if layout_mode is None:
@@ -445,7 +396,6 @@ def _build_and_drive_layout(
                     modulation,
                 )
 
-    # Phase 5 — finish.
     if layout_mode is None:
         return pd2af.layouts.finalize_map(model_builder, None, None)
 
