@@ -6,8 +6,11 @@ templates, species, and modulations. References between elements are
 wired to canonical instances at construction time, so Pass 2 never
 encounters a non-canonical reference — no post-pass remap is needed.
 
-Pass 2 (builder-append) writes the canonical elements into a fresh
-model builder and drives the existing layout strategy.
+Pass 2 (builder-append + layout) writes the canonical elements into a
+fresh model builder and, in the same loop, constructs the layout tree
+and the layout-model mapping inline; ``layout_mode`` drives an inline
+branch (``None`` / ``"plain"`` / ``"auto"`` / ``"overlay"``) calling
+leaf primitives from :mod:`pd2af.layouts`.
 
 Pass 1 follows the layered pipeline order from
 ``plans/model-layout-split.md``:
@@ -23,6 +26,7 @@ time the next layer reads them, so no cross-layer remap is needed.
 """
 
 import dataclasses
+import itertools
 
 import momapy.builder
 import momapy.celldesigner
@@ -30,6 +34,7 @@ import momapy.celldesigner
 import pd2af.layouts
 import pd2af.model
 import pd2af.predicates
+import pd2af.utils
 
 
 _SPECIES_LAYER_ORDER = (
@@ -269,7 +274,20 @@ def _canonicalise_modulations(ingredients, key_to_species, cache):
 
 
 # ---------------------------------------------------------------------------
-# Pass 2 — builder-append
+# Pass 2 — builder-append + layout construction
+
+
+@dataclasses.dataclass
+class _LayoutState:
+    map_: object
+    layout_builder: object = None
+    mapping_builder: object = None
+    model_element_to_layout_elements: dict = dataclasses.field(
+        default_factory=dict
+    )
+    object_to_builder: dict = dataclasses.field(default_factory=dict)
+    kept: set = dataclasses.field(default_factory=set)
+    synthetic_index: int = 0
 
 
 def _build_and_drive_layout(
@@ -280,37 +298,168 @@ def _build_and_drive_layout(
     species_emissions,
     modulations,
 ):
-    layout = pd2af.layouts.STRATEGIES[layout_mode]()
     model_builder = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
     )()
-    layout_builder, mapping_builder = layout.start(map_)
+    state = _LayoutState(map_=map_)
 
+    # Phase 0 — set up layout + mapping builders.
+    if layout_mode in ("plain", "auto"):
+        state.layout_builder, state.mapping_builder = (
+            pd2af.layouts.new_layout_and_mapping_builders()
+        )
+    elif layout_mode == "overlay":
+        state.layout_builder, state.mapping_builder = (
+            pd2af.layouts.clone_input_layout_and_mapping(
+                map_, state.object_to_builder
+            )
+        )
+
+    # Phase 1 — compartments.
     for compartment in compartments:
         model_builder.compartments.add(compartment)
-        layout.on_compartment(map_, compartment, layout_builder, mapping_builder)
+        if layout_mode is None:
+            continue
+        input_layouts = map_.layout_model_mapping.get_mapping(compartment)
+        if not input_layouts:
+            continue
+        if layout_mode in ("plain", "auto"):
+            state.layout_builder.layout_elements.extend(input_layouts)
+            for input_layout in input_layouts:
+                pd2af.layouts.copy_subtree_mappings(
+                    map_.layout_model_mapping,
+                    input_layout,
+                    state.mapping_builder,
+                )
+        elif layout_mode == "overlay":
+            for input_layout in input_layouts:
+                clone = state.object_to_builder.get(id(input_layout))
+                if clone is None:
+                    raise ValueError(
+                        f"compartment layout {input_layout!r} has no clone in "
+                        f"object_to_builder"
+                    )
+                state.kept.add(clone)
 
+    # Phase 2 — templates.
     for template in templates:
         model_builder.species_templates.add(template)
 
+    # Phase 3 — species.
     for key_class, species in species_emissions:
-        is_subunit = key_class is pd2af.predicates.kept_subunit
-        if not is_subunit:
+        is_kept_subunit = key_class is pd2af.predicates.kept_subunit
+        if not is_kept_subunit:
             model_builder.species.add(species)
-        existing_species = species if key_class in _KEPT_KEY_CLASSES else None
-        layout.on_species(
-            map_,
-            species,
-            existing_species,
-            is_subunit,
-            layout_builder,
-            mapping_builder,
+        if layout_mode is None:
+            continue
+
+        has_input = key_class in _KEPT_KEY_CLASSES
+        input_layouts = (
+            map_.layout_model_mapping.get_mapping(species)
+            if has_input
+            else None
         )
 
-    layout.on_species_done(map_, layout_builder, mapping_builder)
+        if layout_mode in ("plain", "auto"):
+            if input_layouts:
+                if not is_kept_subunit:
+                    state.layout_builder.layout_elements.extend(input_layouts)
+                    for input_layout in input_layouts:
+                        pd2af.layouts.copy_subtree_mappings(
+                            map_.layout_model_mapping,
+                            input_layout,
+                            state.mapping_builder,
+                        )
+                state.model_element_to_layout_elements[id(species)] = tuple(
+                    input_layouts
+                )
+            elif layout_mode == "auto" and not is_kept_subunit:
+                synthetic_layout = pd2af.layouts.make_synthetic_layout(
+                    species, state.synthetic_index
+                )
+                state.synthetic_index += 1
+                state.layout_builder.layout_elements.append(synthetic_layout)
+                state.mapping_builder.add_mapping(synthetic_layout, species)
+                state.model_element_to_layout_elements[id(species)] = (
+                    synthetic_layout,
+                )
+        elif layout_mode == "overlay":
+            if input_layouts:
+                for input_layout in input_layouts:
+                    clone = state.object_to_builder.get(id(input_layout))
+                    if clone is None:
+                        raise ValueError(
+                            f"species layout {input_layout!r} has no clone in "
+                            f"object_to_builder"
+                        )
+                    state.kept.add(clone)
+                state.model_element_to_layout_elements[id(species)] = tuple(
+                    input_layouts
+                )
 
+    # Phase 4 — modulations.
     for modulation in modulations:
         model_builder.modulations.add(modulation)
-        layout.on_modulation(modulation, layout_builder, mapping_builder)
+        if layout_mode is None:
+            continue
+        source_layouts = state.model_element_to_layout_elements.get(
+            id(modulation.source)
+        )
+        target_layouts = state.model_element_to_layout_elements.get(
+            id(modulation.target)
+        )
+        if not source_layouts or not target_layouts:
+            continue
+        for source_layout, target_layout in itertools.product(
+            source_layouts, target_layouts
+        ):
+            if layout_mode in ("plain", "auto"):
+                arc = pd2af.layouts.make_modulation_arc(
+                    modulation, source_layout, target_layout
+                )
+                state.layout_builder.layout_elements.append(arc)
+                pd2af.layouts.add_modulation_mapping(
+                    state.mapping_builder,
+                    arc,
+                    source_layout,
+                    target_layout,
+                    modulation,
+                )
+            elif layout_mode == "overlay":
+                # source_builder / target_builder are clones already in
+                # state.kept (added by Phase 1/3 against the shared
+                # object_to_builder). Only the new arc_builder needs to be
+                # marked kept here.
+                arc_builder, source_builder, target_builder = (
+                    pd2af.layouts.make_overlay_modulation_arc(
+                        state, modulation, source_layout, target_layout
+                    )
+                )
+                state.layout_builder.layout_elements.append(arc_builder)
+                state.kept.add(arc_builder)
+                pd2af.layouts.add_modulation_mapping(
+                    state.mapping_builder,
+                    arc_builder,
+                    source_builder,
+                    target_builder,
+                    modulation,
+                )
 
-    return layout.finish(map_, model_builder, layout_builder, mapping_builder)
+    # Phase 5 — finish.
+    if layout_mode is None:
+        return pd2af.layouts.finalize_map(model_builder, None, None)
+
+    if layout_mode == "overlay":
+        state.layout_builder = pd2af.utils.highlight_layout_elements(
+            state.kept, state.layout_builder
+        )
+
+    pd2af.utils.harmonize_root_layout(state.layout_builder)
+    new_map = pd2af.layouts.finalize_map(
+        model_builder, state.layout_builder, state.mapping_builder
+    )
+
+    if layout_mode == "auto":
+        new_map = pd2af.utils.auto_layout(new_map)
+
+    return new_map
