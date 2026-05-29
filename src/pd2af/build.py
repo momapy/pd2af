@@ -46,7 +46,6 @@ class BuilderContext:
     input_map: object
     layout_mode: str | None
     clingo_id_to_model_element: dict
-    subunit_to_top_level: dict
 
     # --- outputs being built ---
     model: object = None
@@ -58,6 +57,7 @@ class BuilderContext:
 
     # --- Pass-1 scratch ---
     cache: dict = dataclasses.field(default_factory=dict)
+    subunit_to_top_level: dict = None
     activity_atoms_by_key_class: dict = dataclasses.field(default_factory=dict)
     influence_atoms: list = dataclasses.field(default_factory=list)
     key_to_species: dict = dataclasses.field(default_factory=dict)
@@ -74,7 +74,6 @@ def build_map(map_, layout_mode, clingo_model, clingo_id_to_model_element):
         input_map=map_,
         layout_mode=layout_mode,
         clingo_id_to_model_element=clingo_id_to_model_element,
-        subunit_to_top_level=pd2af.model.build_subunit_to_top_level(map_),
     )
     _make_and_add_model(context, clingo_model)
     if layout_mode is not None:
@@ -104,6 +103,9 @@ def _make_and_add_model(context, clingo_model):
     context.model = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
     )()
+    context.subunit_to_top_level = pd2af.model.build_subunit_to_top_level(
+        context.input_map
+    )
     _collect_ingredients(context, clingo_model)
     _make_and_add_compartments(context)
     _make_and_add_templates(context)
