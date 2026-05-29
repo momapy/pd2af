@@ -40,48 +40,52 @@ def new_layout_and_mapping_builders():
     )
 
 
-def clone_input_layout_and_mapping(
-    map_,
-    object_to_builder,
-    input_model_element_to_canonical_model_element=None,
+def clone_layout_pruning_foreground(
+    input_layout_element, foreground_ids, object_to_builder
 ):
-    # Round-tripping the mapping through `LayoutModelMappingBuilder.from_object`
-    # would round-trip the model-side values too, producing fresh clones
-    # with different `id()` that the writer's identity lookup can't find
-    # (empty <listOfSpeciesAliases>). Build the mapping by hand: convert
-    # layout-side keys to the cloned builders, keep model-side values as
-    # the input frozen objects.
-    layout_builder = momapy.builder.builder_from_object(
-        map_.layout, object_to_builder=object_to_builder
+    """Clone an input layout element as a builder for use as dimmed
+    background, omitting any descendant subtree whose input original is in
+    ``foreground_ids`` (already drawn in the foreground). Returns ``None``
+    when the element itself belongs to the foreground.
+
+    Clones share ``object_to_builder`` so structure shared across the input
+    layout stays shared once cloned, and they are builders -- not the input
+    frozen objects -- so dimming the background never mutates the input
+    map's layout.
+    """
+    if id(input_layout_element) in foreground_ids:
+        return None
+    clone = momapy.builder.builder_from_object(
+        input_layout_element, object_to_builder=object_to_builder
     )
-    mapping_builder = momapy.core.mapping.LayoutModelMappingBuilder()
-    input_layout_model_mapping = map_.layout_model_mapping
-    anchor_for_key_id = {}
-    for input_anchor, input_key in input_layout_model_mapping._singleton_to_key.items():
-        anchor_for_key_id[id(input_key)] = input_anchor
-    for input_layout_key, input_model_value in input_layout_model_mapping.items():
-        new_layout_key = _convert_layout_side(input_layout_key, object_to_builder)
-        if input_model_element_to_canonical_model_element is not None:
-            input_model_value = input_model_element_to_canonical_model_element.get(
-                id(input_model_value), input_model_value
-            )
-        input_anchor = anchor_for_key_id.get(id(input_layout_key))
-        if input_anchor is not None:
-            new_anchor = object_to_builder.get(id(input_anchor), input_anchor)
-            mapping_builder.add_mapping(
-                new_layout_key, input_model_value, anchor=new_anchor
-            )
-        else:
-            mapping_builder[new_layout_key] = input_model_value
-    return layout_builder, mapping_builder
+    _prune_foreground_from_clone(
+        input_layout_element, clone, foreground_ids, object_to_builder
+    )
+    return clone
 
 
-def _convert_layout_side(layout_key, object_to_builder):
-    if isinstance(layout_key, frozenset):
-        return frozenset(
-            object_to_builder.get(id(element), element) for element in layout_key
+def _prune_foreground_from_clone(
+    input_layout_element, clone, foreground_ids, object_to_builder
+):
+    # The only foreground glyphs that can sit *inside* a background clone are
+    # subunits nested via `layout_elements` (e.g. promoted subunits of a
+    # dissolved complex). `builder_from_object` already cloned the whole
+    # subtree into `object_to_builder`; rebuild `layout_elements` keeping only
+    # the clones whose input original is not in the foreground, recursing so
+    # deeper nestings are pruned too.
+    input_subunits = getattr(input_layout_element, "layout_elements", None)
+    if not input_subunits:
+        return
+    surviving_clones = []
+    for input_subunit in input_subunits:
+        if id(input_subunit) in foreground_ids:
+            continue
+        subunit_clone = object_to_builder[id(input_subunit)]
+        _prune_foreground_from_clone(
+            input_subunit, subunit_clone, foreground_ids, object_to_builder
         )
-    return object_to_builder.get(id(layout_key), layout_key)
+        surviving_clones.append(subunit_clone)
+    clone.layout_elements = surviving_clones
 
 
 def make_synthetic_layout(species, index):
@@ -129,26 +133,6 @@ def make_modulation_arc(modulation, source_layout, target_layout):
         target=target_layout,
         segments=(segment,),
     )
-
-
-def make_overlay_modulation_arc(
-    context, modulation, source_layout, target_layout
-):
-    # Build the arc against cloned source/target builders. The arc's
-    # internal Segment/Point entries get throwaway addresses; isolate
-    # them in a per-arc cache so they don't poison object_to_builder.
-    per_arc_cache = dict(context.object_to_builder)
-    arc = make_modulation_arc(modulation, source_layout, target_layout)
-    arc_builder = momapy.builder.builder_from_object(
-        arc, object_to_builder=per_arc_cache
-    )
-    source_builder = momapy.builder.builder_from_object(
-        source_layout, object_to_builder=context.object_to_builder
-    )
-    target_builder = momapy.builder.builder_from_object(
-        target_layout, object_to_builder=context.object_to_builder
-    )
-    return arc_builder, source_builder, target_builder
 
 
 def add_mappings_for_layout_and_descendants(

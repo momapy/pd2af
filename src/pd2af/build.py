@@ -68,7 +68,6 @@ class BuilderContext:
     # --- Pass-2 scratch ---
     model_element_to_layout_elements: dict = dataclasses.field(default_factory=dict)
     object_to_builder: dict = dataclasses.field(default_factory=dict)
-    kept: set = dataclasses.field(default_factory=set)
     synthetic_index: int = 0
 
 
@@ -275,20 +274,9 @@ def _make_and_add_modulations(context):
 
 
 def _make_and_add_layout(context):
-    if context.layout_mode in ("plain", "auto"):
-        context.layout, context.layout_model_mapping = (
-            pd2af.layouts.new_layout_and_mapping_builders()
-        )
-    elif context.layout_mode == "overlay":
-        context.layout, context.layout_model_mapping = (
-            pd2af.layouts.clone_input_layout_and_mapping(
-                context.input_map,
-                context.object_to_builder,
-                input_model_element_to_canonical_model_element=(
-                    context.input_model_element_to_canonical_model_element
-                ),
-            )
-        )
+    context.layout, context.layout_model_mapping = (
+        pd2af.layouts.new_layout_and_mapping_builders()
+    )
 
     for compartment in pd2af.model.compartments_outermost_first(
         context.model.compartments
@@ -299,37 +287,33 @@ def _make_and_add_layout(context):
     for modulation in context.model.modulations:
         _make_and_add_modulation_layout(context, modulation)
 
-    pd2af.utils.harmonize_root_layout(context.layout)
+    # Overlay = the plain foreground built above + the input map's remaining
+    # glyphs cloned in as dimmed, unmapped background. The background carries
+    # PD context for rendering only; being unmapped, the model-driven writer
+    # drops it, so overlay round-trips identically to plain.
     if context.layout_mode == "overlay":
+        foreground = list(context.layout.layout_elements)
+        _add_dimmed_background(context, foreground)
         context.layout = pd2af.utils.highlight_layout_elements(
-            context.kept, context.layout
+            foreground, context.layout
         )
+    pd2af.utils.harmonize_root_layout(context.layout)
 
 
 def _make_and_add_compartment_layout(context, compartment):
     input_layouts = context.input_map.layout_model_mapping.get_mapping(compartment)
     if not input_layouts:
         return
-    if context.layout_mode in ("plain", "auto"):
-        context.layout.layout_elements.extend(input_layouts)
-        for input_layout in input_layouts:
-            pd2af.layouts.add_mappings_for_layout_and_descendants(
-                context.input_map.layout_model_mapping,
-                input_layout,
-                context.layout_model_mapping,
-                input_model_element_to_canonical_model_element=(
-                    context.input_model_element_to_canonical_model_element
-                ),
-            )
-    elif context.layout_mode == "overlay":
-        for input_layout in input_layouts:
-            clone = context.object_to_builder.get(id(input_layout))
-            if clone is None:
-                raise ValueError(
-                    f"compartment layout {input_layout!r} has no clone in "
-                    f"object_to_builder"
-                )
-            context.kept.add(clone)
+    context.layout.layout_elements.extend(input_layouts)
+    for input_layout in input_layouts:
+        pd2af.layouts.add_mappings_for_layout_and_descendants(
+            context.input_map.layout_model_mapping,
+            input_layout,
+            context.layout_model_mapping,
+            input_model_element_to_canonical_model_element=(
+                context.input_model_element_to_canonical_model_element
+            ),
+        )
 
 
 def _make_and_add_species_layout(context, key_class, species, input_species):
@@ -340,45 +324,27 @@ def _make_and_add_species_layout(context, key_class, species, input_species):
         else None
     )
 
-    if context.layout_mode in ("plain", "auto"):
-        if input_layouts:
-            if not is_kept_subunit:
-                context.layout.layout_elements.extend(input_layouts)
-                for input_layout in input_layouts:
-                    pd2af.layouts.add_mappings_for_layout_and_descendants(
-                        context.input_map.layout_model_mapping,
-                        input_layout,
-                        context.layout_model_mapping,
-                        input_model_element_to_canonical_model_element=(
-                            context.input_model_element_to_canonical_model_element
-                        ),
-                    )
-            context.model_element_to_layout_elements[id(species)] = tuple(
-                input_layouts
-            )
-        elif context.layout_mode == "auto" and not is_kept_subunit:
-            synthetic_layout = pd2af.layouts.make_synthetic_layout(
-                species, context.synthetic_index
-            )
-            context.synthetic_index += 1
-            context.layout.layout_elements.append(synthetic_layout)
-            context.layout_model_mapping.add_mapping(synthetic_layout, species)
-            context.model_element_to_layout_elements[id(species)] = (
-                synthetic_layout,
-            )
-    elif context.layout_mode == "overlay":
-        if input_layouts:
+    if input_layouts:
+        if not is_kept_subunit:
+            context.layout.layout_elements.extend(input_layouts)
             for input_layout in input_layouts:
-                clone = context.object_to_builder.get(id(input_layout))
-                if clone is None:
-                    raise ValueError(
-                        f"species layout {input_layout!r} has no clone in "
-                        f"object_to_builder"
-                    )
-                context.kept.add(clone)
-            context.model_element_to_layout_elements[id(species)] = tuple(
-                input_layouts
-            )
+                pd2af.layouts.add_mappings_for_layout_and_descendants(
+                    context.input_map.layout_model_mapping,
+                    input_layout,
+                    context.layout_model_mapping,
+                    input_model_element_to_canonical_model_element=(
+                        context.input_model_element_to_canonical_model_element
+                    ),
+                )
+        context.model_element_to_layout_elements[id(species)] = tuple(input_layouts)
+    elif context.layout_mode == "auto" and not is_kept_subunit:
+        synthetic_layout = pd2af.layouts.make_synthetic_layout(
+            species, context.synthetic_index
+        )
+        context.synthetic_index += 1
+        context.layout.layout_elements.append(synthetic_layout)
+        context.layout_model_mapping.add_mapping(synthetic_layout, species)
+        context.model_element_to_layout_elements[id(species)] = (synthetic_layout,)
 
 
 def _make_and_add_modulation_layout(context, modulation):
@@ -393,30 +359,38 @@ def _make_and_add_modulation_layout(context, modulation):
     for source_layout, target_layout in itertools.product(
         source_layouts, target_layouts
     ):
-        if context.layout_mode in ("plain", "auto"):
-            arc = pd2af.layouts.make_modulation_arc(
-                modulation, source_layout, target_layout
-            )
-            context.layout.layout_elements.append(arc)
-            pd2af.layouts.add_modulation_mapping(
-                context.layout_model_mapping,
-                arc,
-                source_layout,
-                target_layout,
-                modulation,
-            )
-        elif context.layout_mode == "overlay":
-            arc_builder, source_builder, target_builder = (
-                pd2af.layouts.make_overlay_modulation_arc(
-                    context, modulation, source_layout, target_layout
-                )
-            )
-            context.layout.layout_elements.append(arc_builder)
-            context.kept.add(arc_builder)
-            pd2af.layouts.add_modulation_mapping(
-                context.layout_model_mapping,
-                arc_builder,
-                source_builder,
-                target_builder,
-                modulation,
-            )
+        arc = pd2af.layouts.make_modulation_arc(
+            modulation, source_layout, target_layout
+        )
+        context.layout.layout_elements.append(arc)
+        pd2af.layouts.add_modulation_mapping(
+            context.layout_model_mapping,
+            arc,
+            source_layout,
+            target_layout,
+            modulation,
+        )
+
+
+def _add_dimmed_background(context, foreground):
+    """Clone the input layout's remaining glyphs into ``context.layout`` as
+    unmapped background, for the dimmer to grey out.
+
+    ``foreground`` is the set of layout elements built by the plain path
+    above (input objects shared with the input map). Any input subtree
+    already represented there -- a top-level glyph reused verbatim, or a
+    promoted subunit lifted out of a dissolved complex -- is pruned from the
+    clones, so the background never duplicates a foreground glyph nor
+    collides with its ``id_`` in the dimming selector.
+    """
+    foreground_ids = set()
+    for layout_element in foreground:
+        foreground_ids.add(id(layout_element))
+        for descendant in layout_element.descendants():
+            foreground_ids.add(id(descendant))
+    for input_layout_element in context.input_map.layout.layout_elements:
+        background_clone = pd2af.layouts.clone_layout_pruning_foreground(
+            input_layout_element, foreground_ids, context.object_to_builder
+        )
+        if background_clone is not None:
+            context.layout.layout_elements.append(background_clone)
