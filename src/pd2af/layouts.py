@@ -40,7 +40,11 @@ def new_layout_and_mapping_builders():
     )
 
 
-def clone_input_layout_and_mapping(map_, object_to_builder):
+def clone_input_layout_and_mapping(
+    map_,
+    object_to_builder,
+    input_model_element_to_canonical_model_element=None,
+):
     # Round-tripping the mapping through `LayoutModelMappingBuilder.from_object`
     # would round-trip the model-side values too, producing fresh clones
     # with different `id()` that the writer's identity lookup can't find
@@ -51,12 +55,16 @@ def clone_input_layout_and_mapping(map_, object_to_builder):
         map_.layout, object_to_builder=object_to_builder
     )
     mapping_builder = momapy.core.mapping.LayoutModelMappingBuilder()
-    input_mapping = map_.layout_model_mapping
+    input_layout_model_mapping = map_.layout_model_mapping
     anchor_for_key_id = {}
-    for input_anchor, input_key in input_mapping._singleton_to_key.items():
+    for input_anchor, input_key in input_layout_model_mapping._singleton_to_key.items():
         anchor_for_key_id[id(input_key)] = input_anchor
-    for input_layout_key, input_model_value in input_mapping.items():
+    for input_layout_key, input_model_value in input_layout_model_mapping.items():
         new_layout_key = _convert_layout_side(input_layout_key, object_to_builder)
+        if input_model_element_to_canonical_model_element is not None:
+            input_model_value = input_model_element_to_canonical_model_element.get(
+                id(input_model_value), input_model_value
+            )
         input_anchor = anchor_for_key_id.get(id(input_layout_key))
         if input_anchor is not None:
             new_anchor = object_to_builder.get(id(input_anchor), input_anchor)
@@ -143,11 +151,21 @@ def make_overlay_modulation_arc(
     return arc_builder, source_builder, target_builder
 
 
-def copy_subtree_mappings(source_mapping, layout_element, mapping_builder):
+def add_mappings_for_layout_and_descendants(
+    input_layout_model_mapping,
+    layout_element,
+    mapping_builder,
+    input_model_element_to_canonical_model_element=None,
+):
     elements = [layout_element] + list(layout_element.descendants())
     for element in elements:
-        if element in source_mapping:
-            mapping_builder.add_mapping(element, source_mapping[element])
+        if element in input_layout_model_mapping:
+            model_value = input_layout_model_mapping[element]
+            if input_model_element_to_canonical_model_element is not None:
+                model_value = input_model_element_to_canonical_model_element.get(
+                    id(model_value), model_value
+                )
+            mapping_builder.add_mapping(element, model_value)
 
 
 def add_modulation_mapping(

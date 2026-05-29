@@ -54,6 +54,9 @@ class BuilderContext:
 
     # --- Pass-1 -> Pass-2 handoff ---
     species_emissions: list = dataclasses.field(default_factory=list)
+    input_model_element_to_canonical_model_element: dict = dataclasses.field(
+        default_factory=dict
+    )
 
     # --- Pass-1 scratch ---
     cache: dict = dataclasses.field(default_factory=dict)
@@ -211,15 +214,32 @@ def _make_and_add_species(context):
             if id(species) in seen_species_identities:
                 continue
             seen_species_identities.add(id(species))
-            context.species_emissions.append((key_class, species))
+            input_species = (
+                context.clingo_id_to_model_element[atom.key.species]
+                if key_class in _KEPT_KEY_CLASSES
+                else None
+            )
+            context.species_emissions.append((key_class, species, input_species))
             if key_class is not pd2af.predicates.kept_subunit:
                 context.model.species.add(species)
 
 
 def _resolve_activity_key(context, key):
-    if isinstance(key, _KEPT_KEY_CLASSES):
+    if isinstance(key, pd2af.predicates.promoted_subunit):
         input_species = context.clingo_id_to_model_element[key.species]
-        return pd2af.model.get_or_make_kept_species(input_species, context.cache)
+        return pd2af.model.get_or_make_promoted_subunit_species(
+            input_species,
+            context.subunit_to_top_level,
+            context.cache,
+            context.input_model_element_to_canonical_model_element,
+        )
+    if isinstance(
+        key, (pd2af.predicates.kept_species, pd2af.predicates.kept_subunit)
+    ):
+        input_species = context.clingo_id_to_model_element[key.species]
+        return pd2af.model.get_or_make_kept_species_or_subunit(
+            input_species, context.cache
+        )
     if isinstance(key, pd2af.predicates.new_species_from_template):
         input_species = context.clingo_id_to_model_element[key.species]
         compartment = _compartment_for_input_species(context, input_species)
@@ -262,7 +282,11 @@ def _make_and_add_layout(context):
     elif context.layout_mode == "overlay":
         context.layout, context.layout_model_mapping = (
             pd2af.layouts.clone_input_layout_and_mapping(
-                context.input_map, context.object_to_builder
+                context.input_map,
+                context.object_to_builder,
+                input_model_element_to_canonical_model_element=(
+                    context.input_model_element_to_canonical_model_element
+                ),
             )
         )
 
@@ -270,8 +294,8 @@ def _make_and_add_layout(context):
         context.model.compartments
     ):
         _make_and_add_compartment_layout(context, compartment)
-    for key_class, species in context.species_emissions:
-        _make_and_add_species_layout(context, key_class, species)
+    for key_class, species, input_species in context.species_emissions:
+        _make_and_add_species_layout(context, key_class, species, input_species)
     for modulation in context.model.modulations:
         _make_and_add_modulation_layout(context, modulation)
 
@@ -289,10 +313,13 @@ def _make_and_add_compartment_layout(context, compartment):
     if context.layout_mode in ("plain", "auto"):
         context.layout.layout_elements.extend(input_layouts)
         for input_layout in input_layouts:
-            pd2af.layouts.copy_subtree_mappings(
+            pd2af.layouts.add_mappings_for_layout_and_descendants(
                 context.input_map.layout_model_mapping,
                 input_layout,
                 context.layout_model_mapping,
+                input_model_element_to_canonical_model_element=(
+                    context.input_model_element_to_canonical_model_element
+                ),
             )
     elif context.layout_mode == "overlay":
         for input_layout in input_layouts:
@@ -305,12 +332,11 @@ def _make_and_add_compartment_layout(context, compartment):
             context.kept.add(clone)
 
 
-def _make_and_add_species_layout(context, key_class, species):
+def _make_and_add_species_layout(context, key_class, species, input_species):
     is_kept_subunit = key_class is pd2af.predicates.kept_subunit
-    has_input = key_class in _KEPT_KEY_CLASSES
     input_layouts = (
-        context.input_map.layout_model_mapping.get_mapping(species)
-        if has_input
+        context.input_map.layout_model_mapping.get_mapping(input_species)
+        if input_species is not None
         else None
     )
 
@@ -319,10 +345,13 @@ def _make_and_add_species_layout(context, key_class, species):
             if not is_kept_subunit:
                 context.layout.layout_elements.extend(input_layouts)
                 for input_layout in input_layouts:
-                    pd2af.layouts.copy_subtree_mappings(
+                    pd2af.layouts.add_mappings_for_layout_and_descendants(
                         context.input_map.layout_model_mapping,
                         input_layout,
                         context.layout_model_mapping,
+                        input_model_element_to_canonical_model_element=(
+                            context.input_model_element_to_canonical_model_element
+                        ),
                     )
             context.model_element_to_layout_elements[id(species)] = tuple(
                 input_layouts

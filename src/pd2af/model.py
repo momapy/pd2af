@@ -47,13 +47,52 @@ def register_or_reuse(element, cache):
     return element
 
 
-def get_or_make_kept_species(input_species, cache):
-    """Canonical species for a ``kept_species``/``kept_subunit``/
-    ``promoted_subunit`` key. The input species is the canonical
-    instance — register it so later content-equal candidates collapse
-    onto it.
+def get_or_make_kept_species_or_subunit(input_species, cache):
+    """Canonical species for a ``kept_species`` or ``kept_subunit`` key.
+    The input species is the canonical instance — register it so later
+    content-equal candidates collapse onto it.
     """
     return register_or_reuse(input_species, cache)
+
+
+def get_or_make_promoted_subunit_species(
+    input_subunit,
+    subunit_to_top_level,
+    cache,
+    input_model_element_to_canonical_model_element,
+):
+    """Canonical species for a ``promoted_subunit`` key. CellDesigner
+    subunits carry ``compartment=None`` (inherited from the parent
+    complex); when promoted to top-level they need the parent's
+    compartment, otherwise the writer substitutes a synthetic ``default``
+    compartment that the reader picks up, breaking content-eq on
+    round-trip.
+
+    Two distinct input subunits promoted to the same compartment
+    collapse via the cache; if a content-equal kept species is already
+    cached (from the kept_species layer), the corrected version
+    collapses onto that.
+
+    Records ``id(input_subunit) -> canonical_species`` in
+    ``input_model_element_to_canonical_model_element`` whenever the
+    canonical differs from the input — Pass 2's layout mapping copies
+    use that dict to substitute stale value references that still point
+    at the input subunit.
+    """
+    parent_compartment = get_parent_complex_compartment(
+        input_subunit, subunit_to_top_level
+    )
+    if parent_compartment is None:
+        return register_or_reuse(input_subunit, cache)
+    corrected_species = dataclasses.replace(
+        input_subunit, compartment=parent_compartment
+    )
+    canonical_species = register_or_reuse(corrected_species, cache)
+    if canonical_species is not input_subunit:
+        input_model_element_to_canonical_model_element[id(input_subunit)] = (
+            canonical_species
+        )
+    return canonical_species
 
 
 def get_or_make_stripped_template(input_template, cache):
