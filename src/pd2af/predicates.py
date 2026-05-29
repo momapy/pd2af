@@ -89,10 +89,10 @@ class new(clorm.Predicate):
 
 predicate_to_model_element_class = {
     positivelyInfluences: momapy.celldesigner.PositiveInfluence,
-    negativelyInfluences: momapy.celldesigner.Inhibition,
+    negativelyInfluences: momapy.celldesigner.NegativeInfluence,
 }
 
 model_element_class_to_layout_element_class = {
     momapy.celldesigner.PositiveInfluence: momapy.celldesigner.PositiveInfluenceLayout,
-    momapy.celldesigner.Inhibition: momapy.celldesigner.InhibitionLayout,
+    momapy.celldesigner.NegativeInfluence: momapy.celldesigner.InhibitionLayout,
 }

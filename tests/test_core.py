@@ -65,8 +65,8 @@ class TestTransformExampleKeepSpeciesMode:
         assert modulation_set(out_keep_species.model) == {
             ("PositiveInfluence", "B", "D"),
             ("PositiveInfluence", "D", "F"),
-            ("Inhibition", "B", "E"),
-            ("Inhibition", "G", "B"),
+            ("NegativeInfluence", "B", "E"),
+            ("NegativeInfluence", "G", "B"),
         }
 
     def test_layout_present_with_plain_mode(self, out_keep_species):
@@ -90,8 +90,8 @@ class TestTransformExampleKeepSpeciesNoComplexMode:
         assert modulation_set(out_keep_species_no_complex.model) == {
             ("PositiveInfluence", "B", "C"),
             ("PositiveInfluence", "C", "F"),
-            ("Inhibition", "B", "E"),
-            ("Inhibition", "G", "B"),
+            ("NegativeInfluence", "B", "E"),
+            ("NegativeInfluence", "G", "B"),
         }
 
 
