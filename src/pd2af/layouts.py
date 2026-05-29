@@ -124,21 +124,21 @@ def make_modulation_arc(modulation, source_layout, target_layout):
 
 
 def make_overlay_modulation_arc(
-    state, modulation, source_layout, target_layout
+    context, modulation, source_layout, target_layout
 ):
     # Build the arc against cloned source/target builders. The arc's
     # internal Segment/Point entries get throwaway addresses; isolate
     # them in a per-arc cache so they don't poison object_to_builder.
-    per_arc_cache = dict(state.object_to_builder)
+    per_arc_cache = dict(context.object_to_builder)
     arc = make_modulation_arc(modulation, source_layout, target_layout)
     arc_builder = momapy.builder.builder_from_object(
         arc, object_to_builder=per_arc_cache
     )
     source_builder = momapy.builder.builder_from_object(
-        source_layout, object_to_builder=state.object_to_builder
+        source_layout, object_to_builder=context.object_to_builder
     )
     target_builder = momapy.builder.builder_from_object(
-        target_layout, object_to_builder=state.object_to_builder
+        target_layout, object_to_builder=context.object_to_builder
     )
     return arc_builder, source_builder, target_builder
 
@@ -165,22 +165,4 @@ def add_modulation_mapping(
         frozenset([arc]) | source_cluster | target_cluster,
         modulation,
         anchor=arc,
-    )
-
-
-def finalize_map(model_builder, layout_builder, mapping_builder):
-    new_model = momapy.builder.object_from_builder(model_builder)
-    if layout_builder is None:
-        return momapy.celldesigner.CellDesignerMap(model=new_model)
-    builder_to_object = {}
-    new_layout = momapy.builder.object_from_builder(
-        layout_builder, builder_to_object=builder_to_object
-    )
-    new_mapping = momapy.builder.object_from_builder(
-        mapping_builder, builder_to_object=builder_to_object
-    )
-    return momapy.celldesigner.CellDesignerMap(
-        model=new_model,
-        layout=new_layout,
-        layout_model_mapping=new_mapping,
     )
