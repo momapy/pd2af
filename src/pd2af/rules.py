@@ -749,23 +749,48 @@ _CASQ_ACTIVITY = RuleGroup(
     identifier="casq:activity",
     profiles=_CASQ_PROFILES,
     depends_on=frozenset({"casq:delete"}),
-    docs="`casq` activity emission: every PD species not marked for deletion contributes a `kept_species(SELF)` activity in the new AF map.",
+    docs="`casq` activity emission: every PD species not marked for deletion contributes its own activity, keyed three ways. A genuine top-level species is keyed `kept_species(SELF)`. A subunit whose parent complex survives is keyed `kept_subunit(SELF)` so it is carried inside that complex's `.subunits` rather than lifted to top-level `model.species` -- CellDesigner cannot serialise a species as both an included (subunit) and a standalone top-level species, so lifting silently drops the standalone copies on round-trip. A subunit orphaned by the deletion of its parent complex has no carrier, so it is keyed `promoted_subunit(SELF)`: lifted to top level and given its parent complex's compartment (a subunit otherwise has none, which CellDesigner would fill with a synthetic `default` on round-trip). Influence endpoints are resolved through `activityKey` (below) so an influence onto a subunit references its actual key, not a non-existent `kept_species` one.",
     rules=(
         Rule(
-            identifier="casq:activity:emit",
+            identifier="casq:activity:has_kept_parent",
             text=dedent("""\
-                new(activity(kept_species(SPECIES))) :-
-                    species(SPECIES),
-                    not delete(SPECIES, _)."""),
-            docs="Every PD species that is not deleted emits a `kept_species(SELF)` activity in the AF.",
+                hasKeptParent(SPECIES) :-
+                    hasSubunit(COMPLEX, SPECIES),
+                    not delete(COMPLEX, _)."""),
+            docs="A species has a kept parent if it is a subunit of a complex that is not itself deleted -- so that surviving complex will carry it.",
         ),
         Rule(
-            identifier="casq:activity:contributes",
+            identifier="casq:activity:key_top_level",
             text=dedent("""\
-                contributesActivity(SPECIES) :-
+                activityKey(SPECIES, kept_species(SPECIES)) :-
                     species(SPECIES),
-                    not delete(SPECIES, _)."""),
-            docs="Every non-deleted species contributes an activity, used as a guard in the CASQ influence rules.",
+                    not delete(SPECIES, _),
+                    not hasSubunit(_, SPECIES)."""),
+            docs="A non-deleted top-level species (not a subunit of any complex) is keyed `kept_species(SELF)`.",
+        ),
+        Rule(
+            identifier="casq:activity:key_subunit",
+            text=dedent("""\
+                activityKey(SPECIES, kept_subunit(SPECIES)) :-
+                    species(SPECIES),
+                    not delete(SPECIES, _),
+                    hasKeptParent(SPECIES)."""),
+            docs="A non-deleted subunit whose parent complex survives is keyed `kept_subunit(SELF)`; its activity is carried inside that complex rather than added at top level, so it is not duplicated as a standalone top-level species (which CellDesigner cannot round-trip).",
+        ),
+        Rule(
+            identifier="casq:activity:key_promoted_subunit",
+            text=dedent("""\
+                activityKey(SPECIES, promoted_subunit(SPECIES)) :-
+                    species(SPECIES),
+                    not delete(SPECIES, _),
+                    hasSubunit(_, SPECIES),
+                    not hasKeptParent(SPECIES)."""),
+            docs="A non-deleted subunit orphaned by the deletion of its parent complex is keyed `promoted_subunit(SELF)`: with no surviving complex to carry it, it is lifted to top level and -- unlike a bare `kept_species` -- given its parent complex's compartment, so it round-trips instead of acquiring a synthetic `default` compartment.",
+        ),
+        Rule(
+            identifier="casq:activity:emit",
+            text="new(activity(KEY)) :- activityKey(_, KEY).",
+            docs="Every species with an activity key emits an activity node with that key.",
         ),
     ),
 )
@@ -779,163 +804,163 @@ _CASQ_INFLUENCES = RuleGroup(
         Rule(
             identifier="casq:influences:reactant_to_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasReactant(REACTION, RT), hasReferredSpecies(RT, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A reactant of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:reactant_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasReactant(REACTION, RT), hasReferredSpecies(RT, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="Same as casq:influences:reactant_to_product but routed through a deleted intermediate via bridgedProduct.",
         ),
         Rule(
             identifier="casq:influences:catalyzer_to_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A catalyzer of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:catalyzer_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:catalyzer_to_product.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulator_to_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A physical stimulator of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulator_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:physical_stimulator_to_product.",
         ),
         Rule(
             identifier="casq:influences:trigger_to_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A trigger of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:trigger_to_bridged_product",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:trigger_to_product.",
         ),
         Rule(
             identifier="casq:influences:inhibitor_to_product",
             text=dedent("""\
-                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, P), hasReferredSpecies(P, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="An inhibitor of a reaction negatively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:inhibitor_to_bridged_product",
             text=dedent("""\
-                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     bridgedProduct(REACTION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:inhibitor_to_product.",
         ),
         Rule(
             identifier="casq:influences:catalyzis_modulation",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     catalyzis(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A catalyzis modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:positive_influence_modulation",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     positiveInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A positiveInfluence modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulation_modulation",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     physicalStimulation(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A physicalStimulation modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:triggering_modulation",
             text=dedent("""\
-                new(positivelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(positivelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     triggering(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A triggering modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:inhibition_modulation",
             text=dedent("""\
-                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     inhibition(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="An inhibition modulation arc emits a negative influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:negative_influence_modulation",
             text=dedent("""\
-                new(negativelyInfluences(kept_species(SOURCE), kept_species(TARGET))) :-
+                new(negativelyInfluences(SOURCE_KEY, TARGET_KEY)) :-
                     negativeInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    contributesActivity(SOURCE), contributesActivity(TARGET)."""),
+                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
             docs="A negativeInfluence modulation arc emits a negative influence between its source and target activities.",
         ),
     ),
