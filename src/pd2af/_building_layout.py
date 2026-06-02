@@ -288,15 +288,22 @@ def _add_dimmed_background(context, foreground):
     promoted subunit lifted out of a dissolved complex -- is pruned from the
     clones, so the background never duplicates a foreground glyph nor
     collides with its ``id_`` in the dimming selector.
+
+    The clones are prepended, not appended: momapy draws ``layout_elements``
+    in list order (later elements paint on top), so the dimmed background must
+    sit *before* the foreground to stay behind it -- otherwise it would cover
+    the freshly built influence arcs.
     """
     foreground_ids = set()
     for layout_element in foreground:
         foreground_ids.add(id(layout_element))
         for descendant in layout_element.descendants():
             foreground_ids.add(id(descendant))
+    background_clones = []
     for input_layout_element in context.input_map.layout.layout_elements:
         background_clone = clone_layout_pruning_foreground(
             input_layout_element, foreground_ids, context.object_to_builder
         )
         if background_clone is not None:
-            context.layout.layout_elements.append(background_clone)
+            background_clones.append(background_clone)
+    context.layout.layout_elements[:0] = background_clones

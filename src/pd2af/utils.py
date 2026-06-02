@@ -27,6 +27,25 @@ class _NotInIdSetSelector(momapy.styling.Selector):
         obj_id = getattr(obj, "id_", None)
         return obj_id is None or obj_id not in self.keep_ids
 
+
+@dataclasses.dataclass(frozen=True)
+class _ClassNameSuffixSelector(momapy.styling.Selector):
+    """Selects elements whose class name (ignoring a trailing 'Builder')
+    ends with `suffix`.
+
+    Used to target CellDesigner active-border layouts (`*ActiveLayout`). The
+    'Builder' strip mirrors `TypeSelector`: `apply_style_sheet` visits the
+    layout as builders (e.g. `GenericProteinActiveLayoutBuilder`)."""
+
+    suffix: str
+
+    def select(self, obj, ancestors):
+        class_name = type(obj).__name__
+        if class_name.endswith("Builder"):
+            class_name = class_name[: -len("Builder")]
+        return class_name.endswith(self.suffix)
+
+
 _POINTS_PER_INCH = 96
 _BEZIER_OFFSET = 30.0
 
@@ -55,6 +74,9 @@ def highlight_layout_elements(layout_elements, layout):
     not_selector = _NotInIdSetSelector(frozenset(keep_ids))
     layout_element_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.ClassSelector("LayoutElement"), not_selector])
+    )
+    active_border_selector = momapy.styling.CompoundSelector(
+        tuple([_ClassNameSuffixSelector("ActiveLayout"), not_selector])
     )
     text_layout_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.TypeSelector("TextLayout"), not_selector])
@@ -102,6 +124,17 @@ def highlight_layout_elements(layout_elements, layout):
                     "active_stroke": None,
                     "inner_stroke": None,
                     "group_stroke": momapy.coloring.lightgray,
+                }
+            ),
+            # Active-border sublayouts (`*ActiveLayout`) are transparent by
+            # default and drawn larger, on top of the species body. The blanket
+            # rule above sets `fill: white`, which makes the border opaque and
+            # paints over the body; restore transparency so the dimmed body
+            # shows through. Must follow `layout_element_selector`: matching
+            # selectors apply in dict order with no specificity, last wins.
+            active_border_selector: momapy.styling.StyleCollection(
+                {
+                    "fill": momapy.drawing.NoneValue,
                 }
             ),
             text_layout_selector: momapy.styling.StyleCollection(
