@@ -749,48 +749,36 @@ _CASQ_ACTIVITY = RuleGroup(
     identifier="casq:activity",
     profiles=_CASQ_PROFILES,
     depends_on=frozenset({"casq:delete"}),
-    docs="`casq` activity emission: every PD species not marked for deletion contributes its own activity, keyed three ways. A genuine top-level species is keyed `kept_species(SELF)`. A subunit whose parent complex survives is keyed `kept_subunit(SELF)` so it is carried inside that complex's `.subunits` rather than lifted to top-level `model.species` -- CellDesigner cannot serialise a species as both an included (subunit) and a standalone top-level species, so lifting silently drops the standalone copies on round-trip. A subunit orphaned by the deletion of its parent complex has no carrier, so it is keyed `promoted_subunit(SELF)`: lifted to top level and given its parent complex's compartment (a subunit otherwise has none, which CellDesigner would fill with a synthetic `default` on round-trip). Influence endpoints are resolved through `activityKey` (below) so an influence onto a subunit references its actual key, not a non-existent `kept_species` one.",
+    docs="`casq` activity emission: every species resolves to its outermost top-level complex (recursively), and only surviving top-level entities become activities. A standalone top-level species resolves to itself and is keyed `kept_species(SELF)`. A subunit -- at any nesting depth -- resolves to the outermost complex that contains it and is keyed by *that complex's* `kept_species`; it is never emitted as its own activity. This mirrors casq, which collapses a subunit's participation onto its complex (a subunit is never a node in its own right). When the resolved top-level complex is deleted, the subunit has no surviving carrier and contributes no key, so its participation is dropped -- matching casq's deletion behaviour. Influence endpoints are resolved through `activityKey` (in casq:influences), so an influence touching a subunit references its top-level complex's `kept_species` key. The recursive resolution also fixes a casq bug: casq collapses only one nesting level and silently drops influences from more deeply nested subunits.",
     rules=(
         Rule(
-            identifier="casq:activity:has_kept_parent",
+            identifier="casq:activity:top_level_self",
             text=dedent("""\
-                hasKeptParent(SPECIES) :-
-                    hasSubunit(COMPLEX, SPECIES),
-                    not delete(COMPLEX, _)."""),
-            docs="A species has a kept parent if it is a subunit of a complex that is not itself deleted -- so that surviving complex will carry it.",
-        ),
-        Rule(
-            identifier="casq:activity:key_top_level",
-            text=dedent("""\
-                activityKey(SPECIES, kept_species(SPECIES)) :-
+                topLevel(SPECIES, SPECIES) :-
                     species(SPECIES),
-                    not delete(SPECIES, _),
                     not hasSubunit(_, SPECIES)."""),
-            docs="A non-deleted top-level species (not a subunit of any complex) is keyed `kept_species(SELF)`.",
+            docs="A species that is not a subunit of any complex is its own top-level entity.",
         ),
         Rule(
-            identifier="casq:activity:key_subunit",
+            identifier="casq:activity:top_level_recursive",
             text=dedent("""\
-                activityKey(SPECIES, kept_subunit(SPECIES)) :-
-                    species(SPECIES),
-                    not delete(SPECIES, _),
-                    hasKeptParent(SPECIES)."""),
-            docs="A non-deleted subunit whose parent complex survives is keyed `kept_subunit(SELF)`; its activity is carried inside that complex rather than added at top level, so it is not duplicated as a standalone top-level species (which CellDesigner cannot round-trip).",
+                topLevel(SPECIES, TOP) :-
+                    hasSubunit(PARENT, SPECIES),
+                    topLevel(PARENT, TOP)."""),
+            docs="A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex.",
         ),
         Rule(
-            identifier="casq:activity:key_promoted_subunit",
+            identifier="casq:activity:key",
             text=dedent("""\
-                activityKey(SPECIES, promoted_subunit(SPECIES)) :-
-                    species(SPECIES),
-                    not delete(SPECIES, _),
-                    hasSubunit(_, SPECIES),
-                    not hasKeptParent(SPECIES)."""),
-            docs="A non-deleted subunit orphaned by the deletion of its parent complex is keyed `promoted_subunit(SELF)`: with no surviving complex to carry it, it is lifted to top level and -- unlike a bare `kept_species` -- given its parent complex's compartment, so it round-trips instead of acquiring a synthetic `default` compartment.",
+                activityKey(SPECIES, kept_species(TOP)) :-
+                    topLevel(SPECIES, TOP),
+                    not delete(TOP, _)."""),
+            docs="A species is keyed by the `kept_species` activity of its surviving top-level complex (or of itself, when it is top-level). Subunits never get their own activity; when the top-level complex is deleted there is no key, so nothing it contains contributes.",
         ),
         Rule(
             identifier="casq:activity:emit",
             text="new(activity(KEY)) :- activityKey(_, KEY).",
-            docs="Every species with an activity key emits an activity node with that key.",
+            docs="Every distinct activity key emits an activity node with that key.",
         ),
     ),
 )
