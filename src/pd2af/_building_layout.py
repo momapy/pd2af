@@ -1,8 +1,16 @@
-"""Leaf primitives for layout construction.
+"""Build the AF layout, reusing the input map's glyphs where possible.
 
-The orchestration lives in :mod:`pd2af.build`; this module only exposes
-the small pure-ish helpers it calls.
+``make_and_add_layout`` is the layout pass: it walks the model built by
+:mod:`pd2af._building_model` and populates ``context.layout`` and
+``context.layout_model_mapping``, branching on ``layout_mode``. The leaf
+primitives below -- synthetic nodes, modulation arcs, mapping helpers, and
+background cloning for overlay -- do the per-element construction.
+
+:mod:`pd2af.build` owns the ``BuilderContext`` and invokes this pass after
+the model pass.
 """
+
+import itertools
 
 import momapy.builder
 import momapy.celldesigner
@@ -10,7 +18,9 @@ import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 
+import pd2af._building_model
 import pd2af.predicates
+import pd2af.utils
 
 
 _SPECIES_CLASS_TO_LAYOUT_CLASS = {
@@ -168,3 +178,125 @@ def add_modulation_mapping(
         modulation,
         anchor=arc,
     )
+
+
+# ---------------------------------------------------------------------------
+# Pass 2 -- layout construction
+# ---------------------------------------------------------------------------
+
+
+def make_and_add_layout(context):
+    context.layout, context.layout_model_mapping = new_layout_and_mapping_builders()
+
+    for compartment in pd2af._building_model.compartments_outermost_first(
+        context.model.compartments
+    ):
+        _make_and_add_compartment_layout(context, compartment)
+    for key_class, species, input_species in context.species_emissions:
+        _make_and_add_species_layout(context, key_class, species, input_species)
+    for modulation in context.model.modulations:
+        _make_and_add_modulation_layout(context, modulation)
+
+    # Overlay = the plain foreground built above + the input map's remaining
+    # glyphs cloned in as dimmed, unmapped background. The background carries
+    # PD context for rendering only; being unmapped, the model-driven writer
+    # drops it, so overlay round-trips identically to plain.
+    if context.layout_mode == "overlay":
+        foreground = list(context.layout.layout_elements)
+        _add_dimmed_background(context, foreground)
+        context.layout = pd2af.utils.highlight_layout_elements(
+            foreground, context.layout
+        )
+    pd2af.utils.harmonize_root_layout(context.layout)
+
+
+def _make_and_add_compartment_layout(context, compartment):
+    input_layouts = context.input_map.layout_model_mapping.get_mapping(compartment)
+    if not input_layouts:
+        return
+    context.layout.layout_elements.extend(input_layouts)
+    for input_layout in input_layouts:
+        add_mappings_for_layout_and_descendants(
+            context.input_map.layout_model_mapping,
+            input_layout,
+            context.layout_model_mapping,
+            input_model_element_to_canonical_model_element=(
+                context.input_model_element_to_canonical_model_element
+            ),
+        )
+
+
+def _make_and_add_species_layout(context, key_class, species, input_species):
+    is_kept_subunit = key_class is pd2af.predicates.kept_subunit
+    input_layouts = (
+        context.input_map.layout_model_mapping.get_mapping(input_species)
+        if input_species is not None
+        else None
+    )
+
+    if input_layouts:
+        if not is_kept_subunit:
+            context.layout.layout_elements.extend(input_layouts)
+            for input_layout in input_layouts:
+                add_mappings_for_layout_and_descendants(
+                    context.input_map.layout_model_mapping,
+                    input_layout,
+                    context.layout_model_mapping,
+                    input_model_element_to_canonical_model_element=(
+                        context.input_model_element_to_canonical_model_element
+                    ),
+                )
+        context.model_element_to_layout_elements[id(species)] = tuple(input_layouts)
+    elif context.layout_mode == "auto" and not is_kept_subunit:
+        synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
+        context.synthetic_index += 1
+        context.layout.layout_elements.append(synthetic_layout)
+        context.layout_model_mapping.add_mapping(synthetic_layout, species)
+        context.model_element_to_layout_elements[id(species)] = (synthetic_layout,)
+
+
+def _make_and_add_modulation_layout(context, modulation):
+    source_layouts = context.model_element_to_layout_elements.get(
+        id(modulation.source)
+    )
+    target_layouts = context.model_element_to_layout_elements.get(
+        id(modulation.target)
+    )
+    if not source_layouts or not target_layouts:
+        return
+    for source_layout, target_layout in itertools.product(
+        source_layouts, target_layouts
+    ):
+        arc = make_modulation_arc(modulation, source_layout, target_layout)
+        context.layout.layout_elements.append(arc)
+        add_modulation_mapping(
+            context.layout_model_mapping,
+            arc,
+            source_layout,
+            target_layout,
+            modulation,
+        )
+
+
+def _add_dimmed_background(context, foreground):
+    """Clone the input layout's remaining glyphs into ``context.layout`` as
+    unmapped background, for the dimmer to grey out.
+
+    ``foreground`` is the set of layout elements built by the plain path
+    above (input objects shared with the input map). Any input subtree
+    already represented there -- a top-level glyph reused verbatim, or a
+    promoted subunit lifted out of a dissolved complex -- is pruned from the
+    clones, so the background never duplicates a foreground glyph nor
+    collides with its ``id_`` in the dimming selector.
+    """
+    foreground_ids = set()
+    for layout_element in foreground:
+        foreground_ids.add(id(layout_element))
+        for descendant in layout_element.descendants():
+            foreground_ids.add(id(descendant))
+    for input_layout_element in context.input_map.layout.layout_elements:
+        background_clone = clone_layout_pruning_foreground(
+            input_layout_element, foreground_ids, context.object_to_builder
+        )
+        if background_clone is not None:
+            context.layout.layout_elements.append(background_clone)
