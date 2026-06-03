@@ -63,19 +63,61 @@ class activity(clorm.Predicate):
     key: _ACTIVITY_KEY
 
 
+# Influence edges in the new AF map. There is one typed predicate per
+# output influence class; the rules first converge on an internal
+# ``influences(SOURCE, TARGET, KIND)`` relation (ASP-only, never wrapped
+# in ``new``) and then fan it out to these typed heads. Each is always
+# wrapped by ``new(...)`` in rule heads.
+
+
 class positivelyInfluences(clorm.Predicate):
-    """A positive-influence edge in the new AF map (source activates
-    target). Always wrapped by ``new(...)`` in rule heads.
-    """
+    """A positive-influence edge (source activates target)."""
     source: _ACTIVITY_KEY
     target: _ACTIVITY_KEY
 
 
 class negativelyInfluences(clorm.Predicate):
-    """A negative-influence (inhibition) edge in the new AF map
-    (source inhibits target). Always wrapped by ``new(...)`` in rule
-    heads.
+    """A negative-influence edge (source inhibits target)."""
+    source: _ACTIVITY_KEY
+    target: _ACTIVITY_KEY
+
+
+class modulates(clorm.Predicate):
+    """A modulation edge: source influences target with an effect of
+    unknown sign.
     """
+    source: _ACTIVITY_KEY
+    target: _ACTIVITY_KEY
+
+
+class triggers(clorm.Predicate):
+    """A triggering edge (necessary stimulation): source is required for
+    target.
+    """
+    source: _ACTIVITY_KEY
+    target: _ACTIVITY_KEY
+
+
+class unknownPositivelyInfluences(clorm.Predicate):
+    """A positive-influence edge whose existence is uncertain."""
+    source: _ACTIVITY_KEY
+    target: _ACTIVITY_KEY
+
+
+class unknownNegativelyInfluences(clorm.Predicate):
+    """A negative-influence edge whose existence is uncertain."""
+    source: _ACTIVITY_KEY
+    target: _ACTIVITY_KEY
+
+
+class unknownModulates(clorm.Predicate):
+    """A modulation edge whose existence is uncertain."""
+    source: _ACTIVITY_KEY
+    target: _ACTIVITY_KEY
+
+
+class unknownTriggers(clorm.Predicate):
+    """A triggering edge whose existence is uncertain."""
     source: _ACTIVITY_KEY
     target: _ACTIVITY_KEY
 
@@ -84,15 +126,41 @@ class new(clorm.Predicate):
     """Top-level marker: this fact belongs to the *new* AF map being
     constructed (as opposed to facts about the input PD map).
     """
-    object_: activity | positivelyInfluences | negativelyInfluences
+    object_: (
+        activity
+        | positivelyInfluences
+        | negativelyInfluences
+        | modulates
+        | triggers
+        | unknownPositivelyInfluences
+        | unknownNegativelyInfluences
+        | unknownModulates
+        | unknownTriggers
+    )
 
 
 predicate_to_model_element_class = {
     positivelyInfluences: momapy.celldesigner.PositiveInfluence,
     negativelyInfluences: momapy.celldesigner.NegativeInfluence,
+    modulates: momapy.celldesigner.Modulation,
+    triggers: momapy.celldesigner.Triggering,
+    unknownPositivelyInfluences: momapy.celldesigner.UnknownPositiveInfluence,
+    unknownNegativelyInfluences: momapy.celldesigner.UnknownNegativeInfluence,
+    unknownModulates: momapy.celldesigner.UnknownModulation,
+    unknownTriggers: momapy.celldesigner.UnknownTriggering,
 }
 
+# NB: there are no ``NegativeInfluenceLayout`` / ``UnknownNegativeInfluenceLayout``
+# classes in momapy — negatives reuse the inhibition arc layouts (this
+# mirrors the celldesigner reader, which maps NEGATIVE_INFLUENCE ->
+# InhibitionLayout and UNKNOWN_NEGATIVE_INFLUENCE -> UnknownInhibitionLayout).
 model_element_class_to_layout_element_class = {
     momapy.celldesigner.PositiveInfluence: momapy.celldesigner.PositiveInfluenceLayout,
     momapy.celldesigner.NegativeInfluence: momapy.celldesigner.InhibitionLayout,
+    momapy.celldesigner.Modulation: momapy.celldesigner.ModulationLayout,
+    momapy.celldesigner.Triggering: momapy.celldesigner.TriggeringLayout,
+    momapy.celldesigner.UnknownPositiveInfluence: momapy.celldesigner.UnknownPositiveInfluenceLayout,
+    momapy.celldesigner.UnknownNegativeInfluence: momapy.celldesigner.UnknownInhibitionLayout,
+    momapy.celldesigner.UnknownModulation: momapy.celldesigner.UnknownModulationLayout,
+    momapy.celldesigner.UnknownTriggering: momapy.celldesigner.UnknownTriggeringLayout,
 }

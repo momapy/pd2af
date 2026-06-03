@@ -55,6 +55,12 @@ _KEPT_KEY_CLASSES = (
     pd2af.predicates.promoted_subunit,
 )
 
+# The typed influence predicates emitted into ``new(...)`` — exactly the
+# keys of ``predicate_to_model_element_class``, so the two stay in sync.
+_INFLUENCE_PREDICATE_CLASSES = tuple(
+    pd2af.predicates.predicate_to_model_element_class
+)
+
 
 def register_or_reuse(element, cache):
     """Intern ``element`` by content in ``cache``. First-registered wins:
@@ -276,13 +282,7 @@ def _collect_ingredients(context, clingo_model):
         payload = atom.object_
         if isinstance(payload, pd2af.predicates.activity):
             context.activity_atoms_by_key_class[type(payload.key)].append(payload)
-        elif isinstance(
-            payload,
-            (
-                pd2af.predicates.positivelyInfluences,
-                pd2af.predicates.negativelyInfluences,
-            ),
-        ):
+        elif isinstance(payload, _INFLUENCE_PREDICATE_CLASSES):
             context.influence_atoms.append(payload)
 
 
