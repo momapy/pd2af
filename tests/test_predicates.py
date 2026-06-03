@@ -90,7 +90,7 @@ class TestMappingDicts:
         )
         assert (
             mapping[pd2af.predicates.negativelyInfluences]
-            is momapy.celldesigner.Inhibition
+            is momapy.celldesigner.NegativeInfluence
         )
 
     def test_model_element_class_to_layout_element_class(self):
@@ -100,6 +100,6 @@ class TestMappingDicts:
             is momapy.celldesigner.PositiveInfluenceLayout
         )
         assert (
-            mapping[momapy.celldesigner.Inhibition]
+            mapping[momapy.celldesigner.NegativeInfluence]
             is momapy.celldesigner.InhibitionLayout
         )

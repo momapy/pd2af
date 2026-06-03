@@ -4,11 +4,23 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "aspcompose"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/5d/f2/999502affea8e5b15a9a5b56f8b8ce1e8d65d01ee190c67b058df66d6649/aspcompose-0.1.0.tar.gz", hash = "sha256:5802658074710ad69e724af0475a7ffa8925006f03fa3d2c0132f80e6071ac0b", size = 14052, upload-time = "2026-05-08T11:41:44.745Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/2e/e0f23e5924b76f333d27cd3be1f89a6ea66ab85aa1cd3695c712e9858c76/aspcompose-0.1.0-py3-none-any.whl", hash = "sha256:7124e6d701566daeb97e5b2acc2b18e5fb4b4a694fda73d5a8202cb0ac87e71e", size = 9563, upload-time = "2026-05-08T11:41:43.177Z" },
+source = { editable = "../aspcompose" }
+
+[package.metadata]
+requires-dist = [{ name = "pytest", marker = "extra == 'dev'", specifier = ">=8" }]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "git-cliff", specifier = ">=2.12.0" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "ruff", specifier = ">=0.12.8" },
+]
+test = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
 ]
 
 [[package]]
@@ -31,6 +43,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/36/da/87912ddec6e06feffbaa3d7aa18fc6352bee2e8f1fee185d7d1690f8f4e8/backrefs-7.0-py312-none-any.whl", hash = "sha256:ca42ce6a49ace3d75684dfa9937f3373902a63284ecb385ce36d15e5dcb41c12", size = 398537, upload-time = "2026-04-28T16:27:58.913Z" },
     { url = "https://files.pythonhosted.org/packages/00/bb/90ba423612b6aa0adccc6b1874bcd4a9b44b660c0c16f346611e00f64ac3/backrefs-7.0-py313-none-any.whl", hash = "sha256:f2c52955d631b9e1ac4cd56209f0a3a946d592b98e7790e77699339ae01c102a", size = 400491, upload-time = "2026-04-28T16:28:00.928Z" },
     { url = "https://files.pythonhosted.org/packages/3e/5c/fb93d3092640a24dfb7bd7727a24016d7c01774ca013e60efd3f683c8002/backrefs-7.0-py314-none-any.whl", hash = "sha256:a6448b28180e3ca01134c9cf09dcebafad8531072e09903c5451748a05f24bc9", size = 412349, upload-time = "2026-04-28T16:28:02.412Z" },
+]
+
+[[package]]
+name = "casq"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "loguru" },
+    { name = "networkx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1b/82/3f673adf98743aada30b884112a1d31eb2ed94b1bee3b6a05b42fcfd11d5/casq-1.4.4.tar.gz", hash = "sha256:f5758796e7c7af980c15e859b6cf04c734ca5e93e1fa6a26ea276320dce48b94", size = 620726, upload-time = "2026-04-28T18:03:42.927Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/5f/684ef1fd5f4f2afb2eacd9ab93a97fd05536a66c6d00773b0a32fa94e873/casq-1.4.4-py3-none-any.whl", hash = "sha256:60472bc61ebe54f6ef36a53733ae9f399f652135e27e603a64ddac5019e06c64", size = 41355, upload-time = "2026-04-28T18:03:44.502Z" },
 ]
 
 [[package]]
@@ -270,11 +295,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/57/f0/77af8b398163a27231a4a154c9321a70dba296c9a1c2405320b04418a2dd/fieldz_kb-0.2.4-py3-none-any.whl", hash = "sha256:8b9b075fed803403caafebd62615db9a2c93437a021add8469f49fadeda45d47", size = 27515, upload-time = "2026-04-29T07:58:58.979Z" },
 ]
 
-[package.optional-dependencies]
-clingo = [
-    { name = "clorm" },
-]
-
 [[package]]
 name = "frozendict"
 version = "2.4.7"
@@ -371,6 +391,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
+name = "loguru"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "win32-setctime", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559, upload-time = "2024-12-06T11:20:56.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c", size = 61595, upload-time = "2024-12-06T11:20:54.538Z" },
 ]
 
 [[package]]
@@ -662,8 +695,7 @@ wheels = [
 
 [[package]]
 name = "momapy"
-version = "0.11.1"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../momapy" }
 dependencies = [
     { name = "colorama" },
     { name = "frozendict" },
@@ -673,15 +705,48 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uharfbuzz" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0d/3a/ab1a8bb8b189497a57c20e1f9277ebfa1377955573a55bee3e6ffad1723f/momapy-0.11.1.tar.gz", hash = "sha256:c4bc2da71fe79cd52e73857f06a46ab0ded38ede2777533f408475dcd9245f03", size = 1761939, upload-time = "2026-05-08T11:49:03.858Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/e4/4ade937e85d25409029a70a632d6819f45c7dc25eafc302ab933833051f9/momapy-0.11.1-py3-none-any.whl", hash = "sha256:88c640aa79cdd2508130aa9982260bda224b7bd056e056b6f5204e9cbf6c0e00", size = 293167, upload-time = "2026-05-08T11:49:01.986Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "colorama", specifier = ">=0.4.6" },
+    { name = "frozendict", specifier = ">=2.3.10" },
+    { name = "lxml", specifier = ">=5.3.2" },
+    { name = "numpy", specifier = ">=1.26.2" },
+    { name = "pycairo", marker = "extra == 'all'", specifier = ">=1.29.0" },
+    { name = "pycairo", marker = "extra == 'cairo'", specifier = ">=1.29.0" },
+    { name = "pygobject", marker = "extra == 'all'", specifier = ">=3.54.5" },
+    { name = "pygobject", marker = "extra == 'cairo'", specifier = ">=3.54.5" },
+    { name = "pyparsing", specifier = ">=3.1.1" },
+    { name = "skia-python", marker = "extra == 'all'", specifier = ">=138.0" },
+    { name = "skia-python", marker = "extra == 'skia'", specifier = ">=138.0" },
+    { name = "typing-extensions", specifier = ">=4.15.0" },
+    { name = "uharfbuzz", specifier = ">=0.53.0" },
+]
+provides-extras = ["all", "cairo", "skia"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "git-cliff", specifier = ">=2.12.0" },
+    { name = "griffe-fieldz", specifier = ">=0.1.2" },
+    { name = "griffe-inherited-docstrings", specifier = ">=1.1.1" },
+    { name = "jupyterlab", specifier = ">=4.5.6" },
+    { name = "mkdocs-jupyter", specifier = ">=0.25.1" },
+    { name = "mkdocs-material", specifier = ">=9.6.16" },
+    { name = "mkdocs-pygments", specifier = ">=0.0.2" },
+    { name = "mkdocstrings-python", specifier = ">=1.16.12" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "ruff", specifier = ">=0.12.8" },
+]
+test = [
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
 ]
 
 [[package]]
 name = "momapy-kb"
-version = "0.3.0"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../momapy_kb" }
 dependencies = [
     { name = "colorama" },
     { name = "fieldz-kb" },
@@ -689,14 +754,41 @@ dependencies = [
     { name = "jinja2" },
     { name = "momapy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bd/23/015cc3f47109ca8db15c903b3697d79ae5ce65a7b635b7d4185f71138572/momapy_kb-0.3.0.tar.gz", hash = "sha256:c69f68dd120108caebeb08e95f7614b26316ddb299160a1fcc321ec31b253ce0", size = 327926, upload-time = "2026-05-08T14:15:56.426Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/1b/1d36b5f623a603f6752352665866390e5da9b207cae792e053cc3bed2d22/momapy_kb-0.3.0-py3-none-any.whl", hash = "sha256:06a4be6627f13123a33b43e91e984e5d7c5dbbb96a43a39205fde009655e3503", size = 17644, upload-time = "2026-05-08T14:15:55.288Z" },
-]
 
-[package.optional-dependencies]
-clingo = [
-    { name = "fieldz-kb", extra = ["clingo"] },
+[package.metadata]
+requires-dist = [
+    { name = "colorama", specifier = ">=0.4.6" },
+    { name = "fieldz-kb", specifier = ">=0.2.4" },
+    { name = "fieldz-kb", extras = ["clingo"], marker = "extra == 'all'" },
+    { name = "fieldz-kb", extras = ["clingo"], marker = "extra == 'clingo'" },
+    { name = "fieldz-kb", extras = ["falkordb"], marker = "extra == 'all'" },
+    { name = "fieldz-kb", extras = ["falkordb"], marker = "extra == 'falkordb'" },
+    { name = "fieldz-kb", extras = ["falkordblite"], marker = "extra == 'all'" },
+    { name = "fieldz-kb", extras = ["falkordblite"], marker = "extra == 'falkordblite'" },
+    { name = "fieldz-kb", extras = ["neo4j"], marker = "extra == 'all'" },
+    { name = "fieldz-kb", extras = ["neo4j"], marker = "extra == 'neo4j'" },
+    { name = "frozendict", specifier = ">=2.4.6" },
+    { name = "jinja2", specifier = ">=3.1.3" },
+    { name = "momapy", specifier = ">=0.11.1" },
+]
+provides-extras = ["all", "clingo", "falkordb", "falkordblite", "neo4j"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "notebook", specifier = ">=7.4.7" },
+    { name = "pre-commit", specifier = ">=3.0" },
+]
+docs = [
+    { name = "griffe-fieldz", specifier = ">=0.2" },
+    { name = "griffe-inherited-docstrings", specifier = ">=1.0" },
+    { name = "mkdocs", specifier = ">=1.6" },
+    { name = "mkdocs-autorefs", specifier = ">=1.0" },
+    { name = "mkdocs-material", specifier = ">=9.0" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.24" },
+]
+test = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "testcontainers", extras = ["neo4j"], specifier = ">=4.0" },
 ]
 
 [[package]]
@@ -706,6 +798,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ea/5d/38b681d3fce7a266dd9ab73c66959406d565b3e85f21d5e66e1181d93721/more_itertools-10.8.0.tar.gz", hash = "sha256:f638ddf8a1a0d134181275fb5d58b086ead7c6a72429ad725c67503f13ba30bd", size = 137431, upload-time = "2025-09-02T15:23:11.018Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/8e/469e5a4a2f5855992e425f3cb33804cc07bf18d48f2db061aec61ce50270/more_itertools-10.8.0-py3-none-any.whl", hash = "sha256:52d4362373dcf7c52546bc4af9a86ee7c4579df9a8dc268be0a2f949d376cc9b", size = 69667, upload-time = "2025-09-02T15:23:09.635Z" },
+]
+
+[[package]]
+name = "networkx"
+version = "3.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
 ]
 
 [[package]]
@@ -804,7 +905,7 @@ dependencies = [
     { name = "aspcompose" },
     { name = "clorm" },
     { name = "momapy" },
-    { name = "momapy-kb", extra = ["clingo"] },
+    { name = "momapy-kb" },
     { name = "pydot" },
 ]
 
@@ -815,6 +916,7 @@ test = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "casq" },
     { name = "griffe-fieldz" },
     { name = "griffe-inherited-docstrings" },
     { name = "mkdocs-material" },
@@ -828,10 +930,10 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aspcompose", specifier = ">=0.1.0" },
+    { name = "aspcompose", editable = "../aspcompose" },
     { name = "clorm", specifier = ">=1.6.1" },
-    { name = "momapy", specifier = ">=0.11.1" },
-    { name = "momapy-kb", extras = ["clingo"], specifier = ">=0.3.0" },
+    { name = "momapy", editable = "../momapy" },
+    { name = "momapy-kb", editable = "../momapy_kb" },
     { name = "pydot", specifier = ">=4.0.1" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7" },
 ]
@@ -839,6 +941,7 @@ provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "casq", specifier = ">=1.4.4" },
     { name = "griffe-fieldz", specifier = ">=0.1.2" },
     { name = "griffe-inherited-docstrings", specifier = ">=1.1.1" },
     { name = "mkdocs-material", specifier = ">=9.6.16" },
@@ -1095,4 +1198,13 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/07/f6/d0e5b343768e8bcb4cda79f0f2f55051bf26177ecd5651f84c07567461cf/watchdog-6.0.0-py3-none-win32.whl", hash = "sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a", size = 79065, upload-time = "2024-11-01T14:07:09.525Z" },
     { url = "https://files.pythonhosted.org/packages/db/d9/c495884c6e548fce18a8f40568ff120bc3a4b7b99813081c8ac0c936fa64/watchdog-6.0.0-py3-none-win_amd64.whl", hash = "sha256:cbafb470cf848d93b5d013e2ecb245d4aa1c8fd0504e863ccefa32445359d680", size = 79070, upload-time = "2024-11-01T14:07:10.686Z" },
     { url = "https://files.pythonhosted.org/packages/33/e8/e40370e6d74ddba47f002a32919d91310d6074130fe4e17dabcafc15cbf1/watchdog-6.0.0-py3-none-win_ia64.whl", hash = "sha256:a1914259fa9e1454315171103c6a30961236f508b9b623eae470268bbcc6a22f", size = 79067, upload-time = "2024-11-01T14:07:11.845Z" },
+]
+
+[[package]]
+name = "win32-setctime"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/8f/705086c9d734d3b663af0e9bb3d4de6578d08f46b1b101c2442fd9aecaa2/win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0", size = 4867, upload-time = "2024-12-07T15:28:28.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390", size = 4083, upload-time = "2024-12-07T15:28:26.465Z" },
 ]

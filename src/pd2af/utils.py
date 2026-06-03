@@ -1,5 +1,6 @@
 import collections
 import dataclasses
+import math
 
 import momapy.core.layout
 import momapy.styling
@@ -26,7 +27,27 @@ class _NotInIdSetSelector(momapy.styling.Selector):
         obj_id = getattr(obj, "id_", None)
         return obj_id is None or obj_id not in self.keep_ids
 
+
+@dataclasses.dataclass(frozen=True)
+class _ClassNameSuffixSelector(momapy.styling.Selector):
+    """Selects elements whose class name (ignoring a trailing 'Builder')
+    ends with `suffix`.
+
+    Used to target CellDesigner active-border layouts (`*ActiveLayout`). The
+    'Builder' strip mirrors `TypeSelector`: `apply_style_sheet` visits the
+    layout as builders (e.g. `GenericProteinActiveLayoutBuilder`)."""
+
+    suffix: str
+
+    def select(self, obj, ancestors):
+        class_name = type(obj).__name__
+        if class_name.endswith("Builder"):
+            class_name = class_name[: -len("Builder")]
+        return class_name.endswith(self.suffix)
+
+
 _POINTS_PER_INCH = 96
+_BEZIER_OFFSET = 30.0
 
 _ROOT_LAYOUT_SEP = 15.0
 
@@ -53,6 +74,9 @@ def highlight_layout_elements(layout_elements, layout):
     not_selector = _NotInIdSetSelector(frozenset(keep_ids))
     layout_element_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.ClassSelector("LayoutElement"), not_selector])
+    )
+    active_border_selector = momapy.styling.CompoundSelector(
+        tuple([_ClassNameSuffixSelector("ActiveLayout"), not_selector])
     )
     text_layout_selector = momapy.styling.CompoundSelector(
         tuple([momapy.styling.TypeSelector("TextLayout"), not_selector])
@@ -100,6 +124,17 @@ def highlight_layout_elements(layout_elements, layout):
                     "active_stroke": None,
                     "inner_stroke": None,
                     "group_stroke": momapy.coloring.lightgray,
+                }
+            ),
+            # Active-border sublayouts (`*ActiveLayout`) are transparent by
+            # default and drawn larger, on top of the species body. The blanket
+            # rule above sets `fill: white`, which makes the border opaque and
+            # paints over the body; restore transparency so the dimmed body
+            # shows through. Must follow `layout_element_selector`: matching
+            # selectors apply in dict order with no specificity, last wins.
+            active_border_selector: momapy.styling.StyleCollection(
+                {
+                    "fill": momapy.drawing.NoneValue,
                 }
             ),
             text_layout_selector: momapy.styling.StyleCollection(
@@ -196,6 +231,7 @@ def auto_layout(cd_map):
             else:
                 dot_graph.add_subgraph(compartment_dot_cluster)
     id_to_layout_element = {}
+    directed_pairs = set()
     # Map every descendant id to its top-level Node ancestor (the one that
     # gets added as a pydot node). Arc endpoints can reference descendants
     # (e.g. a subunit inside a complex); those must be redirected to the
@@ -265,6 +301,7 @@ def auto_layout(cd_map):
                 layout_element_builder.target.id_,
             )
             dot_graph.add_edge(pydot.Edge(source_id, target_id))
+            directed_pairs.add((source_id, target_id))
         id_to_layout_element[layout_element_builder.id_] = layout_element_builder
     dot_graph.set("ranksep", 1.0)
     dot_graph.set("nodesep", 0.5)
@@ -306,19 +343,118 @@ def auto_layout(cd_map):
             target_layout_element_builder = id_to_new_layout_element_builder[
                 layout_element_builder.target.id_
             ]
-            start_point = source_layout_element_builder.border(
-                target_layout_element_builder.center()
+            source_top_level_id = descendant_id_to_top_level_id.get(
+                layout_element_builder.source.id_,
+                layout_element_builder.source.id_,
             )
-            end_point = target_layout_element_builder.border(
-                source_layout_element_builder.center()
+            target_top_level_id = descendant_id_to_top_level_id.get(
+                layout_element_builder.target.id_,
+                layout_element_builder.target.id_,
             )
-            if start_point is None:
-                start_point = source_layout_element_builder.north_west()
-            if end_point is None:
-                end_point = target_layout_element_builder.north_east()
-            layout_element_builder.segments = [
-                momapy.geometry.Segment(start_point, end_point)
-            ]
+            is_self_loop = source_top_level_id == target_top_level_id
+            is_bidirectional = not is_self_loop and (
+                target_top_level_id,
+                source_top_level_id,
+            ) in directed_pairs
+            if is_self_loop:
+                start_point = source_layout_element_builder.own_angle(120)
+                end_point = source_layout_element_builder.own_angle(60)
+                if start_point is None:
+                    start_point = source_layout_element_builder.north_west()
+                if end_point is None:
+                    end_point = source_layout_element_builder.north_east()
+                center = source_layout_element_builder.center()
+                start_delta_x = start_point.x - center.x
+                start_delta_y = start_point.y - center.y
+                end_delta_x = end_point.x - center.x
+                end_delta_y = end_point.y - center.y
+                start_length = math.hypot(start_delta_x, start_delta_y) or 1.0
+                end_length = math.hypot(end_delta_x, end_delta_y) or 1.0
+                start_control_point = momapy.geometry.Point(
+                    start_point.x + start_delta_x / start_length * _BEZIER_OFFSET,
+                    start_point.y + start_delta_y / start_length * _BEZIER_OFFSET,
+                )
+                end_control_point = momapy.geometry.Point(
+                    end_point.x + end_delta_x / end_length * _BEZIER_OFFSET,
+                    end_point.y + end_delta_y / end_length * _BEZIER_OFFSET,
+                )
+                # Express the loop as a polyline through the two control
+                # points so the CellDesigner writer can recover them as edit
+                # points (it only sees segment endpoints). Without this, a
+                # single Bezier collapses to start/end on the same node and
+                # the reader's modulation-geometry call hits a None border.
+                layout_element_builder.segments = [
+                    momapy.geometry.Segment(start_point, start_control_point),
+                    momapy.geometry.Segment(start_control_point, end_control_point),
+                    momapy.geometry.Segment(end_control_point, end_point),
+                ]
+            elif is_bidirectional:
+                source_center = source_layout_element_builder.center()
+                target_center = target_layout_element_builder.center()
+                delta_x = target_center.x - source_center.x
+                delta_y = target_center.y - source_center.y
+                length = math.hypot(delta_x, delta_y)
+                if length == 0:
+                    start_point = source_layout_element_builder.own_border(
+                        target_center
+                    )
+                    end_point = target_layout_element_builder.own_border(
+                        source_center
+                    )
+                    if start_point is None:
+                        start_point = source_layout_element_builder.north_west()
+                    if end_point is None:
+                        end_point = target_layout_element_builder.north_east()
+                    layout_element_builder.segments = [
+                        momapy.geometry.Segment(start_point, end_point)
+                    ]
+                else:
+                    normal_x = -delta_y / length
+                    normal_y = delta_x / length
+                    # Deterministic side rule: A→B and B→A get opposite offsets,
+                    # so the two curves bow away from each other.
+                    if (source_top_level_id, target_top_level_id) > (
+                        target_top_level_id,
+                        source_top_level_id,
+                    ):
+                        normal_x = -normal_x
+                        normal_y = -normal_y
+                    middle_x = (source_center.x + target_center.x) / 2
+                    middle_y = (source_center.y + target_center.y) / 2
+                    control_point = momapy.geometry.Point(
+                        middle_x + _BEZIER_OFFSET * normal_x,
+                        middle_y + _BEZIER_OFFSET * normal_y,
+                    )
+                    start_point = source_layout_element_builder.own_border(
+                        control_point
+                    )
+                    end_point = target_layout_element_builder.own_border(
+                        control_point
+                    )
+                    if start_point is None:
+                        start_point = source_layout_element_builder.north_west()
+                    if end_point is None:
+                        end_point = target_layout_element_builder.north_east()
+                    # Polyline through the control point so the writer
+                    # serializes it as an edit point (see self-loop note).
+                    layout_element_builder.segments = [
+                        momapy.geometry.Segment(start_point, control_point),
+                        momapy.geometry.Segment(control_point, end_point),
+                    ]
+            else:
+                start_point = source_layout_element_builder.border(
+                    target_layout_element_builder.center()
+                )
+                end_point = target_layout_element_builder.border(
+                    source_layout_element_builder.center()
+                )
+                if start_point is None:
+                    start_point = source_layout_element_builder.north_west()
+                if end_point is None:
+                    end_point = target_layout_element_builder.north_east()
+                layout_element_builder.segments = [
+                    momapy.geometry.Segment(start_point, end_point)
+                ]
     for (
         compartment_layout_element,
         included_layout_elements,

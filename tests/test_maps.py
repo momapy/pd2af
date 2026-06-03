@@ -52,6 +52,6 @@ def test_smoke(path, mode):
             mod,
             (
                 momapy.celldesigner.PositiveInfluence,
-                momapy.celldesigner.Inhibition,
+                momapy.celldesigner.NegativeInfluence,
             ),
         )
