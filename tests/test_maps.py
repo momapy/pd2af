@@ -15,6 +15,7 @@ import pytest
 import momapy.celldesigner
 
 import pd2af
+import pd2af.predicates
 
 from tests._helpers import (
     COVID_DM_DIR,
@@ -45,13 +46,10 @@ def test_smoke(path, mode):
     out = pd2af.transform(cd_map, mode=mode, layout_mode=None)
     assert isinstance(out, momapy.celldesigner.CellDesignerMap)
     assert isinstance(out.model, momapy.celldesigner.CellDesignerModel)
+    output_influence_classes = tuple(
+        pd2af.predicates.predicate_to_model_element_class.values()
+    )
     for mod in out.model.modulations:
         assert isinstance(mod.source, momapy.celldesigner.Species)
         assert isinstance(mod.target, momapy.celldesigner.Species)
-        assert isinstance(
-            mod,
-            (
-                momapy.celldesigner.PositiveInfluence,
-                momapy.celldesigner.NegativeInfluence,
-            ),
-        )
+        assert isinstance(mod, output_influence_classes)

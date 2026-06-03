@@ -29,6 +29,34 @@ class TestBuildProgram:
         assert "new(positivelyInfluences" in program
         assert "new(negativelyInfluences" in program
 
+    @pytest.mark.parametrize("profile", _PROFILES)
+    def test_profile_emits_all_typed_influence_heads(self, profile):
+        program = pd2af.rules.build_program(profile)
+        for head in (
+            "new(positivelyInfluences",
+            "new(negativelyInfluences",
+            "new(modulates",
+            "new(triggers",
+            "new(unknownPositivelyInfluences",
+            "new(unknownNegativelyInfluences",
+            "new(unknownModulates",
+            "new(unknownTriggers",
+        ):
+            assert head in program, (profile, head)
+
+    @pytest.mark.parametrize("profile", _PROFILES)
+    def test_profile_fans_out_internal_influences_relation(self, profile):
+        program = pd2af.rules.build_program(profile)
+        # The typed heads are derived from the internal influences/3 relation.
+        assert "influences(SOURCE, TARGET, positive)" in program
+        assert "influences(SOURCE_KEY, TARGET_KEY," in program
+
+    def test_non_casq_profiles_carry_kind_through_composes_to(self):
+        for profile in ("normal", "no_complex", "keep_species", "keep_species_no_complex"):
+            program = pd2af.rules.build_program(profile)
+            assert "composesTo(triggering, positive)" in program
+            assert "composesTo(INCOMING_KIND, OUTGOING_KIND)" in program
+
     def test_no_complex_variants_include_active_subunit_rules(self):
         for profile in ("no_complex", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)

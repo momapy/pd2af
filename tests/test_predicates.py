@@ -81,25 +81,80 @@ class TestPredicateClass:
         assert isinstance(atom.object_, pd2af.predicates.activity)
 
 
+class TestTypedInfluencePredicates:
+    """The eight typed influence predicates emitted into ``new(...)``."""
+
+    PREDICATE_NAMES = (
+        "positivelyInfluences",
+        "negativelyInfluences",
+        "modulates",
+        "triggers",
+        "unknownPositivelyInfluences",
+        "unknownNegativelyInfluences",
+        "unknownModulates",
+        "unknownTriggers",
+    )
+
+    def test_all_are_clorm_predicates(self):
+        for name in self.PREDICATE_NAMES:
+            predicate = getattr(pd2af.predicates, name)
+            assert issubclass(predicate, clorm.Predicate), name
+
+    def test_can_be_constructed_with_key_wrappers(self):
+        for name in self.PREDICATE_NAMES:
+            predicate = getattr(pd2af.predicates, name)
+            atom = predicate(
+                source=pd2af.predicates.kept_species(species="a"),
+                target=pd2af.predicates.kept_species(species="b"),
+            )
+            assert isinstance(atom.source, pd2af.predicates.kept_species)
+            assert isinstance(atom.target, pd2af.predicates.kept_species)
+
+    def test_new_wraps_each_typed_influence(self):
+        for name in self.PREDICATE_NAMES:
+            predicate = getattr(pd2af.predicates, name)
+            atom = pd2af.predicates.new(
+                object_=predicate(
+                    source=pd2af.predicates.kept_species(species="a"),
+                    target=pd2af.predicates.kept_species(species="b"),
+                )
+            )
+            assert isinstance(atom.object_, predicate), name
+
+
 class TestMappingDicts:
     def test_predicate_to_model_element_class(self):
         mapping = pd2af.predicates.predicate_to_model_element_class
-        assert (
-            mapping[pd2af.predicates.positivelyInfluences]
-            is momapy.celldesigner.PositiveInfluence
-        )
-        assert (
-            mapping[pd2af.predicates.negativelyInfluences]
-            is momapy.celldesigner.NegativeInfluence
-        )
+        celldesigner = momapy.celldesigner
+        assert mapping == {
+            pd2af.predicates.positivelyInfluences: celldesigner.PositiveInfluence,
+            pd2af.predicates.negativelyInfluences: celldesigner.NegativeInfluence,
+            pd2af.predicates.modulates: celldesigner.Modulation,
+            pd2af.predicates.triggers: celldesigner.Triggering,
+            pd2af.predicates.unknownPositivelyInfluences: celldesigner.UnknownPositiveInfluence,
+            pd2af.predicates.unknownNegativelyInfluences: celldesigner.UnknownNegativeInfluence,
+            pd2af.predicates.unknownModulates: celldesigner.UnknownModulation,
+            pd2af.predicates.unknownTriggers: celldesigner.UnknownTriggering,
+        }
 
     def test_model_element_class_to_layout_element_class(self):
         mapping = pd2af.predicates.model_element_class_to_layout_element_class
-        assert (
-            mapping[momapy.celldesigner.PositiveInfluence]
-            is momapy.celldesigner.PositiveInfluenceLayout
-        )
-        assert (
-            mapping[momapy.celldesigner.NegativeInfluence]
-            is momapy.celldesigner.InhibitionLayout
-        )
+        celldesigner = momapy.celldesigner
+        # NegativeInfluence / UnknownNegativeInfluence have no own *Layout
+        # class; they reuse the inhibition arc layouts (mirrors the reader).
+        assert mapping == {
+            celldesigner.PositiveInfluence: celldesigner.PositiveInfluenceLayout,
+            celldesigner.NegativeInfluence: celldesigner.InhibitionLayout,
+            celldesigner.Modulation: celldesigner.ModulationLayout,
+            celldesigner.Triggering: celldesigner.TriggeringLayout,
+            celldesigner.UnknownPositiveInfluence: celldesigner.UnknownPositiveInfluenceLayout,
+            celldesigner.UnknownNegativeInfluence: celldesigner.UnknownInhibitionLayout,
+            celldesigner.UnknownModulation: celldesigner.UnknownModulationLayout,
+            celldesigner.UnknownTriggering: celldesigner.UnknownTriggeringLayout,
+        }
+
+    def test_every_output_class_has_a_layout(self):
+        predicate_to_model = pd2af.predicates.predicate_to_model_element_class
+        model_to_layout = pd2af.predicates.model_element_class_to_layout_element_class
+        for model_class in predicate_to_model.values():
+            assert model_class in model_to_layout
