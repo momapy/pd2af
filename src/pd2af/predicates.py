@@ -149,18 +149,3 @@ predicate_to_model_element_class = {
     unknownModulates: momapy.celldesigner.UnknownModulation,
     unknownTriggers: momapy.celldesigner.UnknownTriggering,
 }
-
-# NB: there are no ``NegativeInfluenceLayout`` / ``UnknownNegativeInfluenceLayout``
-# classes in momapy — negatives reuse the inhibition arc layouts (this
-# mirrors the celldesigner reader, which maps NEGATIVE_INFLUENCE ->
-# InhibitionLayout and UNKNOWN_NEGATIVE_INFLUENCE -> UnknownInhibitionLayout).
-model_element_class_to_layout_element_class = {
-    momapy.celldesigner.PositiveInfluence: momapy.celldesigner.PositiveInfluenceLayout,
-    momapy.celldesigner.NegativeInfluence: momapy.celldesigner.InhibitionLayout,
-    momapy.celldesigner.Modulation: momapy.celldesigner.ModulationLayout,
-    momapy.celldesigner.Triggering: momapy.celldesigner.TriggeringLayout,
-    momapy.celldesigner.UnknownPositiveInfluence: momapy.celldesigner.UnknownPositiveInfluenceLayout,
-    momapy.celldesigner.UnknownNegativeInfluence: momapy.celldesigner.UnknownInhibitionLayout,
-    momapy.celldesigner.UnknownModulation: momapy.celldesigner.UnknownModulationLayout,
-    momapy.celldesigner.UnknownTriggering: momapy.celldesigner.UnknownTriggeringLayout,
-}

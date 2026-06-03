@@ -39,6 +39,21 @@ _SPECIES_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.Complex: momapy.celldesigner.ComplexLayout,
 }
 
+# Influence (modulation) model class -> its arc layout class. NegativeInfluence
+# and UnknownNegativeInfluence have no own ``*Layout``; they reuse the inhibition
+# arc layouts (mirrors the celldesigner reader, which maps NEGATIVE_INFLUENCE ->
+# InhibitionLayout and UNKNOWN_NEGATIVE_INFLUENCE -> UnknownInhibitionLayout).
+_MODULATION_CLASS_TO_LAYOUT_CLASS = {
+    momapy.celldesigner.PositiveInfluence: momapy.celldesigner.PositiveInfluenceLayout,
+    momapy.celldesigner.NegativeInfluence: momapy.celldesigner.InhibitionLayout,
+    momapy.celldesigner.Modulation: momapy.celldesigner.ModulationLayout,
+    momapy.celldesigner.Triggering: momapy.celldesigner.TriggeringLayout,
+    momapy.celldesigner.UnknownPositiveInfluence: momapy.celldesigner.UnknownPositiveInfluenceLayout,
+    momapy.celldesigner.UnknownNegativeInfluence: momapy.celldesigner.UnknownInhibitionLayout,
+    momapy.celldesigner.UnknownModulation: momapy.celldesigner.UnknownModulationLayout,
+    momapy.celldesigner.UnknownTriggering: momapy.celldesigner.UnknownTriggeringLayout,
+}
+
 
 def new_layout_and_mapping_builders():
     layout_builder_class = momapy.builder.get_or_make_builder_cls(
@@ -124,9 +139,7 @@ def make_synthetic_layout(species, index):
 
 
 def make_modulation_arc(modulation, source_layout, target_layout):
-    arc_class = pd2af.predicates.model_element_class_to_layout_element_class[
-        type(modulation)
-    ]
+    arc_class = _MODULATION_CLASS_TO_LAYOUT_CLASS[type(modulation)]
     if source_layout is target_layout:
         start_point = source_layout.anchor_point("north_north_west")
         end_point = source_layout.anchor_point("north_north_east")
