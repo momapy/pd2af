@@ -107,6 +107,7 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        "-p",
         "--influence-pairing",
         choices=_INFLUENCE_PAIRING_CHOICES,
         default="cross",
