@@ -144,8 +144,8 @@ def make_modulation_arc(modulation, source_layout, target_layout):
         start_point = source_layout.anchor_point("north_north_west")
         end_point = source_layout.anchor_point("north_north_east")
     else:
-        start_point = source_layout.border(target_layout.center())
-        end_point = target_layout.border(source_layout.center())
+        start_point = source_layout.own_border(target_layout.center())
+        end_point = target_layout.own_border(source_layout.center())
         if start_point is None:
             start_point = source_layout.north_west()
         if end_point is None:
