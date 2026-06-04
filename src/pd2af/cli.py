@@ -18,6 +18,8 @@ _MODE_CHOICES = (
 
 _LAYOUT_CHOICES = ("plain", "overlay", "auto")
 
+_INFLUENCE_PAIRING_CHOICES = ("cross", "nearest")
+
 _EXTENSION_TO_WRITER = {
     ".xml": "celldesigner",
     ".sbml": "celldesigner",
@@ -49,6 +51,7 @@ def _run(args):
         cd_map,
         mode=args.mode,
         layout_mode=args.layout,
+        influence_pairing=args.influence_pairing,
     )
     if args.output is None:
         _write_map_to_stdout(new_map)
@@ -101,6 +104,18 @@ def main(argv=None):
             "only), or overlay (reuse full original layout with non-model "
             "elements greyed out). 'normal' and 'no-complex' modes "
             "require `auto`."
+        ),
+    )
+    parser.add_argument(
+        "--influence-pairing",
+        choices=_INFLUENCE_PAIRING_CHOICES,
+        default="cross",
+        help=(
+            "how to draw an influence whose source or target maps to several "
+            "layout glyphs: cross (default, one arc per source/target pair) or "
+            "nearest (a single arc between the closest pair). 'nearest' only "
+            "takes effect with `--layout plain` or `overlay`, where glyph "
+            "positions are real; in `auto` it is ignored."
         ),
     )
     parser.add_argument(

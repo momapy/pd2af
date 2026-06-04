@@ -11,6 +11,7 @@ the model pass.
 """
 
 import itertools
+import math
 
 import momapy.builder
 import momapy.celldesigner
@@ -136,6 +137,22 @@ def make_synthetic_layout(species, index):
         position=position,
     )
     return layout_class(position=position, label=label)
+
+
+def _nearest_layout_pair(source_layouts, target_layouts):
+    """Return the (source_layout, target_layout) pair whose ``.position``s are
+    closest in Euclidean distance.
+
+    ``min`` over ``itertools.product`` is deterministic: on a distance tie it
+    keeps the first pair in product order (source-major), so the choice mirrors
+    the order the cross product would have emitted.
+    """
+    return min(
+        itertools.product(source_layouts, target_layouts),
+        key=lambda pair: math.dist(
+            pair[0].position.to_tuple(), pair[1].position.to_tuple()
+        ),
+    )
 
 
 def make_modulation_arc(modulation, source_layout, target_layout):
@@ -281,9 +298,23 @@ def _make_and_add_modulation_layout(context, modulation):
     )
     if not source_layouts or not target_layouts:
         return
-    for source_layout, target_layout in itertools.product(
-        source_layouts, target_layouts
-    ):
+    # "nearest" collapses the N*M fan-out to the single closest pair, but only
+    # where positions are real (plain/overlay); in auto they are throwaway
+    # placeholders that graphviz overwrites, so the cross product is kept.
+    use_nearest = (
+        context.influence_pairing == "nearest"
+        and context.layout_mode in ("plain", "overlay")
+        and (len(source_layouts) > 1 or len(target_layouts) > 1)
+        and all(
+            layout.position is not None
+            for layout in itertools.chain(source_layouts, target_layouts)
+        )
+    )
+    if use_nearest:
+        pairs = [_nearest_layout_pair(source_layouts, target_layouts)]
+    else:
+        pairs = itertools.product(source_layouts, target_layouts)
+    for source_layout, target_layout in pairs:
         arc = make_modulation_arc(modulation, source_layout, target_layout)
         context.layout.layout_elements.append(arc)
         add_modulation_mapping(

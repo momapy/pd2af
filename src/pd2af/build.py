@@ -31,6 +31,7 @@ class BuilderContext:
     input_map: object
     layout_mode: str | None
     clingo_id_to_model_element: dict
+    influence_pairing: str = "cross"
 
     # --- outputs being built ---
     model: object = None
@@ -56,11 +57,18 @@ class BuilderContext:
     synthetic_index: int = 0
 
 
-def build_map(map_, layout_mode, clingo_model, clingo_id_to_model_element):
+def build_map(
+    map_,
+    layout_mode,
+    clingo_model,
+    clingo_id_to_model_element,
+    influence_pairing="cross",
+):
     context = BuilderContext(
         input_map=map_,
         layout_mode=layout_mode,
         clingo_id_to_model_element=clingo_id_to_model_element,
+        influence_pairing=influence_pairing,
     )
     pd2af._building_model.make_and_add_model(context, clingo_model)
     if layout_mode is not None:

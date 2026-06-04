@@ -9,6 +9,7 @@ _TRANSFORMATION_MODES = frozenset(
 )
 _MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
 _LAYOUT_MODES = frozenset({"plain", "overlay", "auto", None})
+_INFLUENCE_PAIRINGS = frozenset({"cross", "nearest"})
 
 
 def _normalize_layout_mode(layout_mode):
@@ -32,10 +33,20 @@ def transform(
         "casq",
     ] = "normal",
     layout_mode: typing.Literal["auto", "plain", "overlay"] | None = "auto",
+    influence_pairing: typing.Literal["cross", "nearest"] = "cross",
 ):
     layout_mode = _normalize_layout_mode(layout_mode)
     _validate_layout_mode(layout_mode, mode)
+    if influence_pairing not in _INFLUENCE_PAIRINGS:
+        raise ValueError(
+            f"influence_pairing must be one of {sorted(_INFLUENCE_PAIRINGS)}, "
+            f"got {influence_pairing!r}"
+        )
     clingo_model, clingo_id_to_model_element = pd2af.solver.solve(map_, mode)
     return pd2af.build.build_map(
-        map_, layout_mode, clingo_model, clingo_id_to_model_element
+        map_,
+        layout_mode,
+        clingo_model,
+        clingo_id_to_model_element,
+        influence_pairing,
     )
