@@ -205,6 +205,10 @@ def make_and_add_layout(context):
         context.model.compartments
     ):
         _make_and_add_compartment_layout(context, compartment)
+    # Only compartments have been added so far, so this counts exactly the
+    # foreground compartment layouts -- the insertion point for the overlay
+    # background below.
+    compartment_count = len(context.layout.layout_elements)
     for key_class, species, input_species in context.species_emissions:
         _make_and_add_species_layout(context, key_class, species, input_species)
     for modulation in context.model.modulations:
@@ -216,7 +220,7 @@ def make_and_add_layout(context):
     # drops it, so overlay round-trips identically to plain.
     if context.layout_mode == "overlay":
         foreground = list(context.layout.layout_elements)
-        _add_dimmed_background(context, foreground)
+        _add_dimmed_background(context, foreground, compartment_count)
         context.layout = pd2af.utils.highlight_layout_elements(
             foreground, context.layout
         )
@@ -291,7 +295,7 @@ def _make_and_add_modulation_layout(context, modulation):
         )
 
 
-def _add_dimmed_background(context, foreground):
+def _add_dimmed_background(context, foreground, insert_index):
     """Clone the input layout's remaining glyphs into ``context.layout`` as
     unmapped background, for the dimmer to grey out.
 
@@ -302,10 +306,13 @@ def _add_dimmed_background(context, foreground):
     clones, so the background never duplicates a foreground glyph nor
     collides with its ``id_`` in the dimming selector.
 
-    The clones are prepended, not appended: momapy draws ``layout_elements``
-    in list order (later elements paint on top), so the dimmed background must
-    sit *before* the foreground to stay behind it -- otherwise it would cover
-    the freshly built influence arcs.
+    momapy draws ``layout_elements`` in list order (later elements paint on
+    top), so the clones are inserted at ``insert_index`` -- the count of
+    foreground compartments, which are the leading elements -- to land *after*
+    them but *before* the rest of the foreground. This three-layer z-order is
+    required: compartments render an opaque white interior that would hide the
+    background if it sat behind them, while the foreground species and freshly
+    built influence arcs must stay on top of the background.
     """
     foreground_ids = set()
     for layout_element in foreground:
@@ -319,4 +326,4 @@ def _add_dimmed_background(context, foreground):
         )
         if background_clone is not None:
             background_clones.append(background_clone)
-    context.layout.layout_elements[:0] = background_clones
+    context.layout.layout_elements[insert_index:insert_index] = background_clones
