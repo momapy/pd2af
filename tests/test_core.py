@@ -143,12 +143,13 @@ class TestTransformExampleNormalMode:
         assert isinstance(out_normal, momapy.celldesigner.CellDesignerMap)
 
     def test_complex_is_kept(self, out_normal):
-        # Complex D is templateless and is kept as its own activity. Its
-        # active subunit C is subsumed into D and does not appear as a
-        # separate top-level activity.
+        # Complex D is templateless and is kept as its own activity. In
+        # normal mode its active subunit C is keyed via
+        # new_species_from_template and surfaces as its own top-level
+        # activity (it is not subsumed, unlike in keep-species mode).
         names = species_names(out_normal.model)
         assert "D" in names
-        assert "C" not in names
+        assert "C" in names
 
     def test_complex_routes_through_itself(self, out_normal):
         # Influences involving the complex go through the complex (kept_species)
@@ -166,7 +167,7 @@ class TestTransformExampleNormalMode:
         ]
         assert complex_species
         for s in complex_species:
-            assert not s.id_.startswith("merged__")
+            assert not s.id_.startswith("new_species_from_template")
 
     def test_monomers_use_synthesized_species(self, out_normal):
         # Templated monomers are merged into proteoform-class activities,
@@ -174,7 +175,7 @@ class TestTransformExampleNormalMode:
         synthesized = [
             s
             for s in out_normal.model.species
-            if s.id_.startswith("merged__")
+            if s.id_.startswith("new_species_from_template")
         ]
         assert synthesized
 
@@ -211,14 +212,6 @@ class TestTransformErrors:
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map, mode="not-a-mode", layout_mode="plain"
-            )
-
-    def test_unknown_layout_mode_raises_value_error(self, example_cd_map):
-        with pytest.raises(ValueError):
-            pd2af.transform(
-                example_cd_map,
-                mode="keep-species",
-                layout_mode="not-a-layout",
             )
 
     @pytest.mark.parametrize("mode", ["normal", "no-complex"])

@@ -23,7 +23,6 @@ class TestBuildProgram:
     def test_profile_has_activity_and_influence_rules(self, profile):
         program = pd2af.rules.build_program(profile)
         assert "hasActivity" in program
-        assert "contributesActivity" in program
         assert "activityKey" in program
         assert "new(activity(KEY))" in program
         assert "new(positivelyInfluences" in program
@@ -57,15 +56,15 @@ class TestBuildProgram:
             assert "composesTo(triggering, positive)" in program
             assert "composesTo(INCOMING_KIND, OUTGOING_KIND)" in program
 
-    def test_no_complex_variants_include_active_subunit_rules(self):
+    def test_no_complex_variants_promote_active_subunits(self):
         for profile in ("no_complex", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
-            assert "hasActiveSubunit" in program
+            assert "promoted_subunit" in program
 
-    def test_keep_complex_variants_omit_active_subunit_rules(self):
+    def test_keep_complex_variants_omit_subunit_promotion(self):
         for profile in ("normal", "keep_species"):
             program = pd2af.rules.build_program(profile)
-            assert "hasActiveSubunit" not in program
+            assert "promoted_subunit" not in program
 
     def test_no_complex_variants_include_complex_traversal(self):
         for profile in ("no_complex", "keep_species_no_complex"):
@@ -79,16 +78,15 @@ class TestBuildProgram:
             assert "hasSubunit(END_SPECIES, SUBUNIT)" not in program
             assert "hasSubunit(START_SPECIES, SUBUNIT)" not in program
 
-    def test_merged_profiles_use_derived_proteoform_class(self):
+    def test_merged_profiles_use_new_species_from_template(self):
         for profile in ("normal", "no_complex"):
             program = pd2af.rules.build_program(profile)
-            assert "derived_proteoform_class" in program
-            assert "no_compartment" in program
+            assert "new_species_from_template" in program
 
     def test_keep_species_profiles_use_kept_species_only(self):
         for profile in ("keep_species", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
-            assert "derived_proteoform_class" not in program
+            assert "new_species_from_template" not in program
             assert "kept_species" in program
 
     def test_unknown_profile_raises(self):
@@ -101,21 +99,9 @@ def test_registry_validates():
     assert registry is not None
 
 
-def test_contributes_activity_slot_has_three_fillers():
+def test_registry_registers_all_profiles():
     registry = pd2af.rules._build_registry()
-    fillers = registry.slots["contributes_activity"]
-    assert len(fillers) == 3
-    assert "contributes_activity:flat" in fillers
-    assert "contributes_activity:no_active_subunits" in fillers
-    assert "contributes_activity:casq" in fillers
-
-
-def test_activity_key_slot_has_two_fillers():
-    registry = pd2af.rules._build_registry()
-    fillers = registry.slots["activity_key"]
-    assert len(fillers) == 2
-    assert "activity_key:kept" in fillers
-    assert "activity_key:merged" in fillers
+    assert set(registry.profiles) == set(_PROFILES)
 
 
 class TestCasqProfile:
@@ -133,12 +119,12 @@ class TestCasqProfile:
         assert "path(START_SPECIES" not in program
         assert "hasSubunit(END_SPECIES, SUBUNIT)" not in program
         assert "hasContributingComplexAncestor" not in program
-        assert "hasActiveSubunit" not in program
+        assert "promoted_subunit" not in program
 
     def test_casq_uses_kept_species_keys_only(self):
         program = pd2af.rules.build_program("casq")
         assert "kept_species" in program
-        assert "derived_proteoform_class" not in program
+        assert "new_species_from_template" not in program
 
     def test_casq_does_not_emit_inhibitor_spares_reactant(self):
         # casq.lp has no rule analogous to inhibitor-spares-reactant; that

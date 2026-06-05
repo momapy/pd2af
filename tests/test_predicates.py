@@ -9,9 +9,9 @@ class TestPredicateClass:
     def test_kept_species_is_clorm_predicate(self):
         assert issubclass(pd2af.predicates.kept_species, clorm.Predicate)
 
-    def test_derived_proteoform_class_is_clorm_predicate(self):
+    def test_new_species_from_template_is_clorm_predicate(self):
         assert issubclass(
-            pd2af.predicates.derived_proteoform_class, clorm.Predicate
+            pd2af.predicates.new_species_from_template, clorm.Predicate
         )
 
     def test_activity_is_clorm_predicate(self):
@@ -30,12 +30,9 @@ class TestPredicateClass:
         atom = pd2af.predicates.kept_species(species="some_id")
         assert atom.species == "some_id"
 
-    def test_derived_proteoform_class_can_be_constructed(self):
-        atom = pd2af.predicates.derived_proteoform_class(
-            template="t", compartment="c"
-        )
-        assert atom.template == "t"
-        assert atom.compartment == "c"
+    def test_new_species_from_template_can_be_constructed(self):
+        atom = pd2af.predicates.new_species_from_template(species="some_id")
+        assert atom.species == "some_id"
 
     def test_activity_wraps_kept_species(self):
         atom = pd2af.predicates.activity(
@@ -44,25 +41,24 @@ class TestPredicateClass:
         assert isinstance(atom.key, pd2af.predicates.kept_species)
         assert atom.key.species == "x"
 
-    def test_activity_wraps_derived_proteoform_class(self):
+    def test_activity_wraps_new_species_from_template(self):
         atom = pd2af.predicates.activity(
-            key=pd2af.predicates.derived_proteoform_class(
-                template="t", compartment="c"
-            )
+            key=pd2af.predicates.new_species_from_template(species="x")
         )
-        assert isinstance(atom.key, pd2af.predicates.derived_proteoform_class)
-        assert atom.key.template == "t"
-        assert atom.key.compartment == "c"
+        assert isinstance(
+            atom.key, pd2af.predicates.new_species_from_template
+        )
+        assert atom.key.species == "x"
 
     def test_positively_influences_with_key_wrappers(self):
         atom = pd2af.predicates.positivelyInfluences(
             source=pd2af.predicates.kept_species(species="a"),
-            target=pd2af.predicates.derived_proteoform_class(
-                template="t", compartment="c"
-            ),
+            target=pd2af.predicates.new_species_from_template(species="x"),
         )
         assert isinstance(atom.source, pd2af.predicates.kept_species)
-        assert isinstance(atom.target, pd2af.predicates.derived_proteoform_class)
+        assert isinstance(
+            atom.target, pd2af.predicates.new_species_from_template
+        )
 
     def test_negatively_influences_with_key_wrappers(self):
         atom = pd2af.predicates.negativelyInfluences(

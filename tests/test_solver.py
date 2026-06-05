@@ -3,8 +3,39 @@ import pytest
 
 import momapy.celldesigner
 
+import pd2af.core
 import pd2af.predicates
 import pd2af.solver
+
+
+_INFLUENCE_PREDICATES = (
+    pd2af.predicates.positivelyInfluences,
+    pd2af.predicates.negativelyInfluences,
+    pd2af.predicates.modulates,
+    pd2af.predicates.triggers,
+    pd2af.predicates.unknownPositivelyInfluences,
+    pd2af.predicates.unknownNegativelyInfluences,
+    pd2af.predicates.unknownModulates,
+    pd2af.predicates.unknownTriggers,
+)
+
+
+def _activity_atoms(clingo_model):
+    return [
+        fact.object_
+        for fact in clingo_model
+        if isinstance(fact, pd2af.predicates.new)
+        and isinstance(fact.object_, pd2af.predicates.activity)
+    ]
+
+
+def _influence_atoms(clingo_model):
+    return [
+        fact.object_
+        for fact in clingo_model
+        if isinstance(fact, pd2af.predicates.new)
+        and isinstance(fact.object_, _INFLUENCE_PREDICATES)
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -28,19 +59,20 @@ class TestSolve:
         for species in example_cd_map.model.species:
             assert species.id_ in mapped_species_ids
 
-    def test_solve_keep_species_finds_five_activity_atoms(
+    def test_solve_keep_species_finds_six_activity_atoms(
         self, solved_keep_species
     ):
-        # B, D, E, F, G — active subunit C of complex D is subsumed.
+        # B, D, E, F, G plus active subunit C of complex D — C gets a
+        # kept_subunit activity but is carried inside its parent complex.
         clingo_model, _ = solved_keep_species
-        atoms = pd2af.solver._get_activity_atoms(clingo_model)
-        assert len(atoms) == 5
+        atoms = _activity_atoms(clingo_model)
+        assert len(atoms) == 6
 
     def test_solve_keep_species_finds_four_influence_atoms(
         self, solved_keep_species
     ):
         clingo_model, _ = solved_keep_species
-        atoms = pd2af.solver._get_influence_atoms(clingo_model)
+        atoms = _influence_atoms(clingo_model)
         assert len(atoms) == 4
 
     def test_solve_keep_species_no_complex_excludes_complex_with_active_subunit(
@@ -49,7 +81,7 @@ class TestSolve:
         clingo_model, id_to_model_element = pd2af.solver.solve(
             example_cd_map, mode="keep-species-no-complex"
         )
-        atoms = pd2af.solver._get_activity_atoms(clingo_model)
+        atoms = _activity_atoms(clingo_model)
         names = sorted(
             id_to_model_element[atom.key.species].name for atom in atoms
         )
@@ -62,7 +94,7 @@ class TestSolve:
 
 
 def test_supported_modes():
-    assert pd2af.solver._VALID_MODES == frozenset(
+    assert pd2af.core._TRANSFORMATION_MODES == frozenset(
         {
             "normal",
             "no-complex",
@@ -86,12 +118,12 @@ class TestSolveCasq:
 
     def test_activity_keys_are_kept_species(self, solved_casq):
         clingo_model, _ = solved_casq
-        atoms = pd2af.solver._get_activity_atoms(clingo_model)
+        atoms = _activity_atoms(clingo_model)
         assert len(atoms) > 0
         for atom in atoms:
             assert isinstance(atom.key, pd2af.predicates.kept_species)
 
     def test_emits_some_influences(self, solved_casq):
         clingo_model, _ = solved_casq
-        atoms = pd2af.solver._get_influence_atoms(clingo_model)
+        atoms = _influence_atoms(clingo_model)
         assert len(atoms) > 0
