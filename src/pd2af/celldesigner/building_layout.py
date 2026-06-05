@@ -1,7 +1,7 @@
 """Build the AF layout, reusing the input map's glyphs where possible.
 
 ``make_and_add_layout`` is the layout pass: it walks the model built by
-:mod:`pd2af._building_model` and populates ``context.layout`` and
+:mod:`pd2af.celldesigner.building_model` and populates ``context.layout`` and
 ``context.layout_model_mapping``, branching on ``layout_mode``. The leaf
 primitives below -- synthetic nodes, modulation arcs, mapping helpers, and
 background cloning for overlay -- do the per-element construction.
@@ -19,7 +19,7 @@ import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 
-import pd2af._building_model
+import pd2af.celldesigner.building_model
 import pd2af.predicates
 import pd2af.utils
 
@@ -218,7 +218,7 @@ def add_modulation_mapping(
 def make_and_add_layout(context):
     context.layout, context.layout_model_mapping = new_layout_and_mapping_builders()
 
-    for compartment in pd2af._building_model.compartments_outermost_first(
+    for compartment in pd2af.celldesigner.building_model.compartments_outermost_first(
         context.model.compartments
     ):
         _make_and_add_compartment_layout(context, compartment)

@@ -2,7 +2,7 @@ import momapy.celldesigner
 import momapy.geometry
 
 import pd2af.predicates
-import pd2af._building_layout
+import pd2af.celldesigner.building_layout
 
 
 def _node(position):
@@ -11,7 +11,7 @@ def _node(position):
 
 class TestModulationLayoutMap:
     def test_modulation_class_to_layout_class(self):
-        mapping = pd2af._building_layout._MODULATION_CLASS_TO_LAYOUT_CLASS
+        mapping = pd2af.celldesigner.building_layout._MODULATION_CLASS_TO_LAYOUT_CLASS
         celldesigner = momapy.celldesigner
         # NegativeInfluence / UnknownNegativeInfluence have no own *Layout
         # class; they reuse the inhibition arc layouts (mirrors the reader).
@@ -30,7 +30,7 @@ class TestModulationLayoutMap:
         # Cross-module invariant: every model class an output influence
         # predicate maps to must have an arc layout class to draw it.
         output_classes = pd2af.predicates.predicate_to_model_element_class.values()
-        layout_map = pd2af._building_layout._MODULATION_CLASS_TO_LAYOUT_CLASS
+        layout_map = pd2af.celldesigner.building_layout._MODULATION_CLASS_TO_LAYOUT_CLASS
         for model_class in output_classes:
             assert model_class in layout_map, model_class
 
@@ -40,7 +40,7 @@ class TestNearestInfluencePairing:
         target = _node(momapy.geometry.Point(0.0, 0.0))
         near_source = _node(momapy.geometry.Point(1.0, 0.0))
         far_source = _node(momapy.geometry.Point(10.0, 0.0))
-        source_layout, target_layout = pd2af._building_layout._nearest_layout_pair(
+        source_layout, target_layout = pd2af.celldesigner.building_layout._nearest_layout_pair(
             (far_source, near_source), (target,)
         )
         assert source_layout is near_source
@@ -50,7 +50,7 @@ class TestNearestInfluencePairing:
         target = _node(momapy.geometry.Point(0.0, 0.0))
         first_source = _node(momapy.geometry.Point(0.0, 5.0))
         second_source = _node(momapy.geometry.Point(5.0, 0.0))
-        source_layout, _ = pd2af._building_layout._nearest_layout_pair(
+        source_layout, _ = pd2af.celldesigner.building_layout._nearest_layout_pair(
             (first_source, second_source), (target,)
         )
         assert source_layout is first_source

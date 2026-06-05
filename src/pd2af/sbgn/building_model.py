@@ -1,0 +1,188 @@
+"""Build the SBGN-AF model from clingo activity / influence atoms.
+
+``make_and_add_model`` is the AF model pass: it walks the activity atoms
+(``kept_species`` keys, each resolving to an input SBGN-PD entity pool or
+phenotype) and the influence atoms, and populates ``context.model`` with
+canonical, content-deduped compartments, activities and influences.
+
+Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
+:class:`UnitOfInformation` (the entity class) and a label that is the canonical
+serialization of the whole entity pool (:mod:`pd2af.sbgn.labels`) -- so two
+distinct proteoforms stay distinct activities under content-based model
+equality. A PD :class:`Phenotype` process becomes an AF :class:`Phenotype`
+activity. Dedup is honoured by interning every constructed element through the
+shared content cache (``register_or_reuse``) and resolving influence endpoints
+through the deduped activities, mirroring the model-element dedup invariant.
+"""
+
+import momapy.builder
+import momapy.sbgn.af
+import momapy.sbgn.pd
+
+import pd2af.predicates
+import pd2af.sbgn.labels
+
+
+_ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
+    momapy.sbgn.pd.Macromolecule: momapy.sbgn.af.MacromoleculeUnitOfInformation,
+    momapy.sbgn.pd.MacromoleculeMultimer: momapy.sbgn.af.MacromoleculeUnitOfInformation,
+    momapy.sbgn.pd.NucleicAcidFeature: momapy.sbgn.af.NucleicAcidFeatureUnitOfInformation,
+    momapy.sbgn.pd.NucleicAcidFeatureMultimer: momapy.sbgn.af.NucleicAcidFeatureUnitOfInformation,
+    momapy.sbgn.pd.SimpleChemical: momapy.sbgn.af.SimpleChemicalUnitOfInformation,
+    momapy.sbgn.pd.SimpleChemicalMultimer: momapy.sbgn.af.SimpleChemicalUnitOfInformation,
+    momapy.sbgn.pd.Complex: momapy.sbgn.af.ComplexUnitOfInformation,
+    momapy.sbgn.pd.Multimer: momapy.sbgn.af.ComplexUnitOfInformation,
+    momapy.sbgn.pd.ComplexMultimer: momapy.sbgn.af.ComplexUnitOfInformation,
+    momapy.sbgn.pd.UnspecifiedEntity: momapy.sbgn.af.UnspecifiedEntityUnitOfInformation,
+    momapy.sbgn.pd.PerturbingAgent: momapy.sbgn.af.PerturbationUnitOfInformation,
+    # Subunit classes (a promoted subunit becomes a top-level activity in the
+    # no-complex modes) map to the same unit of information as their entity-pool
+    # counterpart.
+    momapy.sbgn.pd.MacromoleculeSubunit: momapy.sbgn.af.MacromoleculeUnitOfInformation,
+    momapy.sbgn.pd.MacromoleculeMultimerSubunit: momapy.sbgn.af.MacromoleculeUnitOfInformation,
+    momapy.sbgn.pd.NucleicAcidFeatureSubunit: momapy.sbgn.af.NucleicAcidFeatureUnitOfInformation,
+    momapy.sbgn.pd.NucleicAcidFeatureMultimerSubunit: momapy.sbgn.af.NucleicAcidFeatureUnitOfInformation,
+    momapy.sbgn.pd.SimpleChemicalSubunit: momapy.sbgn.af.SimpleChemicalUnitOfInformation,
+    momapy.sbgn.pd.SimpleChemicalMultimerSubunit: momapy.sbgn.af.SimpleChemicalUnitOfInformation,
+    momapy.sbgn.pd.ComplexSubunit: momapy.sbgn.af.ComplexUnitOfInformation,
+    momapy.sbgn.pd.ComplexMultimerSubunit: momapy.sbgn.af.ComplexUnitOfInformation,
+    momapy.sbgn.pd.UnspecifiedEntitySubunit: momapy.sbgn.af.UnspecifiedEntityUnitOfInformation,
+}
+
+# An unrecognised entity class falls back to an unspecified-entity unit of
+# information rather than failing the whole transformation.
+_FALLBACK_UNIT_OF_INFORMATION_CLASS = (
+    momapy.sbgn.af.UnspecifiedEntityUnitOfInformation
+)
+
+# Influence predicate -> AF influence class. SBGN-PD only ever emits the four
+# left-hand kinds (it has no "unknown" modulation twins), but the unknown
+# variants are mapped too so the table is total over the predicate set.
+_INFLUENCE_PREDICATE_TO_AF_CLASS = {
+    pd2af.predicates.positivelyInfluences: momapy.sbgn.af.PositiveInfluence,
+    pd2af.predicates.negativelyInfluences: momapy.sbgn.af.NegativeInfluence,
+    pd2af.predicates.triggers: momapy.sbgn.af.NecessaryStimulation,
+    pd2af.predicates.modulates: momapy.sbgn.af.UnknownInfluence,
+    pd2af.predicates.unknownPositivelyInfluences: momapy.sbgn.af.PositiveInfluence,
+    pd2af.predicates.unknownNegativelyInfluences: momapy.sbgn.af.NegativeInfluence,
+    pd2af.predicates.unknownTriggers: momapy.sbgn.af.NecessaryStimulation,
+    pd2af.predicates.unknownModulates: momapy.sbgn.af.UnknownInfluence,
+}
+
+_INFLUENCE_PREDICATE_CLASSES = tuple(_INFLUENCE_PREDICATE_TO_AF_CLASS)
+
+
+def register_or_reuse(element, cache):
+    """Intern ``element`` by content in ``cache``; first-registered wins."""
+    existing = cache.get(element)
+    if existing is not None:
+        return existing
+    cache[element] = element
+    return element
+
+
+def make_and_add_model(context, clingo_model):
+    context.model = momapy.builder.get_or_make_builder_cls(
+        momapy.sbgn.af.SBGNAFModel
+    )()
+    _collect_atoms(context, clingo_model)
+    _make_and_add_compartments(context)
+    _make_and_add_activities(context)
+    _make_and_add_influences(context)
+
+
+def _collect_atoms(context, clingo_model):
+    context.activity_atoms = []
+    for atom in clingo_model.query(pd2af.predicates.new).all():
+        payload = atom.object_
+        if isinstance(payload, pd2af.predicates.activity):
+            context.activity_atoms.append(payload)
+        elif isinstance(payload, _INFLUENCE_PREDICATE_CLASSES):
+            context.influence_atoms.append(payload)
+
+
+def _input_element_for_key(context, key):
+    return context.clingo_id_to_model_element[key.species]
+
+
+def _make_and_add_compartments(context):
+    seen_compartment_identities = set()
+    for atom in context.activity_atoms:
+        input_element = _input_element_for_key(context, atom.key)
+        input_compartment = getattr(input_element, "compartment", None)
+        if input_compartment is None:
+            continue
+        af_compartment = _get_or_make_compartment(context, input_compartment)
+        if id(af_compartment) not in seen_compartment_identities:
+            seen_compartment_identities.add(id(af_compartment))
+            context.model.compartments.add(af_compartment)
+
+
+def _get_or_make_compartment(context, input_compartment):
+    canonical = context.input_compartment_to_af_compartment.get(
+        id(input_compartment)
+    )
+    if canonical is not None:
+        return canonical
+    candidate = momapy.sbgn.af.Compartment(label=input_compartment.label)
+    canonical = register_or_reuse(candidate, context.cache)
+    context.input_compartment_to_af_compartment[id(input_compartment)] = canonical
+    return canonical
+
+
+def _make_and_add_activities(context):
+    seen_activity_identities = set()
+    for atom in context.activity_atoms:
+        if isinstance(atom.key, pd2af.predicates.kept_subunit):
+            # A kept_subunit's activity lives inside its parent complex (which
+            # is emitted as its own activity); it is not a standalone activity,
+            # and -- having no carrier -- is never an influence endpoint.
+            continue
+        if atom.key in context.key_to_activity:
+            continue
+        input_element = _input_element_for_key(context, atom.key)
+        activity = _make_activity(context, input_element)
+        context.key_to_activity[atom.key] = activity
+        if id(activity) in seen_activity_identities:
+            continue
+        seen_activity_identities.add(id(activity))
+        context.activity_emissions.append((activity, input_element))
+        context.model.activities.add(activity)
+
+
+def _make_activity(context, input_element):
+    if isinstance(input_element, momapy.sbgn.pd.Phenotype):
+        candidate = momapy.sbgn.af.Phenotype(label=input_element.label)
+        return register_or_reuse(candidate, context.cache)
+    unit_of_information_class = _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS.get(
+        type(input_element), _FALLBACK_UNIT_OF_INFORMATION_CLASS
+    )
+    unit_of_information = register_or_reuse(
+        unit_of_information_class(), context.cache
+    )
+    compartment = None
+    input_compartment = getattr(input_element, "compartment", None)
+    if input_compartment is not None:
+        compartment = _get_or_make_compartment(context, input_compartment)
+    candidate = momapy.sbgn.af.BiologicalActivity(
+        label=pd2af.sbgn.labels.build_label(input_element),
+        compartment=compartment,
+        units_of_information=frozenset([unit_of_information]),
+    )
+    return register_or_reuse(candidate, context.cache)
+
+
+def _make_and_add_influences(context):
+    seen_influence_identities = set()
+    for atom in context.influence_atoms:
+        source = context.key_to_activity.get(atom.source)
+        target = context.key_to_activity.get(atom.target)
+        if source is None or target is None:
+            continue
+        influence_class = _INFLUENCE_PREDICATE_TO_AF_CLASS[type(atom)]
+        candidate = influence_class(source=source, target=target)
+        canonical = register_or_reuse(candidate, context.cache)
+        if id(canonical) in seen_influence_identities:
+            continue
+        seen_influence_identities.add(id(canonical))
+        context.model.influences.add(canonical)

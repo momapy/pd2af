@@ -1,12 +1,12 @@
 """Coordinator: drive the two-phase BuilderContext pipeline.
 
-Pass 1 (:func:`pd2af._building_model.make_and_add_model`) walks clingo
+Pass 1 (:func:`pd2af.celldesigner.building_model.make_and_add_model`) walks clingo
 activity / influence atoms and populates ``context.model`` with canonical,
 content-deduped compartments, templates, species and modulations.
 References between elements are wired to canonical instances at
 construction time.
 
-Pass 2 (:func:`pd2af._building_layout.make_and_add_layout`) -- skipped
+Pass 2 (:func:`pd2af.celldesigner.building_layout.make_and_add_layout`) -- skipped
 entirely when ``layout_mode is None`` -- populates ``context.layout`` and
 ``context.layout_model_mapping``, branching on ``layout_mode``.
 
@@ -19,9 +19,13 @@ import dataclasses
 
 import momapy.builder
 import momapy.celldesigner
+import momapy.sbgn.af
 
-import pd2af._building_layout
-import pd2af._building_model
+import pd2af.celldesigner.building_layout
+import pd2af.celldesigner.building_model
+import pd2af.languages
+import pd2af.sbgn.building_layout
+import pd2af.sbgn.building_model
 import pd2af.utils
 
 
@@ -56,6 +60,14 @@ class BuilderContext:
     object_to_builder: dict = dataclasses.field(default_factory=dict)
     synthetic_index: int = 0
 
+    # --- SBGN-AF pass scratch ---
+    activity_atoms: list = dataclasses.field(default_factory=list)
+    key_to_activity: dict = dataclasses.field(default_factory=dict)
+    activity_emissions: list = dataclasses.field(default_factory=list)
+    input_compartment_to_af_compartment: dict = dataclasses.field(
+        default_factory=dict
+    )
+
 
 def build_map(
     map_,
@@ -70,13 +82,22 @@ def build_map(
         clingo_id_to_model_element=clingo_id_to_model_element,
         influence_pairing=influence_pairing,
     )
-    pd2af._building_model.make_and_add_model(context, clingo_model)
-    if layout_mode is not None:
-        pd2af._building_layout.make_and_add_layout(context)
+    language = pd2af.languages.language_from_map(map_)
+    if language == pd2af.languages.SBGN_PD:
+        pd2af.sbgn.building_model.make_and_add_model(context, clingo_model)
+        if layout_mode is not None:
+            pd2af.sbgn.building_layout.make_and_add_layout(context)
+        map_builder_class = momapy.builder.get_or_make_builder_cls(
+            momapy.sbgn.af.SBGNAFMap
+        )
+    else:
+        pd2af.celldesigner.building_model.make_and_add_model(context, clingo_model)
+        if layout_mode is not None:
+            pd2af.celldesigner.building_layout.make_and_add_layout(context)
+        map_builder_class = momapy.builder.get_or_make_builder_cls(
+            momapy.celldesigner.CellDesignerMap
+        )
 
-    map_builder_class = momapy.builder.get_or_make_builder_cls(
-        momapy.celldesigner.CellDesignerMap
-    )
     map_builder = map_builder_class(
         model=context.model,
         layout=context.layout,
@@ -84,6 +105,8 @@ def build_map(
     )
     new_map = momapy.builder.object_from_builder(map_builder)
 
-    if layout_mode == "auto":
+    # auto-layout (graphviz) is CellDesigner-only for now; SBGN-AF output uses
+    # the curated input geometry (plain) -- see pd2af.sbgn.building_layout.
+    if layout_mode == "auto" and language == pd2af.languages.CELLDESIGNER:
         new_map = pd2af.utils.auto_layout(new_map)
     return new_map

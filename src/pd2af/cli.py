@@ -23,6 +23,8 @@ _INFLUENCE_PAIRING_CHOICES = ("cross", "nearest")
 _EXTENSION_TO_WRITER = {
     ".xml": "celldesigner",
     ".sbml": "celldesigner",
+    ".sbgn": "sbgnml",
+    ".sbgnml": "sbgnml",
     ".pickle": "pickle",
     ".pkl": "pickle",
 }
@@ -46,9 +48,9 @@ def _write_map_to_stdout(cd_map):
 
 def _run(args):
     reader_result = momapy.io.core.read(args.input_file)
-    cd_map = reader_result.obj
+    input_map = reader_result.obj
     new_map = pd2af.transform(
-        cd_map,
+        input_map,
         mode=args.mode,
         layout_mode=args.layout,
         influence_pairing=args.influence_pairing,

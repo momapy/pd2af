@@ -1,0 +1,27 @@
+"""Input-language tokens and inference from the input map type.
+
+The input language drives both the ontology vocabulary
+(:mod:`pd2af.ontology`) and which rule variant is resolved
+(:mod:`pd2af.rules`). The output language is *deduced* from the input:
+``celldesigner`` input -> CellDesigner output, ``sbgn_pd`` input ->
+SBGN-AF output.
+"""
+
+import momapy.celldesigner
+import momapy.sbgn.pd
+
+
+CELLDESIGNER = "celldesigner"
+SBGN_PD = "sbgn_pd"
+
+
+def language_from_map(map_):
+    """Infer the input language token from the input map's type."""
+    if isinstance(map_, momapy.sbgn.pd.SBGNPDMap):
+        return SBGN_PD
+    if isinstance(map_, momapy.celldesigner.CellDesignerMap):
+        return CELLDESIGNER
+    raise ValueError(
+        f"unsupported input map type {type(map_).__name__!r}; "
+        f"expected SBGNPDMap or CellDesignerMap"
+    )
