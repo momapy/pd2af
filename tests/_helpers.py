@@ -12,6 +12,11 @@ SBGN_MAPS_DIR = os.path.join(_TESTS_DIR, "maps", "sbgn")
 SBGN_EXAMPLE_MAP_PATH = os.path.join(
     SBGN_MAPS_DIR, "insulin-like_growth_factor_signaling.sbgn"
 )
+# A small SBGN-PD map that carries explicit `compartmentRef` attributes (the
+# curated maps do not), so the compartment-handling paths can be exercised.
+SBGN_WITH_COMPARTMENTS_MAP_PATH = os.path.join(
+    SBGN_MAPS_DIR, "with_compartments.sbgn"
+)
 
 
 def read_cd_map(path):

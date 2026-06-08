@@ -149,11 +149,17 @@ def _get_or_make_compartment(context, input_compartment):
     canonical = context.input_compartment_to_af_compartment.get(
         id(input_compartment)
     )
-    if canonical is not None:
-        return canonical
-    candidate = momapy.sbgn.af.Compartment(label=input_compartment.label)
-    canonical = register_or_reuse(candidate, context.cache)
-    context.input_compartment_to_af_compartment[id(input_compartment)] = canonical
+    if canonical is None:
+        candidate = momapy.sbgn.af.Compartment(label=input_compartment.label)
+        canonical = register_or_reuse(candidate, context.cache)
+        context.input_compartment_to_af_compartment[id(input_compartment)] = (
+            canonical
+        )
+    # Reverse index so the layout pass can recover the input compartment (and
+    # thus its glyph) from the canonical AF compartment. Keyed by id(canonical):
+    # if several input compartments dedup to one AF compartment by label, the
+    # last registered wins -- fine for plain-mode geometry.
+    context.af_compartment_to_input_compartment[id(canonical)] = input_compartment
     return canonical
 
 

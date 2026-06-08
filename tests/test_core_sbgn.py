@@ -23,6 +23,7 @@ import pd2af
 
 from tests._helpers import (
     SBGN_MAPS_DIR,
+    SBGN_WITH_COMPARTMENTS_MAP_PATH,
     has_dot_binary,
     read_sbgn_map,
 )
@@ -157,3 +158,68 @@ class TestRealMapIntegration:
         momapy.io.core.write(out, path, writer="sbgnml")
         # Read-back must not raise (the integration invariant).
         momapy.io.core.read(path, reader="sbgnml")
+
+
+def _compartment_layouts(layout):
+    return [
+        element
+        for element in layout.layout_elements
+        if isinstance(element, momapy.sbgn.af.CompartmentLayout)
+    ]
+
+
+class TestCompartments:
+    """Compartments must survive into the AF output (model + layout) when the
+    input carries `compartmentRef`. The model pass already handled this; these
+    guard the output/layout path: the plain-mode input-compartment lookup and
+    the auto-layout `outside`-free clustering (SBGN has no outside compartment).
+    """
+
+    @pytest.fixture(scope="class")
+    def map_with_compartments(self):
+        return read_sbgn_map(SBGN_WITH_COMPARTMENTS_MAP_PATH)
+
+    @pytest.mark.parametrize(
+        "mode",
+        ("keep-species", "keep-species-no-complex", "normal", "no-complex"),
+    )
+    def test_model_carries_compartments(self, map_with_compartments, mode):
+        out = pd2af.transform(map_with_compartments, mode=mode, layout_mode=None)
+        assert len(out.model.compartments) == 1
+        assert all(
+            activity.compartment is not None for activity in out.model.activities
+        )
+
+    def test_plain_layout_renders_compartment(self, map_with_compartments):
+        # Regression: the plain-mode input-compartment lookup used to return
+        # None, so zero CompartmentLayouts were emitted.
+        out = pd2af.transform(
+            map_with_compartments, mode="keep-species", layout_mode="plain"
+        )
+        assert len(_compartment_layouts(out.layout)) == 1
+
+    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
+    def test_auto_layout_renders_compartment(self, map_with_compartments, mode):
+        # Regression: auto-layout used to crash on `compartment.outside`
+        # (a CellDesigner-only relation; SBGN has no outside compartment).
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(map_with_compartments, mode=mode, layout_mode="auto")
+        assert len(_compartment_layouts(out.layout)) == 1
+
+    @pytest.mark.parametrize(
+        "mode,layout_mode",
+        (("keep-species", "plain"), ("normal", "auto")),
+    )
+    def test_compartments_round_trip(
+        self, map_with_compartments, mode, layout_mode
+    ):
+        if layout_mode == "auto" and not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            map_with_compartments, mode=mode, layout_mode=layout_mode
+        )
+        path = os.path.join(tempfile.gettempdir(), "pd2af_test_compartments.sbgn")
+        momapy.io.core.write(out, path, writer="sbgnml")
+        back = momapy.io.core.read(path, reader="sbgnml").obj
+        assert len(back.model.compartments) == len(out.model.compartments) == 1

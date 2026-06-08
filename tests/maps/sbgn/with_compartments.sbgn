@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sbgn xmlns="http://sbgn.org/libsbgn/0.3">
+    <map language="process description" id="map_with_compartments">
+        <glyph id="c1" class="compartment">
+            <label text="cytosol">
+                <bbox y="40.0" x="300.0" h="23.0" w="80.0"/>
+            </label>
+            <bbox y="40.0" x="100.0" h="400.0" w="500.0"/>
+        </glyph>
+        <glyph id="gA" class="macromolecule" compartmentRef="c1">
+            <label text="A"/>
+            <bbox y="120.0" x="150.0" h="60.0" w="100.0"/>
+            <glyph id="gA_sv" class="state variable">
+                <state value="active"/>
+                <bbox y="169.0" x="187.5" h="22.0" w="25.0"/>
+            </glyph>
+        </glyph>
+        <glyph id="gB" class="macromolecule" compartmentRef="c1">
+            <label text="B"/>
+            <bbox y="120.0" x="450.0" h="60.0" w="100.0"/>
+            <glyph id="gB_sv" class="state variable">
+                <state value="active"/>
+                <bbox y="169.0" x="487.5" h="22.0" w="25.0"/>
+            </glyph>
+        </glyph>
+        <glyph id="gS" class="simple chemical" compartmentRef="c1">
+            <label text="S"/>
+            <bbox y="320.0" x="300.0" h="60.0" w="60.0"/>
+        </glyph>
+        <glyph id="gP" class="process">
+            <bbox y="230.0" x="390.0" h="20.0" w="20.0"/>
+            <port id="gP.1" y="240.0" x="380.0"/>
+            <port id="gP.2" y="240.0" x="420.0"/>
+        </glyph>
+        <arc id="arcSP" target="gP.1" source="gS" class="consumption">
+            <start y="320.0" x="330.0"/>
+            <end y="240.0" x="380.0"/>
+        </arc>
+        <arc id="arcPB" target="gB" source="gP.2" class="production">
+            <start y="240.0" x="420.0"/>
+            <end y="180.0" x="500.0"/>
+        </arc>
+        <arc id="arcAP" target="gP" source="gA" class="catalysis">
+            <start y="180.0" x="200.0"/>
+            <end y="230.0" x="390.0"/>
+        </arc>
+    </map>
+</sbgn>

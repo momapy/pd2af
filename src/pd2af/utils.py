@@ -223,7 +223,9 @@ def auto_layout(
             compartment_layout_element = compartment_layout_elements[0]
             dot_cluster = pydot.Cluster(compartment.id_)
             compartment_to_dot_cluster[compartment] = dot_cluster
-            outside_compartment = compartment.outside
+            # `outside` is a CellDesigner-only relation (compartment nesting);
+            # SBGN compartments have no such concept, so don't assume it exists.
+            outside_compartment = getattr(compartment, "outside", None)
             outside_compartment_layout_elements = (
                 new_map_builder.layout_model_mapping.get_mapping(outside_compartment)
             )
@@ -235,7 +237,7 @@ def auto_layout(
                     outside_compartment_layout_element
                 ].append(compartment_layout_element)
     for compartment, compartment_dot_cluster in compartment_to_dot_cluster.items():
-        outside_compartment = compartment.outside
+        outside_compartment = getattr(compartment, "outside", None)
         if outside_compartment is not None:
             outside_dot_cluster = compartment_to_dot_cluster.get(outside_compartment)
             if outside_dot_cluster is not None:

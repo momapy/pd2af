@@ -47,13 +47,13 @@ _INFLUENCE_CLASS_TO_LAYOUT_CLASS = {
     momapy.sbgn.af.NecessaryStimulation: momapy.sbgn.af.NecessaryStimulationLayout,
 }
 
-_UNIT_OF_INFORMATION_SIZE = 12.0
-
-# auto-mode placeholder geometry; graphviz repositions everything afterwards.
+# Nodes (activities, phenotypes, units of information) use momapy's default
+# layout-class sizes, so we never pass width/height when building them. The one
+# exception is a compartment in `plain` mode, which reuses its input glyph size
+# so it still encloses its members at their curated positions.
+#
+# auto-mode placeholder position; graphviz repositions everything afterwards.
 _PLACEHOLDER_POSITION = momapy.geometry.Point(0.0, 0.0)
-_DEFAULT_ACTIVITY_WIDTH = 60.0
-_DEFAULT_ACTIVITY_HEIGHT = 30.0
-_DEFAULT_COMPARTMENT_SIZE = 80.0
 
 
 def _builder(layout_class, **kwargs):
@@ -88,9 +88,10 @@ def _input_glyph(context, input_element):
 
 def _make_and_add_compartment_layout(context, compartment):
     if context.layout_mode == "auto":
-        position = _PLACEHOLDER_POSITION
-        width = _DEFAULT_COMPARTMENT_SIZE
-        height = _DEFAULT_COMPARTMENT_SIZE
+        # Default size; graphviz fits the cluster around its members afterwards.
+        compartment_layout = _builder(
+            momapy.sbgn.af.CompartmentLayout, position=_PLACEHOLDER_POSITION
+        )
     else:
         input_compartment = _input_compartment_for(context, compartment)
         if input_compartment is None:
@@ -98,17 +99,16 @@ def _make_and_add_compartment_layout(context, compartment):
         input_glyph = _input_glyph(context, input_compartment)
         if input_glyph is None:
             return
-        position = input_glyph.position
-        width = input_glyph.width
-        height = input_glyph.height
-    compartment_layout = _builder(
-        momapy.sbgn.af.CompartmentLayout,
-        position=position,
-        width=width,
-        height=height,
-    )
+        # Reuse the input glyph size so the compartment still encloses its
+        # members at their curated positions.
+        compartment_layout = _builder(
+            momapy.sbgn.af.CompartmentLayout,
+            position=input_glyph.position,
+            width=input_glyph.width,
+            height=input_glyph.height,
+        )
     compartment_layout.label = momapy.core.layout.TextLayout(
-        text=compartment.label or "", position=position
+        text=compartment.label or "", position=compartment_layout.position
     )
     context.layout.layout_elements.append(compartment_layout)
     context.layout_model_mapping.add_mapping(compartment_layout, compartment)
@@ -116,32 +116,25 @@ def _make_and_add_compartment_layout(context, compartment):
 
 
 def _input_compartment_for(context, af_compartment):
-    for input_id, canonical in context.input_compartment_to_af_compartment.items():
-        if canonical is af_compartment:
-            return context.clingo_id_to_model_element.get(input_id)
-    return None
+    return context.af_compartment_to_input_compartment.get(id(af_compartment))
 
 
 def _make_and_add_activity_layout(context, activity, input_element):
+    # The activity uses momapy's default size; only its position differs by mode
+    # (curated input glyph position in plain, placeholder in auto).
     if context.layout_mode == "auto":
         position = _PLACEHOLDER_POSITION
-        width = _DEFAULT_ACTIVITY_WIDTH
-        height = _DEFAULT_ACTIVITY_HEIGHT
     else:
         input_glyph = _input_glyph(context, input_element)
         if input_glyph is None:
             return
         position = input_glyph.position
-        width = input_glyph.width
-        height = input_glyph.height
     activity_layout_class = (
         momapy.sbgn.af.PhenotypeLayout
         if isinstance(activity, momapy.sbgn.af.Phenotype)
         else momapy.sbgn.af.BiologicalActivityLayout
     )
-    activity_layout = _builder(
-        activity_layout_class, position=position, width=width, height=height
-    )
+    activity_layout = _builder(activity_layout_class, position=position)
     activity_layout.label = momapy.core.layout.TextLayout(
         text=activity.label or "", position=position
     )
@@ -151,27 +144,23 @@ def _make_and_add_activity_layout(context, activity, input_element):
 
     for unit_of_information in getattr(activity, "units_of_information", frozenset()):
         _make_and_add_unit_of_information_layout(
-            context, activity_layout, unit_of_information, position, width, height
+            context, activity_layout, unit_of_information
         )
 
 
 def _make_and_add_unit_of_information_layout(
-    context, activity_layout, unit_of_information, position, width, height
+    context, activity_layout, unit_of_information
 ):
     layout_class = _UNIT_OF_INFORMATION_CLASS_TO_LAYOUT_CLASS.get(
         type(unit_of_information)
     )
     if layout_class is None:
         return
-    unit_position = momapy.geometry.Point(
-        position.x - width / 2 + _UNIT_OF_INFORMATION_SIZE,
-        position.y - height / 2,
-    )
-    unit_layout = _builder(
-        layout_class,
-        position=unit_position,
-        width=_UNIT_OF_INFORMATION_SIZE,
-        height=_UNIT_OF_INFORMATION_SIZE,
+    # Default size; straddle the activity's top-left corner (SBGN convention).
+    unit_layout = _builder(layout_class, position=_PLACEHOLDER_POSITION)
+    unit_layout.position = momapy.geometry.Point(
+        activity_layout.position.x - activity_layout.width / 2 + unit_layout.width,
+        activity_layout.position.y - activity_layout.height / 2,
     )
     activity_layout.layout_elements.append(unit_layout)
     context.layout_model_mapping.add_mapping(unit_layout, unit_of_information)
