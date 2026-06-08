@@ -1,16 +1,25 @@
-"""Build the SBGN-AF layout by reusing the curated SBGN-PD geometry (plain).
+"""Build the SBGN-AF layout, in either ``plain`` or ``auto`` mode.
 
-For each AF activity we look up the input PD entity's glyph and build a fresh
-``BiologicalActivityLayout`` / ``PhenotypeLayout`` at the *same* position and
-size, with a typed unit-of-information sublayout and a label. Influence arcs are
-drawn afresh between the reused activity positions (PD arcs ran entity->process,
-so they cannot be copied). The ``layout_model_mapping`` is built per the
-catalogue in ``momapy/sbgn/af/__init__.py`` (singleton keys for activities and
-units of information; a ``frozenset`` key ``{arc, source, target}`` anchored on
-the arc for each influence).
+For each AF activity we build a fresh ``BiologicalActivityLayout`` /
+``PhenotypeLayout`` with a typed unit-of-information sublayout and a label.
+Influence arcs are drawn afresh between the activity positions (PD arcs ran
+entity->process, so they cannot be copied). The ``layout_model_mapping`` is
+built per the catalogue in ``momapy/sbgn/af/__init__.py`` (singleton keys for
+activities and units of information; a ``frozenset`` key ``{arc, source,
+target}`` anchored on the arc for each influence).
 
-Only ``plain`` layout is implemented; ``auto``/``overlay`` for SBGN-AF are
-future work (see the plan / ``pd2af.utils.auto_layout``).
+Two layout modes:
+
+* ``plain`` -- reuse the curated SBGN-PD geometry: each activity is placed at
+  its input PD entity's glyph position and size. Activities/compartments whose
+  input has no glyph are skipped. Used for the keep-species modes (every
+  activity maps back to exactly one input glyph).
+* ``auto`` -- build every element at a placeholder position with the default
+  size, then hand the whole layout to ``pd2af.utils.auto_layout`` (graphviz) in
+  ``build.py`` for repositioning. Required by the merged ``normal`` /
+  ``no-complex`` modes, where a merged activity has no single input glyph.
+
+``overlay`` for SBGN-AF is unsupported (see ``pd2af.core``).
 """
 
 import momapy.builder
@@ -40,16 +49,22 @@ _INFLUENCE_CLASS_TO_LAYOUT_CLASS = {
 
 _UNIT_OF_INFORMATION_SIZE = 12.0
 
+# auto-mode placeholder geometry; graphviz repositions everything afterwards.
+_PLACEHOLDER_POSITION = momapy.geometry.Point(0.0, 0.0)
+_DEFAULT_ACTIVITY_WIDTH = 60.0
+_DEFAULT_ACTIVITY_HEIGHT = 30.0
+_DEFAULT_COMPARTMENT_SIZE = 80.0
+
 
 def _builder(layout_class, **kwargs):
     return momapy.builder.get_or_make_builder_cls(layout_class)(**kwargs)
 
 
 def make_and_add_layout(context):
-    if context.layout_mode != "plain":
+    if context.layout_mode not in ("plain", "auto"):
         raise NotImplementedError(
-            "SBGN-AF output currently supports only the 'plain' layout mode "
-            f"(got {context.layout_mode!r}); 'auto'/'overlay' are future work."
+            "SBGN-AF output supports the 'plain' and 'auto' layout modes "
+            f"(got {context.layout_mode!r}); 'overlay' is unsupported."
         )
     context.layout = _builder(momapy.sbgn.af.SBGNAFLayout)
     context.layout_model_mapping = momapy.core.mapping.LayoutModelMappingBuilder()
@@ -72,17 +87,28 @@ def _input_glyph(context, input_element):
 
 
 def _make_and_add_compartment_layout(context, compartment):
-    input_compartment = _input_compartment_for(context, compartment)
-    if input_compartment is None:
-        return
-    input_glyph = _input_glyph(context, input_compartment)
-    if input_glyph is None:
-        return
+    if context.layout_mode == "auto":
+        position = _PLACEHOLDER_POSITION
+        width = _DEFAULT_COMPARTMENT_SIZE
+        height = _DEFAULT_COMPARTMENT_SIZE
+    else:
+        input_compartment = _input_compartment_for(context, compartment)
+        if input_compartment is None:
+            return
+        input_glyph = _input_glyph(context, input_compartment)
+        if input_glyph is None:
+            return
+        position = input_glyph.position
+        width = input_glyph.width
+        height = input_glyph.height
     compartment_layout = _builder(
         momapy.sbgn.af.CompartmentLayout,
-        position=input_glyph.position,
-        width=input_glyph.width,
-        height=input_glyph.height,
+        position=position,
+        width=width,
+        height=height,
+    )
+    compartment_layout.label = momapy.core.layout.TextLayout(
+        text=compartment.label or "", position=position
     )
     context.layout.layout_elements.append(compartment_layout)
     context.layout_model_mapping.add_mapping(compartment_layout, compartment)
@@ -97,12 +123,17 @@ def _input_compartment_for(context, af_compartment):
 
 
 def _make_and_add_activity_layout(context, activity, input_element):
-    input_glyph = _input_glyph(context, input_element)
-    if input_glyph is None:
-        return
-    position = input_glyph.position
-    width = input_glyph.width
-    height = input_glyph.height
+    if context.layout_mode == "auto":
+        position = _PLACEHOLDER_POSITION
+        width = _DEFAULT_ACTIVITY_WIDTH
+        height = _DEFAULT_ACTIVITY_HEIGHT
+    else:
+        input_glyph = _input_glyph(context, input_element)
+        if input_glyph is None:
+            return
+        position = input_glyph.position
+        width = input_glyph.width
+        height = input_glyph.height
     activity_layout_class = (
         momapy.sbgn.af.PhenotypeLayout
         if isinstance(activity, momapy.sbgn.af.Phenotype)

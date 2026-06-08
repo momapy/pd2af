@@ -94,6 +94,38 @@ class TestBuildProgram:
             pd2af.rules.build_program("does-not-exist")
 
 
+class TestMergedProfilesSbgnPdVariant:
+    """`normal`/`no_complex` must emit working rules for SBGN-PD input:
+    entity-pool carriers and `isMergeableEntity`-gated merge keys (not the
+    CellDesigner `species` carrier / `hasTemplate` gate)."""
+
+    @pytest.mark.parametrize("profile", ("normal", "no_complex"))
+    def test_sbgn_pd_variant_uses_entity_pool_carrier_and_merge_keys(
+        self, profile
+    ):
+        program = pd2af.rules.build_program(profile, language="sbgn_pd")
+        assert "new_species_from_template" in program
+        assert "isMergeableEntity" in program
+        assert (
+            "activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY)." in program
+        )
+        # The CellDesigner species carrier must NOT leak into the SBGN-PD program
+        # (its absence is exactly the carrier bug this variant fixes).
+        assert (
+            "activityCarrier(SPECIES, SPECIES) :- species(SPECIES)."
+            not in program
+        )
+
+    @pytest.mark.parametrize("profile", ("normal", "no_complex"))
+    def test_celldesigner_variant_unchanged(self, profile):
+        program = pd2af.rules.build_program(profile, language="celldesigner")
+        assert "hasTemplate" in program
+        assert (
+            "activityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
+        )
+        assert "isMergeableEntity" not in program
+
+
 def test_registry_validates():
     registry = pd2af.rules._build_registry()
     assert registry is not None

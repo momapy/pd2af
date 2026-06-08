@@ -12,9 +12,9 @@ _MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
 _LAYOUT_MODES = frozenset({"plain", "overlay", "auto", None})
 _INFLUENCE_PAIRINGS = frozenset({"cross", "nearest"})
 
-# SBGN-AF output currently only reuses the curated input geometry (plain);
-# graphviz `auto` and the `overlay` dimming are CellDesigner-only for now.
-_SBGN_AF_LAYOUT_MODES = frozenset({"plain", None})
+# SBGN-AF output supports the curated-geometry `plain` mode and the graphviz
+# `auto` mode; the `overlay` dimming is CellDesigner-only.
+_SBGN_AF_LAYOUT_MODES = frozenset({"plain", "auto", None})
 
 
 def _normalize_layout_mode(layout_mode):
@@ -34,8 +34,8 @@ def _validate_layout_mode_for_language(layout_mode, language):
         and layout_mode not in _SBGN_AF_LAYOUT_MODES
     ):
         raise ValueError(
-            f"SBGN-AF output currently supports layout_mode 'plain' or None, "
-            f"got {layout_mode!r} ('auto'/'overlay' are future work)"
+            f"SBGN-AF output supports layout_mode 'plain', 'auto' or None, "
+            f"got {layout_mode!r} ('overlay' is unsupported)"
         )
 
 

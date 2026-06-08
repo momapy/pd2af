@@ -48,9 +48,14 @@ def _unit_of_information_token(unit_of_information):
     return unit_of_information.value
 
 
-def build_label(entity):
+def build_label(entity, include_state_variables=True):
     """Return the SBGN-AF activity label for an SBGN-PD ``entity`` (entity pool
     or subunit), per the rules in the module docstring.
+
+    When ``include_state_variables`` is ``False`` the state-variable block is
+    omitted so that distinct proteoforms (same type/name/units, different state)
+    collapse into a single merged activity. Used by the merged ``normal`` /
+    ``no-complex`` modes; the keep-species modes keep the default ``True``.
     """
     decorations = ""
     units_of_information = getattr(entity, "units_of_information", None)
@@ -66,7 +71,7 @@ def build_label(entity):
             + "]"
         )
     state_variables = getattr(entity, "state_variables", None)
-    if state_variables:
+    if include_state_variables and state_variables:
         tokens = [
             _state_variable_token(state_variable)
             for state_variable in sorted(
@@ -79,7 +84,12 @@ def build_label(entity):
     if not name:
         subunits = getattr(entity, "subunits", None)
         if subunits:
-            name = ":".join(sorted(build_label(subunit) for subunit in subunits))
+            name = ":".join(
+                sorted(
+                    build_label(subunit, include_state_variables)
+                    for subunit in subunits
+                )
+            )
     if decorations and name:
         return f"{decorations}{name}"
     return decorations or name

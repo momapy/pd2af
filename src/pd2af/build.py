@@ -67,6 +67,9 @@ class BuilderContext:
     input_compartment_to_af_compartment: dict = dataclasses.field(
         default_factory=dict
     )
+    subunit_id_to_parent_compartment: dict = dataclasses.field(
+        default_factory=dict
+    )
 
 
 def build_map(
@@ -105,8 +108,14 @@ def build_map(
     )
     new_map = momapy.builder.object_from_builder(map_builder)
 
-    # auto-layout (graphviz) is CellDesigner-only for now; SBGN-AF output uses
-    # the curated input geometry (plain) -- see pd2af.sbgn.building_layout.
-    if layout_mode == "auto" and language == pd2af.languages.CELLDESIGNER:
-        new_map = pd2af.utils.auto_layout(new_map)
+    # auto-layout (graphviz) repositions an already-built layout. The
+    # compartment-layout classes differ per language (see pd2af.utils.auto_layout).
+    if layout_mode == "auto":
+        if language == pd2af.languages.CELLDESIGNER:
+            new_map = pd2af.utils.auto_layout(new_map)
+        elif language == pd2af.languages.SBGN_PD:
+            new_map = pd2af.utils.auto_layout(
+                new_map,
+                compartment_layout_classes=(momapy.sbgn.af.CompartmentLayout,),
+            )
     return new_map

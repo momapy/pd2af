@@ -86,9 +86,30 @@ def make_and_add_model(context, clingo_model):
         momapy.sbgn.af.SBGNAFModel
     )()
     _collect_atoms(context, clingo_model)
+    _build_subunit_compartment_map(context)
     _make_and_add_compartments(context)
     _make_and_add_activities(context)
     _make_and_add_influences(context)
+
+
+def _build_subunit_compartment_map(context):
+    """Map ``id(subunit)`` -> the compartment of its enclosing complex.
+
+    SBGN-PD subunit classes have no ``compartment`` field, so a promoted
+    subunit activity would otherwise get ``compartment=None`` and never merge
+    with a top-level twin. Mirror the CellDesigner builder: a subunit inherits
+    its parent complex's compartment. Built once by walking the input model's
+    complexes recursively (nested complexes pass their compartment down)."""
+    context.subunit_id_to_parent_compartment = {}
+
+    def walk(entity, inherited_compartment):
+        compartment = getattr(entity, "compartment", None) or inherited_compartment
+        for subunit in getattr(entity, "subunits", None) or ():
+            context.subunit_id_to_parent_compartment[id(subunit)] = compartment
+            walk(subunit, compartment)
+
+    for entity in context.input_map.model.entity_pools:
+        walk(entity, None)
 
 
 def _collect_atoms(context, clingo_model):
@@ -108,8 +129,14 @@ def _input_element_for_key(context, key):
 def _make_and_add_compartments(context):
     seen_compartment_identities = set()
     for atom in context.activity_atoms:
+        if isinstance(atom.key, pd2af.predicates.kept_subunit):
+            continue
         input_element = _input_element_for_key(context, atom.key)
         input_compartment = getattr(input_element, "compartment", None)
+        if input_compartment is None:
+            input_compartment = context.subunit_id_to_parent_compartment.get(
+                id(input_element)
+            )
         if input_compartment is None:
             continue
         af_compartment = _get_or_make_compartment(context, input_compartment)
@@ -141,7 +168,10 @@ def _make_and_add_activities(context):
         if atom.key in context.key_to_activity:
             continue
         input_element = _input_element_for_key(context, atom.key)
-        activity = _make_activity(context, input_element)
+        merge = isinstance(
+            atom.key, pd2af.predicates.new_species_from_template
+        )
+        activity = _make_activity(context, input_element, merge=merge)
         context.key_to_activity[atom.key] = activity
         if id(activity) in seen_activity_identities:
             continue
@@ -150,7 +180,13 @@ def _make_and_add_activities(context):
         context.model.activities.add(activity)
 
 
-def _make_activity(context, input_element):
+def _make_activity(context, input_element, merge=False):
+    """Build (and intern) the AF activity for ``input_element``.
+
+    ``merge=True`` (the ``new_species_from_template`` key) strips state
+    variables from the label so distinct proteoforms collapse into one merged
+    activity under content-based model equality. ``merge=False`` keeps the full
+    label, so distinct proteoforms stay distinct (keep-species behaviour)."""
     if isinstance(input_element, momapy.sbgn.pd.Phenotype):
         candidate = momapy.sbgn.af.Phenotype(label=input_element.label)
         return register_or_reuse(candidate, context.cache)
@@ -160,12 +196,20 @@ def _make_activity(context, input_element):
     unit_of_information = register_or_reuse(
         unit_of_information_class(), context.cache
     )
-    compartment = None
     input_compartment = getattr(input_element, "compartment", None)
+    if input_compartment is None:
+        # A subunit has no compartment field; inherit its parent complex's so a
+        # promoted subunit can merge with a top-level twin (parity).
+        input_compartment = context.subunit_id_to_parent_compartment.get(
+            id(input_element)
+        )
+    compartment = None
     if input_compartment is not None:
         compartment = _get_or_make_compartment(context, input_compartment)
     candidate = momapy.sbgn.af.BiologicalActivity(
-        label=pd2af.sbgn.labels.build_label(input_element),
+        label=pd2af.sbgn.labels.build_label(
+            input_element, include_state_variables=not merge
+        ),
         compartment=compartment,
         units_of_information=frozenset([unit_of_information]),
     )

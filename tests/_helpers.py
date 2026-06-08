@@ -8,9 +8,18 @@ _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPS_DIR = os.path.join(_TESTS_DIR, "maps", "celldesigner")
 EXAMPLE_MAP_PATH = os.path.join(MAPS_DIR, "example.xml")
 
+SBGN_MAPS_DIR = os.path.join(_TESTS_DIR, "maps", "sbgn")
+SBGN_EXAMPLE_MAP_PATH = os.path.join(
+    SBGN_MAPS_DIR, "insulin-like_growth_factor_signaling.sbgn"
+)
+
 
 def read_cd_map(path):
     return momapy.io.core.read(path).obj
+
+
+def read_sbgn_map(path):
+    return momapy.io.core.read(path, reader="sbgnml").obj
 
 
 def has_dot_binary():

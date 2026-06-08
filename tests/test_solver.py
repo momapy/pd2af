@@ -105,6 +105,18 @@ def test_supported_modes():
     )
 
 
+class TestSolveSbgnPdMergedModes:
+    """Regression guard for the SBGN-PD carrier bug: `normal`/`no-complex`
+    over SBGN-PD input must emit a non-empty influence set (was zero before
+    the entity-pool carrier was added to these profiles)."""
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_sbgn_pd_merged_mode_emits_influences(self, sbgn_example_map, mode):
+        clingo_model, _ = pd2af.solver.solve(sbgn_example_map, mode=mode)
+        assert len(_activity_atoms(clingo_model)) > 0
+        assert len(_influence_atoms(clingo_model)) > 0
+
+
 @pytest.fixture(scope="module")
 def solved_casq(example_cd_map):
     return pd2af.solver.solve(example_cd_map, mode="casq")

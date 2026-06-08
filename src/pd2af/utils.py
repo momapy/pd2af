@@ -195,7 +195,19 @@ def _get_flatten_dot_nodes(dot_graph):
     return dot_nodes
 
 
-def auto_layout(cd_map):
+def auto_layout(
+    cd_map,
+    compartment_layout_classes=(
+        momapy.celldesigner.RectangleCompartmentLayout,
+        momapy.celldesigner.OvalCompartmentLayout,
+    ),
+):
+    """Reposition an already-built layout with graphviz (dot).
+
+    Generic over the map language except for the compartment-layout classes,
+    which differ per language: pass ``compartment_layout_classes`` to identify
+    the compartment containers (so they become dot clusters rather than nodes).
+    Defaults to the CellDesigner compartment-layout classes."""
     new_map_builder = momapy.builder.builder_from_object(cd_map)
     new_layout_builder = new_map_builder.layout
     dot_graph = pydot.Dot(graph_type="digraph")
@@ -242,10 +254,7 @@ def auto_layout(cd_map):
             layout_element_builder, momapy.core.layout.Node
         ) and not momapy.builder.isinstance_or_builder(
             layout_element_builder,
-            (
-                momapy.celldesigner.RectangleCompartmentLayout,
-                momapy.celldesigner.OvalCompartmentLayout,
-            ),
+            compartment_layout_classes,
         ):
             descendant_id_to_top_level_id[layout_element_builder.id_] = (
                 layout_element_builder.id_
@@ -261,10 +270,7 @@ def auto_layout(cd_map):
             layout_element_builder, momapy.core.layout.Node
         ) and not momapy.builder.isinstance_or_builder(
             layout_element_builder,
-            (
-                momapy.celldesigner.RectangleCompartmentLayout,
-                momapy.celldesigner.OvalCompartmentLayout,
-            ),
+            compartment_layout_classes,
         ):
             dot_node = pydot.Node(layout_element_builder.id_)
             dot_node.set("width", layout_element_builder.width / _POINTS_PER_INCH)
