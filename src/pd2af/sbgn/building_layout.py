@@ -23,10 +23,10 @@ Two layout modes:
 """
 
 import momapy.builder
-import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 import momapy.sbgn.af
+import momapy.sbgn.io.sbgnml._reading_layout
 
 import pd2af.utils
 
@@ -54,6 +54,9 @@ _INFLUENCE_CLASS_TO_LAYOUT_CLASS = {
 #
 # auto-mode placeholder position; graphviz repositions everything afterwards.
 _PLACEHOLDER_POSITION = momapy.geometry.Point(0.0, 0.0)
+
+# How far right of an activity's north-west corner the unit of information sits.
+_UNIT_OF_INFORMATION_X_OFFSET = 15.0
 
 
 def _builder(layout_class, **kwargs):
@@ -107,8 +110,10 @@ def _make_and_add_compartment_layout(context, compartment):
             width=input_glyph.width,
             height=input_glyph.height,
         )
-    compartment_layout.label = momapy.core.layout.TextLayout(
-        text=compartment.label or "", position=compartment_layout.position
+    compartment_layout.label = (
+        momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+            compartment.label, compartment_layout.position
+        )
     )
     context.layout.layout_elements.append(compartment_layout)
     context.layout_model_mapping.add_mapping(compartment_layout, compartment)
@@ -135,8 +140,10 @@ def _make_and_add_activity_layout(context, activity, input_element):
         else momapy.sbgn.af.BiologicalActivityLayout
     )
     activity_layout = _builder(activity_layout_class, position=position)
-    activity_layout.label = momapy.core.layout.TextLayout(
-        text=activity.label or "", position=position
+    activity_layout.label = (
+        momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+            activity.label, position
+        )
     )
     context.layout.layout_elements.append(activity_layout)
     context.layout_model_mapping.add_mapping(activity_layout, activity)
@@ -156,11 +163,12 @@ def _make_and_add_unit_of_information_layout(
     )
     if layout_class is None:
         return
-    # Default size; straddle the activity's top-left corner (SBGN convention).
-    unit_layout = _builder(layout_class, position=_PLACEHOLDER_POSITION)
-    unit_layout.position = momapy.geometry.Point(
-        activity_layout.position.x - activity_layout.width / 2 + unit_layout.width,
-        activity_layout.position.y - activity_layout.height / 2,
+    # Default size; place the UoI on the activity's top border (the SBGN
+    # convention), offset right of the north-west corner.
+    north_west = activity_layout.north_west()
+    unit_layout = _builder(
+        layout_class,
+        position=momapy.geometry.Point(north_west.x + _UNIT_OF_INFORMATION_X_OFFSET, north_west.y),
     )
     activity_layout.layout_elements.append(unit_layout)
     context.layout_model_mapping.add_mapping(unit_layout, unit_of_information)
