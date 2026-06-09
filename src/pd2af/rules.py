@@ -1,14 +1,21 @@
 """ASP rule composition for the pd2af transformation modes.
 
-The non-CASQ rules are organised in three layers:
+The non-CASQ rules are organised in layers:
 
 * **topology** (shared across all non-CASQ profiles) — structural
-  helpers: ``isSubunit``, ``hasActiveDescendant``, ``hasSomeTemplate``.
+  helpers: ``isSubunit``, ``hasActiveDescendant``.
+* **top_level** (the complex-keeping modes ``keep-species`` and
+  ``normal``) — ``topLevel(SPECIES, TOP)`` resolves every species to its
+  outermost top-level entity, so a subunit is keyed by (and its
+  influences routed to) its top-level complex rather than itself.
 * **preparation** (one rule group per non-CASQ mode) — emits
   ``activityCarrier(RAW_SPECIES, ACTIVITY_BEARER)`` and
   ``activityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of two
-  per-species wrappers: ``kept_species/1`` or
-  ``new_species_from_template/1``.
+  per-species wrappers: ``kept_species/1`` (top-level species, and the
+  top-level complex a subunit resolves to) or ``promoted_subunit/1`` (a
+  subunit promoted to top level when its complex is dissolved in the
+  no-complex modes). Proteoform/PTM stripping for the merged modes
+  (``normal``/``no-complex``) happens at the build stage, not in the key.
 * **derivation** (shared across all non-CASQ profiles) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``activityCarrier`` /
@@ -124,7 +131,7 @@ _ACTIVITY_BASE = RuleGroup(
 _TOPOLOGY = RuleGroup(
     identifier="topology",
     profiles=_NON_CASQ_PROFILES,
-    docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendant`, `hasSomeTemplate`.",
+    docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendant`.",
     rules=(
         Rule(
             identifier="topology:is_subunit",
@@ -149,38 +156,43 @@ _TOPOLOGY = RuleGroup(
                     hasActiveDescendant(NESTED_COMPLEX)."""),
             docs="The `hasActiveDescendant` relation is transitive through complex containment.",
         ),
+    ),
+)
+
+_TOP_LEVEL = RuleGroup(
+    identifier="top_level",
+    profiles=frozenset({"keep_species", "normal"}),
+    depends_on=frozenset({"topology"}),
+    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer). Mirrors the resolution `casq` performs in its own pipeline.",
+    rules=(
         Rule(
-            identifier="topology:has_some_template",
-            text="hasSomeTemplate(SPECIES) :- hasTemplate(SPECIES, _).",
-            docs="A species has some template if it is linked to any template.",
+            identifier="top_level:recursive",
+            text=dedent("""\
+                topLevel(SPECIES, TOP) :-
+                    hasSubunit(PARENT, SPECIES),
+                    topLevel(PARENT, TOP)."""),
+            docs="A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex.",
         ),
     ),
-    # `isMergeableEntity` marks the entities whose proteoforms collapse into one
-    # merged activity in `normal`/`no-complex`. In CellDesigner this is keyed on
-    # `hasTemplate` (a template object exists), so the helper is unused and its
-    # variant is empty. SBGN-PD has no template object, so the helper enumerates
-    # the mergeable leaf functors explicitly: Macromolecule, NucleicAcidFeature
-    # and SimpleChemical and their multimer/subunit variants. Complex,
-    # UnspecifiedEntity and PerturbingAgent stay distinct (never mergeable).
     variants={
-        "celldesigner": (),
+        "celldesigner": (
+            Rule(
+                identifier="top_level:celldesigner:self",
+                text=dedent("""\
+                    topLevel(SPECIES, SPECIES) :-
+                        species(SPECIES),
+                        not hasSubunit(_, SPECIES)."""),
+                docs="CellDesigner: a species that is not a subunit of any complex is its own top-level entity.",
+            ),
+        ),
         "sbgn_pd": (
             Rule(
-                identifier="topology:sbgn_pd:is_mergeable_entity",
+                identifier="top_level:sbgn_pd:self",
                 text=dedent("""\
-                    isMergeableEntity(X) :- macromolecule(X).
-                    isMergeableEntity(X) :- macromoleculeMultimer(X).
-                    isMergeableEntity(X) :- macromoleculeSubunit(X).
-                    isMergeableEntity(X) :- macromoleculeMultimerSubunit(X).
-                    isMergeableEntity(X) :- nucleicAcidFeature(X).
-                    isMergeableEntity(X) :- nucleicAcidFeatureMultimer(X).
-                    isMergeableEntity(X) :- nucleicAcidFeatureSubunit(X).
-                    isMergeableEntity(X) :- nucleicAcidFeatureMultimerSubunit(X).
-                    isMergeableEntity(X) :- simpleChemical(X).
-                    isMergeableEntity(X) :- simpleChemicalMultimer(X).
-                    isMergeableEntity(X) :- simpleChemicalSubunit(X).
-                    isMergeableEntity(X) :- simpleChemicalMultimerSubunit(X)."""),
-                docs="SBGN-PD: an entity is mergeable (its proteoforms collapse into one merged activity) if it is a Macromolecule, NucleicAcidFeature or SimpleChemical, or a multimer/subunit variant thereof. Enumerated explicitly (no ISA); absent functors are harmless under `--warn=no-atom-undefined`.",
+                    topLevel(ENTITY, ENTITY) :-
+                        entityPool(ENTITY),
+                        not hasSubunit(_, ENTITY)."""),
+                docs="SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity.",
             ),
         ),
     },
@@ -189,32 +201,16 @@ _TOPOLOGY = RuleGroup(
 _PREPARATION_KEEP_SPECIES = RuleGroup(
     identifier="preparation:keep_species",
     profiles=frozenset({"keep_species"}),
-    depends_on=frozenset({"activity_base", "topology"}),
-    docs="`keep-species` preparation: every species with activity contributes its own activity (top-level → `kept_species(SELF)`; subunit → `kept_subunit(SELF)`). Influences stay on the original species (no rerouting). A complex with any active descendant additionally inherits an activity, so the assembly is also represented in the AF.",
+    depends_on=frozenset({"activity_base", "topology", "top_level"}),
+    docs="`keep-species` preparation: a species with activity is keyed by the `kept_species` of its top-level entity (`top_level` group) -- itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own: it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key.",
     rules=(
         Rule(
-            identifier="preparation:keep_species:complex_inherits_activity",
+            identifier="preparation:keep_species:key",
             text=dedent("""\
-                hasActivity(COMPLEX, has_active_descendant) :-
-                    complex(COMPLEX),
-                    hasActiveDescendant(COMPLEX)."""),
-            docs="A complex with any (transitive) active subunit is itself active in the AF view, with reason `has_active_descendant`.",
-        ),
-        Rule(
-            identifier="preparation:keep_species:key_top_level",
-            text=dedent("""\
-                activityKey(SPECIES, kept_species(SPECIES)) :-
+                activityKey(SPECIES, kept_species(TOP)) :-
                     hasActivity(SPECIES, _),
-                    not isSubunit(SPECIES)."""),
-            docs="A top-level species with activity is keyed by `kept_species(SELF)`.",
-        ),
-        Rule(
-            identifier="preparation:keep_species:key_subunit",
-            text=dedent("""\
-                activityKey(SPECIES, kept_subunit(SPECIES)) :-
-                    hasActivity(SPECIES, _),
-                    isSubunit(SPECIES)."""),
-            docs="A subunit with activity is keyed by `kept_subunit(SELF)` (the activity lives inside its parent complex's `.subunits`, not at top level).",
+                    topLevel(SPECIES, TOP)."""),
+            docs="A species with activity is keyed by the `kept_species` of its top-level entity (itself when top-level; its outermost complex when a subunit).",
         ),
     ),
     # The activity carrier is a per-language variant: a CellDesigner species is
@@ -327,7 +323,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
     identifier="preparation:no_complex",
     profiles=frozenset({"no_complex"}),
     depends_on=frozenset({"activity_base", "topology"}),
-    docs="`no-complex` preparation: a complex with any active descendant is suppressed; top-level mergeable species are keyed by `new_species_from_template(SELF)` and non-mergeable ones by `kept_species(SELF)`; subunits of suppressed complexes are promoted top-level (mergeable → `new_species_from_template`, non-mergeable → `promoted_subunit`). The merge criterion is per-language: CellDesigner uses `hasTemplate`; SBGN-PD uses `isMergeableEntity`.",
+    docs="`no-complex` preparation: a complex with any active descendant is suppressed; non-suppressed top-level species with activity are keyed by `kept_species(SELF)`; subunits of suppressed complexes are promoted to top level, keyed by `promoted_subunit(SELF)` (paths reach them via `paths_complex_traversal`). PTM stripping for the merged `no-complex` mode happens at the build stage, not in the activity key.",
     rules=(
         Rule(
             identifier="preparation:no_complex:suppressed",
@@ -362,42 +358,21 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
                 docs="Each species is its own activity carrier.",
             ),
             Rule(
-                identifier="preparation:no_complex:key_top_templated",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        not isSubunit(SPECIES),
-                        not suppressed(SPECIES),
-                        hasTemplate(SPECIES, _)."""),
-                docs="A non-suppressed top-level templated active species is keyed by `new_species_from_template(SELF)`.",
-            ),
-            Rule(
-                identifier="preparation:no_complex:key_top_templateless",
+                identifier="preparation:no_complex:key_top_level",
                 text=dedent("""\
                     activityKey(SPECIES, kept_species(SPECIES)) :-
                         hasActivity(SPECIES, _),
                         not isSubunit(SPECIES),
-                        not suppressed(SPECIES),
-                        not hasSomeTemplate(SPECIES)."""),
-                docs="A non-suppressed top-level templateless active species is keyed by `kept_species(SELF)`.",
+                        not suppressed(SPECIES)."""),
+                docs="A non-suppressed top-level active species is keyed by `kept_species(SELF)`.",
             ),
             Rule(
-                identifier="preparation:no_complex:key_promoted_subunit_templated",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        subunitOfSuppressed(SPECIES),
-                        hasTemplate(SPECIES, _)."""),
-                docs="A templated subunit of a suppressed complex is keyed by `new_species_from_template(SELF)` (proteoforms collapse via Python content interning).",
-            ),
-            Rule(
-                identifier="preparation:no_complex:key_promoted_subunit_templateless",
+                identifier="preparation:no_complex:key_promoted_subunit",
                 text=dedent("""\
                     activityKey(SPECIES, promoted_subunit(SPECIES)) :-
                         hasActivity(SPECIES, _),
-                        subunitOfSuppressed(SPECIES),
-                        not hasSomeTemplate(SPECIES)."""),
-                docs="A templateless subunit of a suppressed complex is keyed by `promoted_subunit(SELF)` and added at top level.",
+                        subunitOfSuppressed(SPECIES)."""),
+                docs="A subunit of a suppressed complex with activity is promoted to top level, keyed by `promoted_subunit(SELF)`.",
             ),
         ),
         "sbgn_pd": (
@@ -417,42 +392,21 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
                 docs="SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths_complex_traversal`).",
             ),
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:key_top_mergeable",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        not isSubunit(SPECIES),
-                        not suppressed(SPECIES),
-                        isMergeableEntity(SPECIES)."""),
-                docs="SBGN-PD: a non-suppressed top-level mergeable entity is keyed by `new_species_from_template(SELF)` so its proteoforms collapse.",
-            ),
-            Rule(
-                identifier="preparation:no_complex:sbgn_pd:key_top_non_mergeable",
+                identifier="preparation:no_complex:sbgn_pd:key_top_level",
                 text=dedent("""\
                     activityKey(SPECIES, kept_species(SPECIES)) :-
                         hasActivity(SPECIES, _),
                         not isSubunit(SPECIES),
-                        not suppressed(SPECIES),
-                        not isMergeableEntity(SPECIES)."""),
-                docs="SBGN-PD: a non-suppressed top-level non-mergeable entity is keyed by `kept_species(SELF)`.",
+                        not suppressed(SPECIES)."""),
+                docs="SBGN-PD: a non-suppressed top-level active entity is keyed by `kept_species(SELF)`.",
             ),
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:key_promoted_subunit_mergeable",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        subunitOfSuppressed(SPECIES),
-                        isMergeableEntity(SPECIES)."""),
-                docs="SBGN-PD: a mergeable subunit of a suppressed complex is promoted and keyed by `new_species_from_template(SELF)` (proteoforms collapse).",
-            ),
-            Rule(
-                identifier="preparation:no_complex:sbgn_pd:key_promoted_subunit_non_mergeable",
+                identifier="preparation:no_complex:sbgn_pd:key_promoted_subunit",
                 text=dedent("""\
                     activityKey(SPECIES, promoted_subunit(SPECIES)) :-
                         hasActivity(SPECIES, _),
-                        subunitOfSuppressed(SPECIES),
-                        not isMergeableEntity(SPECIES)."""),
-                docs="SBGN-PD: a non-mergeable subunit of a suppressed complex is keyed by `promoted_subunit(SELF)` and added at top level.",
+                        subunitOfSuppressed(SPECIES)."""),
+                docs="SBGN-PD: a subunit of a suppressed complex with activity is promoted to top level, keyed by `promoted_subunit(SELF)`.",
             ),
         ),
     },
@@ -461,16 +415,16 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
 _PREPARATION_NORMAL = RuleGroup(
     identifier="preparation:normal",
     profiles=frozenset({"normal"}),
-    depends_on=frozenset({"activity_base", "topology"}),
-    docs="`normal` preparation: top-level species with activity contribute their own activity (mergeable proteoforms → `new_species_from_template`, others → `kept_species`); subunits with activity contribute too (mergeable → `new_species_from_template` promoted to top level, others → `kept_subunit` carried by parent). A complex with any active descendant additionally inherits a `kept_species` activity. The merge criterion is per-language: CellDesigner uses `hasTemplate`; SBGN-PD uses `isMergeableEntity`. NOTE: in `normal` (no complex traversal) a promoted mergeable subunit may be an *orphan* activity with no influences — this is intended parity with CellDesigner's normal mode.",
+    depends_on=frozenset({"activity_base", "topology", "top_level"}),
+    docs="`normal` preparation: same activity keying as `keep-species` -- a species with activity is keyed by the `kept_species` of its top-level entity (`top_level` group), so a subunit is never its own activity and its influences attach to its top-level complex. `normal` differs from `keep-species` only at the build stage (proteoform/PTM stripping in the merged modes), not in the activity keys. Carriers are identity.",
     rules=(
         Rule(
-            identifier="preparation:normal:complex_inherits_activity",
+            identifier="preparation:normal:key",
             text=dedent("""\
-                hasActivity(COMPLEX, has_active_descendant) :-
-                    complex(COMPLEX),
-                    hasActiveDescendant(COMPLEX)."""),
-            docs="A complex with any (transitive) active subunit is itself active in the AF view, with reason `has_active_descendant`.",
+                activityKey(SPECIES, kept_species(TOP)) :-
+                    hasActivity(SPECIES, _),
+                    topLevel(SPECIES, TOP)."""),
+            docs="A species with activity is keyed by the `kept_species` of its top-level entity (itself when top-level; its outermost complex when a subunit).",
         ),
     ),
     variants={
@@ -478,43 +432,7 @@ _PREPARATION_NORMAL = RuleGroup(
             Rule(
                 identifier="preparation:normal:carrier",
                 text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
-                docs="Each species is its own activity carrier (no rerouting).",
-            ),
-            Rule(
-                identifier="preparation:normal:key_top_templated",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        hasTemplate(SPECIES, _),
-                        not isSubunit(SPECIES)."""),
-                docs="A top-level templated species with activity is keyed by `new_species_from_template(SELF)`.",
-            ),
-            Rule(
-                identifier="preparation:normal:key_top_templateless",
-                text=dedent("""\
-                    activityKey(SPECIES, kept_species(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        not hasSomeTemplate(SPECIES),
-                        not isSubunit(SPECIES)."""),
-                docs="A top-level templateless species with activity is keyed by `kept_species(SELF)`.",
-            ),
-            Rule(
-                identifier="preparation:normal:key_subunit_templated",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        hasTemplate(SPECIES, _),
-                        isSubunit(SPECIES)."""),
-                docs="A templated subunit with activity is keyed by `new_species_from_template(SELF)` (proteoforms collapse via Python interning to a top-level synthesized activity).",
-            ),
-            Rule(
-                identifier="preparation:normal:key_subunit_templateless",
-                text=dedent("""\
-                    activityKey(SPECIES, kept_subunit(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        not hasSomeTemplate(SPECIES),
-                        isSubunit(SPECIES)."""),
-                docs="A templateless subunit with activity is keyed by `kept_subunit(SELF)` (carried by its parent complex's `.subunits`).",
+                docs="Each species is its own activity carrier (no rerouting; a subunit endpoint is rerouted to its top-level complex by the `top_level` key, not by the carrier).",
             ),
         ),
         "sbgn_pd": (
@@ -527,47 +445,6 @@ _PREPARATION_NORMAL = RuleGroup(
                 identifier="preparation:normal:sbgn_pd:carrier_phenotype",
                 text="activityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
                 docs="SBGN-PD: each phenotype process is its own activity carrier.",
-            ),
-            Rule(
-                identifier="preparation:normal:sbgn_pd:carrier_subunit",
-                text="activityCarrier(SUBUNIT, SUBUNIT) :- isSubunit(SUBUNIT).",
-                docs="SBGN-PD: each subunit is its own activity carrier, so a promoted mergeable subunit can be an influence endpoint.",
-            ),
-            Rule(
-                identifier="preparation:normal:sbgn_pd:key_top_mergeable",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        isMergeableEntity(SPECIES),
-                        not isSubunit(SPECIES)."""),
-                docs="SBGN-PD: a top-level mergeable entity with activity is keyed by `new_species_from_template(SELF)` so its proteoforms collapse into one merged activity.",
-            ),
-            Rule(
-                identifier="preparation:normal:sbgn_pd:key_top_non_mergeable",
-                text=dedent("""\
-                    activityKey(SPECIES, kept_species(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        not isMergeableEntity(SPECIES),
-                        not isSubunit(SPECIES)."""),
-                docs="SBGN-PD: a top-level non-mergeable entity (Complex, UnspecifiedEntity, PerturbingAgent) with activity is keyed by `kept_species(SELF)`.",
-            ),
-            Rule(
-                identifier="preparation:normal:sbgn_pd:key_subunit_mergeable",
-                text=dedent("""\
-                    activityKey(SPECIES, new_species_from_template(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        isMergeableEntity(SPECIES),
-                        isSubunit(SPECIES)."""),
-                docs="SBGN-PD: a mergeable subunit with activity is promoted and keyed by `new_species_from_template(SELF)` (parity with CellDesigner's normal mode; may be an orphan as no path routes through it).",
-            ),
-            Rule(
-                identifier="preparation:normal:sbgn_pd:key_subunit_non_mergeable",
-                text=dedent("""\
-                    activityKey(SPECIES, kept_subunit(SPECIES)) :-
-                        hasActivity(SPECIES, _),
-                        not isMergeableEntity(SPECIES),
-                        isSubunit(SPECIES)."""),
-                docs="SBGN-PD: a non-mergeable subunit with activity is keyed by `kept_subunit(SELF)` (carried by its parent complex's `.subunits`).",
             ),
         ),
     },
@@ -1651,6 +1528,7 @@ def _build_registry() -> RuleRegistry:
         [
             _ACTIVITY_BASE,
             _TOPOLOGY,
+            _TOP_LEVEL,
             _PREPARATION_KEEP_SPECIES,
             _PREPARATION_KEEP_SPECIES_NO_COMPLEX,
             _PREPARATION_NO_COMPLEX,

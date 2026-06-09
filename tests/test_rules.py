@@ -78,10 +78,19 @@ class TestBuildProgram:
             assert "hasSubunit(END_SPECIES, SUBUNIT)" not in program
             assert "hasSubunit(START_SPECIES, SUBUNIT)" not in program
 
-    def test_merged_profiles_use_new_species_from_template(self):
-        for profile in ("normal", "no_complex"):
+    def test_complex_keeping_profiles_key_by_top_level(self):
+        # `normal`/`keep-species` route every species (including subunits) to
+        # its top-level complex via the shared `topLevel` relation, so a
+        # subunit never gets its own key.
+        for profile in ("normal", "keep_species"):
             program = pd2af.rules.build_program(profile)
-            assert "new_species_from_template" in program
+            assert "topLevel(SPECIES, TOP)" in program
+            assert "activityKey(SPECIES, kept_species(TOP))" in program
+
+    def test_no_profile_uses_new_species_from_template(self):
+        for profile in _PROFILES:
+            program = pd2af.rules.build_program(profile)
+            assert "new_species_from_template" not in program
 
     def test_keep_species_profiles_use_kept_species_only(self):
         for profile in ("keep_species", "keep_species_no_complex"):
@@ -96,16 +105,15 @@ class TestBuildProgram:
 
 class TestMergedProfilesSbgnPdVariant:
     """`normal`/`no_complex` must emit working rules for SBGN-PD input:
-    entity-pool carriers and `isMergeableEntity`-gated merge keys (not the
-    CellDesigner `species` carrier / `hasTemplate` gate)."""
+    entity-pool carriers (not the CellDesigner `species` carrier). The
+    templated/mergeable gating is gone -- keys are structural roles only and
+    PTM stripping happens at the build stage."""
 
     @pytest.mark.parametrize("profile", ("normal", "no_complex"))
-    def test_sbgn_pd_variant_uses_entity_pool_carrier_and_merge_keys(
-        self, profile
-    ):
+    def test_sbgn_pd_variant_uses_entity_pool_carrier(self, profile):
         program = pd2af.rules.build_program(profile, language="sbgn_pd")
-        assert "new_species_from_template" in program
-        assert "isMergeableEntity" in program
+        assert "new_species_from_template" not in program
+        assert "isMergeableEntity" not in program
         assert (
             "activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY)." in program
         )
@@ -117,13 +125,13 @@ class TestMergedProfilesSbgnPdVariant:
         )
 
     @pytest.mark.parametrize("profile", ("normal", "no_complex"))
-    def test_celldesigner_variant_unchanged(self, profile):
+    def test_celldesigner_variant_uses_species_carrier(self, profile):
         program = pd2af.rules.build_program(profile, language="celldesigner")
-        assert "hasTemplate" in program
         assert (
             "activityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
         )
         assert "isMergeableEntity" not in program
+        assert "new_species_from_template" not in program
 
 
 def test_registry_validates():

@@ -1,9 +1,12 @@
 """Build the AF model from clingo activity / influence atoms.
 
 ``make_and_add_model`` is the model pass: it walks the activity atoms in
-layer order (kept_species → kept_subunit → promoted_subunit →
-new_species_from_template) and populates ``context.model`` with canonical,
-content-deduped compartments, templates, species and modulations.
+layer order (kept_species → promoted_subunit) and populates ``context.model``
+with canonical, content-deduped compartments, templates, species and
+modulations. In the merged modes (``normal``/``no-complex``) each activity's
+species is stripped of its PTM decorations (recursively, including subunits)
+by ``get_or_make_stripped_species``; the other modes reuse input species by
+identity.
 
 The stateless ``get_or_make_*`` leaf helpers do the actual element
 construction. Each interns the constructed element through a shared
@@ -11,7 +14,7 @@ content-keyed cache (``register_or_reuse``), so two content-equal elements
 collapse to a single Python identity end-to-end. The canonicity policy is
 "first-registered wins"; combined with the layer order above, a kept
 input-map element is always the canonical instance for its content class,
-never displaced by a freshly synthesized one.
+never displaced by a freshly stripped one.
 
 :mod:`pd2af.build` owns the ``BuilderContext`` and drives this pass, then
 the layout pass.
@@ -22,36 +25,15 @@ import dataclasses
 import momapy.builder
 import momapy.celldesigner
 
+import pd2af.languages
 import pd2af.predicates
 
 
-_NO_COMPARTMENT_SENTINEL = "no_compartment"
-
-_TEMPLATE_MERGE_PREFIX = "new_species_from_template__"
-
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
-
-_TEMPLATE_TO_SPECIES_CLASS = {
-    momapy.celldesigner.GenericProteinTemplate: momapy.celldesigner.GenericProtein,
-    momapy.celldesigner.TruncatedProteinTemplate: momapy.celldesigner.TruncatedProtein,
-    momapy.celldesigner.ReceptorTemplate: momapy.celldesigner.Receptor,
-    momapy.celldesigner.IonChannelTemplate: momapy.celldesigner.IonChannel,
-    momapy.celldesigner.GeneTemplate: momapy.celldesigner.Gene,
-    momapy.celldesigner.RNATemplate: momapy.celldesigner.RNA,
-    momapy.celldesigner.AntisenseRNATemplate: momapy.celldesigner.AntisenseRNA,
-}
 
 
 _SPECIES_LAYER_ORDER = (
     pd2af.predicates.kept_species,
-    pd2af.predicates.kept_subunit,
-    pd2af.predicates.promoted_subunit,
-    pd2af.predicates.new_species_from_template,
-)
-
-_KEPT_KEY_CLASSES = (
-    pd2af.predicates.kept_species,
-    pd2af.predicates.kept_subunit,
     pd2af.predicates.promoted_subunit,
 )
 
@@ -75,7 +57,7 @@ def register_or_reuse(element, cache):
 
 
 def get_or_make_kept_species_or_subunit(input_species, cache):
-    """Canonical species for a ``kept_species`` or ``kept_subunit`` key.
+    """Canonical species for a ``kept_species`` key (non-merged modes).
     The input species is the canonical instance — register it so later
     content-equal candidates collapse onto it.
     """
@@ -146,35 +128,55 @@ def get_or_make_stripped_template(input_template, cache):
     return register_or_reuse(candidate, cache)
 
 
-def get_or_make_synthesized_species(
-    input_species, stripped_template, compartment, cache
+def get_or_make_stripped_species(
+    input_species,
+    compartment,
+    cache,
+    input_model_element_to_canonical_model_element,
 ):
-    """Build a synthesized species from a stripped template and a
-    compartment. Two ``new_species_from_template`` keys whose (template,
-    compartment) cells coincide yield a single canonical species.
+    """Return a decoration-free canonical species for ``input_species`` (the
+    merged modes ``normal``/``no-complex``). Clears every post-translational
+    decoration -- ``homomultimer`` (-> 1), ``modifications``,
+    ``structural_states``, and, via a stripped template,
+    ``modification_residues``/``regions`` -- sets the effective ``compartment``,
+    and strips ``subunits`` recursively (a ``frozenset`` collapses subunits that
+    strip to equal content). Built with ``dataclasses.replace`` so the concrete
+    class and the input's real, reader-resolvable ``id_`` are preserved;
+    content-equal stripped twins still intern to one canonical because ``id_``
+    is ``compare=False``. Records ``id(input) -> canonical`` when they differ so
+    Pass 2 can substitute stale references (mirrors
+    ``get_or_make_promoted_subunit_species``).
     """
-    template = input_species.template
-    if template is None:
-        raise ValueError(
-            f"new_species_from_template key references species "
-            f"{input_species.id_!r} which has no template"
+    fields = {}
+    if hasattr(input_species, "homomultimer"):
+        fields["homomultimer"] = 1
+    if hasattr(input_species, "modifications"):
+        fields["modifications"] = frozenset()
+    if hasattr(input_species, "structural_states"):
+        fields["structural_states"] = frozenset()
+    if hasattr(input_species, "compartment"):
+        fields["compartment"] = compartment
+    template = getattr(input_species, "template", None)
+    if template is not None:
+        fields["template"] = get_or_make_stripped_template(template, cache)
+    subunits = getattr(input_species, "subunits", None)
+    if subunits:
+        fields["subunits"] = frozenset(
+            get_or_make_stripped_species(
+                subunit,
+                getattr(subunit, "compartment", None),
+                cache,
+                input_model_element_to_canonical_model_element,
+            )
+            for subunit in subunits
         )
-    species_class = _TEMPLATE_TO_SPECIES_CLASS.get(type(template))
-    if species_class is None:
-        raise ValueError(
-            f"cannot synthesize a templated species for template class "
-            f"{type(template).__name__}"
+    candidate = dataclasses.replace(input_species, **fields)
+    canonical = register_or_reuse(candidate, cache)
+    if canonical is not input_species:
+        input_model_element_to_canonical_model_element[id(input_species)] = (
+            canonical
         )
-    compartment_id = (
-        compartment.id_ if compartment is not None else _NO_COMPARTMENT_SENTINEL
-    )
-    candidate = species_class(
-        id_=f"{_TEMPLATE_MERGE_PREFIX}{template.id_}__{compartment_id}",
-        name=template.name,
-        template=stripped_template,
-        compartment=compartment,
-    )
-    return register_or_reuse(candidate, cache)
+    return canonical
 
 
 def get_or_make_modulation(modulation_class, source, target, cache):
@@ -309,6 +311,7 @@ def _compartment_for_input_species(context, input_species):
 
 
 def _make_and_add_templates(context):
+    strip = context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES
     seen_template_identities = set()
 
     def record(template):
@@ -317,32 +320,22 @@ def _make_and_add_templates(context):
         seen_template_identities.add(id(template))
         context.model.species_templates.add(template)
 
-    # Kept templates first: walk each kept-key input species's subunit
-    # tree and register every template it carries by identity. This
-    # primes the cache so that a content-equal stripped candidate
-    # collapses onto its kept twin in the next phase.
-    for key_class in _KEPT_KEY_CLASSES:
+    # Register the templates each activity carries (walking subunit trees). In
+    # the merged modes the registered template is the *stripped* one, so the
+    # stripped species built in the species pass finds its canonical template
+    # already present (same `context.cache`); otherwise the input template is
+    # registered verbatim. This runs before `_make_and_add_species`.
+    for key_class in _SPECIES_LAYER_ORDER:
         for atom in context.activity_atoms_by_key_class[key_class]:
             input_species = context.clingo_id_to_model_element[atom.key.species]
             for input_template in _walk_templates(input_species):
-                canonical = register_or_reuse(input_template, context.cache)
+                if strip:
+                    canonical = get_or_make_stripped_template(
+                        input_template, context.cache
+                    )
+                else:
+                    canonical = register_or_reuse(input_template, context.cache)
                 record(canonical)
-
-    # Stripped templates: one per content cell. Built from each
-    # new_species_from_template atom's input template; the species
-    # layer reads back the canonical via the cache.
-    for atom in context.activity_atoms_by_key_class[
-        pd2af.predicates.new_species_from_template
-    ]:
-        input_species = context.clingo_id_to_model_element[atom.key.species]
-        input_template = input_species.template
-        if input_template is None:
-            raise ValueError(
-                f"new_species_from_template key references species "
-                f"{input_species.id_!r} which has no template"
-            )
-        canonical = get_or_make_stripped_template(input_template, context.cache)
-        record(canonical)
 
 
 def _walk_templates(species):
@@ -362,39 +355,35 @@ def _make_and_add_species(context):
             if id(species) in seen_species_identities:
                 continue
             seen_species_identities.add(id(species))
-            input_species = (
-                context.clingo_id_to_model_element[atom.key.species]
-                if key_class in _KEPT_KEY_CLASSES
-                else None
-            )
+            input_species = context.clingo_id_to_model_element[atom.key.species]
             context.species_emissions.append((key_class, species, input_species))
-            if key_class is not pd2af.predicates.kept_subunit:
-                context.model.species.add(species)
+            context.model.species.add(species)
 
 
 def _resolve_activity_key(context, key):
+    """Resolve an activity key to its output species. In the merged modes
+    (``normal``/``no-complex``) every species is stripped of its PTM decorations
+    (recursively, including subunits) so content-equal proteoforms collapse;
+    otherwise the input species is reused by identity (``kept_species``) or
+    promoted with a corrected compartment (``promoted_subunit``)."""
+    input_species = context.clingo_id_to_model_element[key.species]
+    if context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES:
+        compartment = _compartment_for_input_species(context, input_species)
+        return get_or_make_stripped_species(
+            input_species,
+            compartment,
+            context.cache,
+            context.input_model_element_to_canonical_model_element,
+        )
     if isinstance(key, pd2af.predicates.promoted_subunit):
-        input_species = context.clingo_id_to_model_element[key.species]
         return get_or_make_promoted_subunit_species(
             input_species,
             context.subunit_to_top_level,
             context.cache,
             context.input_model_element_to_canonical_model_element,
         )
-    if isinstance(
-        key, (pd2af.predicates.kept_species, pd2af.predicates.kept_subunit)
-    ):
-        input_species = context.clingo_id_to_model_element[key.species]
+    if isinstance(key, pd2af.predicates.kept_species):
         return get_or_make_kept_species_or_subunit(input_species, context.cache)
-    if isinstance(key, pd2af.predicates.new_species_from_template):
-        input_species = context.clingo_id_to_model_element[key.species]
-        compartment = _compartment_for_input_species(context, input_species)
-        stripped_template = get_or_make_stripped_template(
-            input_species.template, context.cache
-        )
-        return get_or_make_synthesized_species(
-            input_species, stripped_template, compartment, context.cache
-        )
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 

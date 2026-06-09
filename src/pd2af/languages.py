@@ -15,6 +15,14 @@ CELLDESIGNER = "celldesigner"
 SBGN_PD = "sbgn_pd"
 
 
+# The "merged" (true-AF) transformation modes: proteoforms collapse and all
+# post-translational decorations are stripped. The build stage strips PTMs iff
+# ``context.mode`` is one of these; the complementary modes keep decorations.
+# (Tokens are the hyphenated transform-mode names, not the underscored ASP
+# profile names.)
+MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
+
+
 def language_from_map(map_):
     """Infer the input language token from the input map's type."""
     if isinstance(map_, momapy.sbgn.pd.SBGNPDMap):

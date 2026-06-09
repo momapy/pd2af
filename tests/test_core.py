@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 import momapy.celldesigner
@@ -5,11 +7,27 @@ import momapy.celldesigner
 import pd2af
 
 from tests._helpers import (
+    MAPS_DIR,
     has_dot_binary,
     modulation_set,
     read_cd_map,
     species_names,
 )
+
+
+def _assert_recursively_stripped(species_iterable):
+    """Every species (and subunit, recursively) carries no PTM decoration and
+    keeps a real, reader-resolvable id (no synthesized prefix)."""
+    for species in species_iterable:
+        assert not species.id_.startswith("new_species_from_template")
+        assert getattr(species, "homomultimer", 1) == 1
+        assert not getattr(species, "structural_states", frozenset())
+        assert not getattr(species, "modifications", frozenset())
+        template = getattr(species, "template", None)
+        if template is not None:
+            assert not getattr(template, "modification_residues", frozenset())
+            assert not getattr(template, "regions", frozenset())
+        _assert_recursively_stripped(getattr(species, "subunits", ()) or ())
 
 
 @pytest.fixture(scope="module")
@@ -143,13 +161,12 @@ class TestTransformExampleNormalMode:
         assert isinstance(out_normal, momapy.celldesigner.CellDesignerMap)
 
     def test_complex_is_kept(self, out_normal):
-        # Complex D is templateless and is kept as its own activity. In
-        # normal mode its active subunit C is keyed via
-        # new_species_from_template and surfaces as its own top-level
-        # activity (it is not subsumed, unlike in keep-species mode).
+        # Complex D is kept as its own activity. Its active subunit C is no
+        # longer a separate top-level activity -- it is a structural component
+        # of D, so any influence it carries routes to D (same as keep-species).
         names = species_names(out_normal.model)
         assert "D" in names
-        assert "C" in names
+        assert "C" not in names
 
     def test_complex_routes_through_itself(self, out_normal):
         # Influences involving the complex go through the complex (kept_species)
@@ -169,15 +186,39 @@ class TestTransformExampleNormalMode:
         for s in complex_species:
             assert not s.id_.startswith("new_species_from_template")
 
-    def test_monomers_use_synthesized_species(self, out_normal):
-        # Templated monomers are merged into proteoform-class activities,
-        # which are synthesized species.
-        synthesized = [
+    def test_merged_species_carry_no_decorations(self, out_normal):
+        # Merged modes strip every PTM decoration (recursively, incl. subunits)
+        # and keep each species' real id -- there is no synthesized id prefix.
+        _assert_recursively_stripped(out_normal.model.species)
+
+
+class TestMergedModeStripping:
+    """The merged modes strip all PTM decorations (recursively); keep-species
+    keeps them. Exercised on a committed map that carries real modifications and
+    structural states -- example.xml is decoration-free, so it cannot prove the
+    strip on its own."""
+
+    @pytest.fixture(scope="class")
+    def rich_map(self):
+        return read_cd_map(os.path.join(MAPS_DIR, "Apoptosis_pathway.xml"))
+
+    def test_normal_strips_all_decorations(self, rich_map):
+        out = pd2af.transform(rich_map, mode="normal", layout_mode=None)
+        _assert_recursively_stripped(out.model.species)
+
+    def test_no_complex_strips_all_decorations(self, rich_map):
+        out = pd2af.transform(rich_map, mode="no-complex", layout_mode=None)
+        _assert_recursively_stripped(out.model.species)
+
+    def test_keep_species_retains_decorations(self, rich_map):
+        out = pd2af.transform(rich_map, mode="keep-species", layout_mode=None)
+        decorated = [
             s
-            for s in out_normal.model.species
-            if s.id_.startswith("new_species_from_template")
+            for s in out.model.species
+            if getattr(s, "modifications", None)
+            or getattr(s, "structural_states", None)
         ]
-        assert synthesized
+        assert decorated  # keep-species preserves PTM decorations
 
 
 class TestTransformLayoutModes:

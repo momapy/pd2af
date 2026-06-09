@@ -59,14 +59,15 @@ class TestSolve:
         for species in example_cd_map.model.species:
             assert species.id_ in mapped_species_ids
 
-    def test_solve_keep_species_finds_six_activity_atoms(
+    def test_solve_keep_species_finds_five_activity_atoms(
         self, solved_keep_species
     ):
-        # B, D, E, F, G plus active subunit C of complex D — C gets a
-        # kept_subunit activity but is carried inside its parent complex.
+        # B, D, E, F, G. Active subunit C of complex D no longer gets its own
+        # activity -- it resolves to D's top-level `kept_species(D)`, the same
+        # key D itself carries, so it adds no distinct activity atom.
         clingo_model, _ = solved_keep_species
         atoms = _activity_atoms(clingo_model)
-        assert len(atoms) == 6
+        assert len(atoms) == 5
 
     def test_solve_keep_species_finds_four_influence_atoms(
         self, solved_keep_species

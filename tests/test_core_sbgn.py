@@ -85,6 +85,29 @@ def active_subunit_complex_map():
     return momapy.sbgn.pd.SBGNPDMap(model=model)
 
 
+@pytest.fixture
+def stateful_complex_map():
+    """A complex carrying its *own* state variable (``tense``) plus a stateful
+    subunit -- mirrors the actin:myosin case. Merged modes strip both the
+    complex's and the subunit's state (recursively); keep-species keeps them."""
+    complex_state = momapy.sbgn.pd.StateVariable(
+        variable="r0", value="tense", order=0
+    )
+    subunit_state = momapy.sbgn.pd.StateVariable(
+        variable="r0", value="active", order=0
+    )
+    subunit = momapy.sbgn.pd.MacromoleculeSubunit(
+        label="RAF", state_variables=frozenset([subunit_state])
+    )
+    complex_ = momapy.sbgn.pd.Complex(
+        label=None,
+        state_variables=frozenset([complex_state]),
+        subunits=frozenset([subunit]),
+    )
+    model = momapy.sbgn.pd.SBGNPDModel(entity_pools=frozenset([complex_]))
+    return momapy.sbgn.pd.SBGNPDMap(model=model)
+
+
 class TestProteoformMerging:
     def test_keep_species_keeps_proteoforms_distinct(self, proteoform_map):
         out = pd2af.transform(proteoform_map, mode="keep-species", layout_mode=None)
@@ -97,20 +120,22 @@ class TestProteoformMerging:
 
 
 class TestComplexHandling:
-    def test_normal_keeps_complex_and_promotes_subunit(
+    def test_normal_keeps_complex_without_promoting_subunit(
         self, active_subunit_complex_map
     ):
         out = pd2af.transform(
             active_subunit_complex_map, mode="normal", layout_mode=None
         )
-        # The complex becomes a ComplexUnitOfInformation activity, and its
-        # active mergeable subunit is promoted to its own activity (parity).
+        # The complex becomes a single ComplexUnitOfInformation activity. Its
+        # active subunit is NOT promoted to its own activity -- it is a
+        # structural component of the complex (carried in the composed label).
         assert _has_complex_unit_of_information(out.model)
-        assert any(
+        assert not any(
             isinstance(unit, momapy.sbgn.af.MacromoleculeUnitOfInformation)
             for activity in out.model.activities
             for unit in activity.units_of_information
         )
+        assert len(out.model.activities) == 1
 
     def test_no_complex_breaks_complex_into_subunit(
         self, active_subunit_complex_map
@@ -122,6 +147,24 @@ class TestComplexHandling:
         # the promoted subunit survives.
         assert not _has_complex_unit_of_information(out.model)
         assert _activity_labels(out.model) == ["RAF"]
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_merged_modes_strip_complex_and_subunit_state(
+        self, stateful_complex_map, mode
+    ):
+        out = pd2af.transform(stateful_complex_map, mode=mode, layout_mode=None)
+        labels = _activity_labels(out.model)
+        # No state-variable bracket survives -- neither the complex's own
+        # `tense` nor the subunit's `active`.
+        assert all("tense" not in label for label in labels)
+        assert all("active" not in label for label in labels)
+
+    def test_keep_species_retains_complex_state(self, stateful_complex_map):
+        out = pd2af.transform(
+            stateful_complex_map, mode="keep-species", layout_mode=None
+        )
+        labels = _activity_labels(out.model)
+        assert any("tense" in label for label in labels)
 
 
 _SBGN_MAP_NAMES = (

@@ -15,21 +15,40 @@ CellDesigner, an activity is represented by a **species** that stands
 in for the entity performing it. The species type carries the
 provenance of the activity.
 
-The transformation modes encode different choices about how PD entities
-collapse into activities:
+The transformation modes encode two orthogonal choices: whether to
+**strip post-translational decorations** (state variables in SBGN;
+`modifications`, `structural_states`, template `modification_residues`/
+`regions` and `homomultimer` in CellDesigner) and merge content-equal
+results, and whether to **keep or dissolve complexes**. In every mode a
+subunit is a *structural component*, never an independent activity: a
+subunit's activity and influences are attributed to its outermost
+top-level complex (subunit-level influences are a CellDesigner artifact,
+not standard AF). All of this is decided by the **mode at build time**,
+not encoded in the activity key.
 
-| mode                       | proteoforms                | complexes                                  |
-| -------------------------- | -------------------------- | ------------------------------------------ |
-| `normal`                   | merged per (template, compartment) | kept (PD-style, with subunits)         |
-| `no-complex`               | merged per (template, compartment) | broken into active subunits; otherwise kept (PD-style) |
-| `keep-species`             | each PD species → own activity | kept (PD-style, with subunits)         |
-| `keep-species-no-complex`  | each PD species → own activity | broken into active subunits; otherwise kept (PD-style) |
-| `casq`                     | each PD species → own activity | (CASQ-specific pruning)                |
+| mode                       | PTM decorations    | complexes                                                  |
+| -------------------------- | ------------------ | ---------------------------------------------------------- |
+| `normal`                   | stripped & merged  | kept (opaque; subunits carried in the label/structure, influences routed to the complex) |
+| `no-complex`               | stripped & merged  | dissolved: active subunits promoted to top-level activities |
+| `keep-species`             | kept               | kept (opaque; subunits routed to the complex)              |
+| `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities |
+| `casq`                     | kept               | kept (CASQ-specific deletion pruning)                      |
 
 `normal` is the canonical AF mode and will be the default for the
 future SBGN-AF output. `keep-species*` and `casq` deliberately deviate:
-they preserve PD structure for users who want a CD-native lossy
-reduction rather than a true AF view.
+they preserve PD proteoform structure for users who want a CD-native
+lossy reduction rather than a true AF view.
+
+Stripping is a single recursive operation over the resolved entity
+(`pd2af.celldesigner.building_model.get_or_make_stripped_species`;
+`pd2af.sbgn.labels.build_label` with `include_state_variables=False`),
+applied to *every* entity in the merged modes — complexes and
+non-templated entities included, not just templated proteoforms. The
+two structural-role activity keys are `kept_species` (a top-level
+entity, or the top-level complex a subunit resolves to via the shared
+`topLevel` ASP relation) and `promoted_subunit` (a subunit lifted to top
+level when its complex is dissolved). `MERGED_PROTEOFORM_MODES` in
+`pd2af.languages` is the single source of truth for which modes strip.
 
 ## Model-element dedup invariant
 

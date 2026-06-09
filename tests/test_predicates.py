@@ -9,10 +9,8 @@ class TestPredicateClass:
     def test_kept_species_is_clorm_predicate(self):
         assert issubclass(pd2af.predicates.kept_species, clorm.Predicate)
 
-    def test_new_species_from_template_is_clorm_predicate(self):
-        assert issubclass(
-            pd2af.predicates.new_species_from_template, clorm.Predicate
-        )
+    def test_promoted_subunit_is_clorm_predicate(self):
+        assert issubclass(pd2af.predicates.promoted_subunit, clorm.Predicate)
 
     def test_activity_is_clorm_predicate(self):
         assert issubclass(pd2af.predicates.activity, clorm.Predicate)
@@ -30,8 +28,8 @@ class TestPredicateClass:
         atom = pd2af.predicates.kept_species(species="some_id")
         assert atom.species == "some_id"
 
-    def test_new_species_from_template_can_be_constructed(self):
-        atom = pd2af.predicates.new_species_from_template(species="some_id")
+    def test_promoted_subunit_can_be_constructed(self):
+        atom = pd2af.predicates.promoted_subunit(species="some_id")
         assert atom.species == "some_id"
 
     def test_activity_wraps_kept_species(self):
@@ -41,24 +39,20 @@ class TestPredicateClass:
         assert isinstance(atom.key, pd2af.predicates.kept_species)
         assert atom.key.species == "x"
 
-    def test_activity_wraps_new_species_from_template(self):
+    def test_activity_wraps_promoted_subunit(self):
         atom = pd2af.predicates.activity(
-            key=pd2af.predicates.new_species_from_template(species="x")
+            key=pd2af.predicates.promoted_subunit(species="x")
         )
-        assert isinstance(
-            atom.key, pd2af.predicates.new_species_from_template
-        )
+        assert isinstance(atom.key, pd2af.predicates.promoted_subunit)
         assert atom.key.species == "x"
 
     def test_positively_influences_with_key_wrappers(self):
         atom = pd2af.predicates.positivelyInfluences(
             source=pd2af.predicates.kept_species(species="a"),
-            target=pd2af.predicates.new_species_from_template(species="x"),
+            target=pd2af.predicates.promoted_subunit(species="x"),
         )
         assert isinstance(atom.source, pd2af.predicates.kept_species)
-        assert isinstance(
-            atom.target, pd2af.predicates.new_species_from_template
-        )
+        assert isinstance(atom.target, pd2af.predicates.promoted_subunit)
 
     def test_negatively_influences_with_key_wrappers(self):
         atom = pd2af.predicates.negativelyInfluences(

@@ -1,24 +1,28 @@
 """Build the SBGN-AF model from clingo activity / influence atoms.
 
 ``make_and_add_model`` is the AF model pass: it walks the activity atoms
-(``kept_species`` keys, each resolving to an input SBGN-PD entity pool or
-phenotype) and the influence atoms, and populates ``context.model`` with
-canonical, content-deduped compartments, activities and influences.
+(``kept_species`` / ``promoted_subunit`` keys, each resolving to an input
+SBGN-PD entity pool, phenotype or promoted subunit) and the influence atoms,
+and populates ``context.model`` with canonical, content-deduped compartments,
+activities and influences.
 
 Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
 :class:`UnitOfInformation` (the entity class) and a label that is the canonical
-serialization of the whole entity pool (:mod:`pd2af.sbgn.labels`) -- so two
-distinct proteoforms stay distinct activities under content-based model
-equality. A PD :class:`Phenotype` process becomes an AF :class:`Phenotype`
-activity. Dedup is honoured by interning every constructed element through the
-shared content cache (``register_or_reuse``) and resolving influence endpoints
-through the deduped activities, mirroring the model-element dedup invariant.
+serialization of the whole entity pool (:mod:`pd2af.sbgn.labels`). In the
+merged modes (``normal``/``no-complex``) the label is built with state
+variables stripped, so distinct proteoforms collapse to one merged activity;
+otherwise they stay distinct under content-based model equality. A PD
+:class:`Phenotype` process becomes an AF :class:`Phenotype` activity. Dedup is
+honoured by interning every constructed element through the shared content
+cache (``register_or_reuse``) and resolving influence endpoints through the
+deduped activities, mirroring the model-element dedup invariant.
 """
 
 import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
+import pd2af.languages
 import pd2af.predicates
 import pd2af.sbgn.labels
 
@@ -129,8 +133,6 @@ def _input_element_for_key(context, key):
 def _make_and_add_compartments(context):
     seen_compartment_identities = set()
     for atom in context.activity_atoms:
-        if isinstance(atom.key, pd2af.predicates.kept_subunit):
-            continue
         input_element = _input_element_for_key(context, atom.key)
         input_compartment = getattr(input_element, "compartment", None)
         if input_compartment is None:
@@ -164,20 +166,13 @@ def _get_or_make_compartment(context, input_compartment):
 
 
 def _make_and_add_activities(context):
+    strip = context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES
     seen_activity_identities = set()
     for atom in context.activity_atoms:
-        if isinstance(atom.key, pd2af.predicates.kept_subunit):
-            # A kept_subunit's activity lives inside its parent complex (which
-            # is emitted as its own activity); it is not a standalone activity,
-            # and -- having no carrier -- is never an influence endpoint.
-            continue
         if atom.key in context.key_to_activity:
             continue
         input_element = _input_element_for_key(context, atom.key)
-        merge = isinstance(
-            atom.key, pd2af.predicates.new_species_from_template
-        )
-        activity = _make_activity(context, input_element, merge=merge)
+        activity = _make_activity(context, input_element, strip=strip)
         context.key_to_activity[atom.key] = activity
         if id(activity) in seen_activity_identities:
             continue
@@ -186,12 +181,12 @@ def _make_and_add_activities(context):
         context.model.activities.add(activity)
 
 
-def _make_activity(context, input_element, merge=False):
+def _make_activity(context, input_element, strip=False):
     """Build (and intern) the AF activity for ``input_element``.
 
-    ``merge=True`` (the ``new_species_from_template`` key) strips state
+    ``strip=True`` (the merged modes ``normal``/``no-complex``) drops state
     variables from the label so distinct proteoforms collapse into one merged
-    activity under content-based model equality. ``merge=False`` keeps the full
+    activity under content-based model equality. ``strip=False`` keeps the full
     label, so distinct proteoforms stay distinct (keep-species behaviour)."""
     if isinstance(input_element, momapy.sbgn.pd.Phenotype):
         candidate = momapy.sbgn.af.Phenotype(label=input_element.label)
@@ -214,7 +209,7 @@ def _make_activity(context, input_element, merge=False):
         compartment = _get_or_make_compartment(context, input_compartment)
     candidate = momapy.sbgn.af.BiologicalActivity(
         label=pd2af.sbgn.labels.build_label(
-            input_element, include_state_variables=not merge
+            input_element, include_state_variables=not strip
         ),
         compartment=compartment,
         units_of_information=frozenset([unit_of_information]),

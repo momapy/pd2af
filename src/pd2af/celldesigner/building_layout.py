@@ -20,7 +20,6 @@ import momapy.core.mapping
 import momapy.geometry
 
 import pd2af.celldesigner.building_model
-import pd2af.predicates
 import pd2af.utils
 
 
@@ -226,8 +225,8 @@ def make_and_add_layout(context):
     # foreground compartment layouts -- the insertion point for the overlay
     # background below.
     compartment_count = len(context.layout.layout_elements)
-    for key_class, species, input_species in context.species_emissions:
-        _make_and_add_species_layout(context, key_class, species, input_species)
+    for _key_class, species, input_species in context.species_emissions:
+        _make_and_add_species_layout(context, species, input_species)
     for modulation in context.model.modulations:
         _make_and_add_modulation_layout(context, modulation)
 
@@ -260,8 +259,7 @@ def _make_and_add_compartment_layout(context, compartment):
         )
 
 
-def _make_and_add_species_layout(context, key_class, species, input_species):
-    is_kept_subunit = key_class is pd2af.predicates.kept_subunit
+def _make_and_add_species_layout(context, species, input_species):
     input_layouts = (
         context.input_map.layout_model_mapping.get_mapping(input_species)
         if input_species is not None
@@ -269,19 +267,18 @@ def _make_and_add_species_layout(context, key_class, species, input_species):
     )
 
     if input_layouts:
-        if not is_kept_subunit:
-            context.layout.layout_elements.extend(input_layouts)
-            for input_layout in input_layouts:
-                add_mappings_for_layout_and_descendants(
-                    context.input_map.layout_model_mapping,
-                    input_layout,
-                    context.layout_model_mapping,
-                    input_model_element_to_canonical_model_element=(
-                        context.input_model_element_to_canonical_model_element
-                    ),
-                )
+        context.layout.layout_elements.extend(input_layouts)
+        for input_layout in input_layouts:
+            add_mappings_for_layout_and_descendants(
+                context.input_map.layout_model_mapping,
+                input_layout,
+                context.layout_model_mapping,
+                input_model_element_to_canonical_model_element=(
+                    context.input_model_element_to_canonical_model_element
+                ),
+            )
         context.model_element_to_layout_elements[id(species)] = tuple(input_layouts)
-    elif context.layout_mode == "auto" and not is_kept_subunit:
+    elif context.layout_mode == "auto":
         synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
         context.synthetic_index += 1
         context.layout.layout_elements.append(synthetic_layout)
