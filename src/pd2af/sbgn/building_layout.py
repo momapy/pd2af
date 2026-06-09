@@ -11,13 +11,16 @@ target}`` anchored on the arc for each influence).
 Two layout modes:
 
 * ``plain`` -- reuse the curated SBGN-PD geometry: each activity is placed at
-  its input PD entity's glyph position and size. Activities/compartments whose
-  input has no glyph are skipped. Used for the keep-species modes (every
-  activity maps back to exactly one input glyph).
+  its input element's layout position. An input element drawn with several
+  layouts (a cloned entity pool) yields one activity layout per input layout,
+  and influence arcs fan out across the source/target layouts per
+  ``--influence-pairing`` (``cross`` -- one arc per pair -- or ``nearest`` -- a
+  single arc between the closest pair). Activities/compartments whose input has
+  no layout are skipped.
 * ``auto`` -- build every element at a placeholder position with the default
   size, then hand the whole layout to ``pd2af.utils.auto_layout`` (graphviz) in
   ``build.py`` for repositioning. Required by the merged ``normal`` /
-  ``no-complex`` modes, where a merged activity has no single input glyph.
+  ``no-complex`` modes, where a merged activity has no single input layout.
 
 ``overlay`` for SBGN-AF is unsupported (see ``pd2af.core``).
 """
@@ -49,7 +52,7 @@ _INFLUENCE_CLASS_TO_LAYOUT_CLASS = {
 
 # Nodes (activities, phenotypes, units of information) use momapy's default
 # layout-class sizes, so we never pass width/height when building them. The one
-# exception is a compartment in `plain` mode, which reuses its input glyph size
+# exception is a compartment in `plain` mode, which reuses its input layout size
 # so it still encloses its members at their curated positions.
 #
 # auto-mode placeholder position; graphviz repositions everything afterwards.
@@ -82,11 +85,13 @@ def make_and_add_layout(context):
     pd2af.utils.harmonize_root_layout(context.layout)
 
 
-def _input_glyph(context, input_element):
-    glyphs = context.input_map.layout_model_mapping.get_mapping(input_element)
-    if not glyphs:
-        return None
-    return glyphs[0]
+def _get_input_layouts(context, input_element):
+    """Return the input map's layout elements for a model element, as a tuple
+    (empty when the element has none). A cloned entity pool maps to several."""
+    input_layouts = context.input_map.layout_model_mapping.get_mapping(
+        input_element
+    )
+    return tuple(input_layouts) if input_layouts else ()
 
 
 def _make_and_add_compartment_layout(context, compartment):
@@ -99,16 +104,17 @@ def _make_and_add_compartment_layout(context, compartment):
         input_compartment = _input_compartment_for(context, compartment)
         if input_compartment is None:
             return
-        input_glyph = _input_glyph(context, input_compartment)
-        if input_glyph is None:
+        input_layouts = _get_input_layouts(context, input_compartment)
+        if not input_layouts:
             return
-        # Reuse the input glyph size so the compartment still encloses its
+        input_layout = input_layouts[0]
+        # Reuse the input layout's size so the compartment still encloses its
         # members at their curated positions.
         compartment_layout = _builder(
             momapy.sbgn.af.CompartmentLayout,
-            position=input_glyph.position,
-            width=input_glyph.width,
-            height=input_glyph.height,
+            position=input_layout.position,
+            width=input_layout.width,
+            height=input_layout.height,
         )
     compartment_layout.label = (
         momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
@@ -125,34 +131,40 @@ def _input_compartment_for(context, af_compartment):
 
 
 def _make_and_add_activity_layout(context, activity, input_element):
-    # The activity uses momapy's default size; only its position differs by mode
-    # (curated input glyph position in plain, placeholder in auto).
+    # The activity uses momapy's default size; only its position(s) differ by
+    # mode. In auto a single placeholder graphviz repositions; in plain the
+    # curated input layout positions -- one activity layout per input layout, so
+    # a cloned entity pool keeps each of its placements.
     if context.layout_mode == "auto":
-        position = _PLACEHOLDER_POSITION
+        positions = (_PLACEHOLDER_POSITION,)
     else:
-        input_glyph = _input_glyph(context, input_element)
-        if input_glyph is None:
+        input_layouts = _get_input_layouts(context, input_element)
+        if not input_layouts:
             return
-        position = input_glyph.position
+        positions = tuple(input_layout.position for input_layout in input_layouts)
     activity_layout_class = (
         momapy.sbgn.af.PhenotypeLayout
         if isinstance(activity, momapy.sbgn.af.Phenotype)
         else momapy.sbgn.af.BiologicalActivityLayout
     )
-    activity_layout = _builder(activity_layout_class, position=position)
-    activity_layout.label = (
-        momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-            activity.label, position
+    activity_layouts = []
+    for position in positions:
+        activity_layout = _builder(activity_layout_class, position=position)
+        activity_layout.label = (
+            momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+                activity.label, position
+            )
         )
-    )
-    context.layout.layout_elements.append(activity_layout)
-    context.layout_model_mapping.add_mapping(activity_layout, activity)
-    context.model_element_to_layout_elements[id(activity)] = (activity_layout,)
-
-    for unit_of_information in getattr(activity, "units_of_information", frozenset()):
-        _make_and_add_unit_of_information_layout(
-            context, activity_layout, unit_of_information
-        )
+        context.layout.layout_elements.append(activity_layout)
+        context.layout_model_mapping.add_mapping(activity_layout, activity)
+        for unit_of_information in getattr(
+            activity, "units_of_information", frozenset()
+        ):
+            _make_and_add_unit_of_information_layout(
+                context, activity_layout, unit_of_information
+            )
+        activity_layouts.append(activity_layout)
+    context.model_element_to_layout_elements[id(activity)] = tuple(activity_layouts)
 
 
 def _make_and_add_unit_of_information_layout(
@@ -183,13 +195,17 @@ def _make_and_add_influence_layout(context, influence):
     )
     if not source_layouts or not target_layouts:
         return
-    source_layout = source_layouts[0]
-    target_layout = target_layouts[0]
-    arc = _make_influence_arc(influence, source_layout, target_layout)
-    context.layout.layout_elements.append(arc)
-    context.layout_model_mapping.add_mapping(
-        frozenset([arc, source_layout, target_layout]), influence, anchor=arc
+    prefer_nearest = (
+        context.influence_pairing == "nearest" and context.layout_mode == "plain"
     )
+    for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
+        source_layouts, target_layouts, prefer_nearest
+    ):
+        arc = _make_influence_arc(influence, source_layout, target_layout)
+        context.layout.layout_elements.append(arc)
+        context.layout_model_mapping.add_mapping(
+            frozenset([arc, source_layout, target_layout]), influence, anchor=arc
+        )
 
 
 def _make_influence_arc(influence, source_layout, target_layout):
