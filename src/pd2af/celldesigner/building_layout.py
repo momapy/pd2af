@@ -248,6 +248,13 @@ def _make_and_add_species_layout(context, species, input_species):
     )
 
     if input_layouts:
+        if context.layout_mode == "auto" and len(input_layouts) > 1:
+            # Auto repositions every node, so a cloned species' extra glyphs
+            # carry no spatial meaning -- and the cross-product pairing would
+            # multiply each influence arc N*M. Keep one glyph (its real size and
+            # subunit structure) and let graphviz place it. plain/overlay keep
+            # every clone, where the curated positions are meaningful.
+            input_layouts = input_layouts[:1]
         context.layout.layout_elements.extend(input_layouts)
         for input_layout in input_layouts:
             add_mappings_for_layout_and_descendants(
