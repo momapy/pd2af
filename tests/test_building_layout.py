@@ -3,6 +3,7 @@ import momapy.geometry
 
 import pd2af.predicates
 import pd2af.celldesigner.building_layout
+import pd2af.utils
 
 
 def _node(position):
@@ -40,7 +41,7 @@ class TestNearestInfluencePairing:
         target = _node(momapy.geometry.Point(0.0, 0.0))
         near_source = _node(momapy.geometry.Point(1.0, 0.0))
         far_source = _node(momapy.geometry.Point(10.0, 0.0))
-        source_layout, target_layout = pd2af.celldesigner.building_layout._nearest_layout_pair(
+        source_layout, target_layout = pd2af.utils.nearest_layout_pair(
             (far_source, near_source), (target,)
         )
         assert source_layout is near_source
@@ -50,7 +51,7 @@ class TestNearestInfluencePairing:
         target = _node(momapy.geometry.Point(0.0, 0.0))
         first_source = _node(momapy.geometry.Point(0.0, 5.0))
         second_source = _node(momapy.geometry.Point(5.0, 0.0))
-        source_layout, _ = pd2af.celldesigner.building_layout._nearest_layout_pair(
+        source_layout, _ = pd2af.utils.nearest_layout_pair(
             (first_source, second_source), (target,)
         )
         assert source_layout is first_source

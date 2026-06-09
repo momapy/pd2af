@@ -1,5 +1,6 @@
 import collections
 import dataclasses
+import itertools
 import math
 
 import momapy.core.layout
@@ -50,6 +51,45 @@ _POINTS_PER_INCH = 96
 _BEZIER_OFFSET = 30.0
 
 _ROOT_LAYOUT_SEP = 15.0
+
+
+def nearest_layout_pair(source_layouts, target_layouts):
+    """Return the (source_layout, target_layout) pair whose ``.position``s are
+    closest in Euclidean distance.
+
+    ``min`` over ``itertools.product`` is deterministic: on a distance tie it
+    keeps the first pair in product order (source-major), so the choice mirrors
+    the order the cross product would have emitted.
+    """
+    return min(
+        itertools.product(source_layouts, target_layouts),
+        key=lambda pair: math.dist(
+            pair[0].position.to_tuple(), pair[1].position.to_tuple()
+        ),
+    )
+
+
+def influence_layout_pairs(source_layouts, target_layouts, prefer_nearest):
+    """Return the (source_layout, target_layout) pairs to draw an influence /
+    modulation arc between.
+
+    By default the full ``source x target`` cross product. ``prefer_nearest``
+    (``-p nearest``) collapses the fan-out to the single closest pair, but only
+    where there *is* fan-out (more than one layout on a side) and every layout
+    has a real ``position`` -- in ``auto`` mode positions are throwaway
+    placeholders that graphviz overwrites, so the cross product is kept.
+    """
+    use_nearest = (
+        prefer_nearest
+        and (len(source_layouts) > 1 or len(target_layouts) > 1)
+        and all(
+            layout.position is not None
+            for layout in itertools.chain(source_layouts, target_layouts)
+        )
+    )
+    if use_nearest:
+        return [nearest_layout_pair(source_layouts, target_layouts)]
+    return list(itertools.product(source_layouts, target_layouts))
 
 
 def harmonize_root_layout(layout_builder):
