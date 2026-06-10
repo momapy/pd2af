@@ -120,6 +120,24 @@ def influence_layout_pairs(source_layouts, target_layouts, prefer_nearest):
     return list(itertools.product(source_layouts, target_layouts))
 
 
+def make_arc_segment_from_source_and_target(source_layout, target_layout):
+    """Straight Segment connecting two node layouts for a modulation /
+    influence arc. A self-loop (source is target) anchors to the node's
+    north edge; otherwise the segment runs border-to-border, falling back
+    to corner anchors when a border point is undefined."""
+    if source_layout is target_layout:
+        start_point = source_layout.anchor_point("north_north_west")
+        end_point = source_layout.anchor_point("north_north_east")
+    else:
+        start_point = source_layout.own_border(target_layout.center())
+        end_point = target_layout.own_border(source_layout.center())
+        if start_point is None:
+            start_point = source_layout.north_west()
+        if end_point is None:
+            end_point = target_layout.north_east()
+    return momapy.geometry.Segment(start_point, end_point)
+
+
 def harmonize_root_layout(layout_builder):
     """Set the root layout's fill to white and fit it tightly around its
     children. Applied uniformly across all layout modes so the rendered

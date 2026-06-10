@@ -210,17 +210,9 @@ def _make_and_add_influence_layout(context, influence):
 
 def _make_influence_arc(influence, source_layout, target_layout):
     arc_class = _INFLUENCE_CLASS_TO_LAYOUT_CLASS[type(influence)]
-    if source_layout is target_layout:
-        start_point = source_layout.anchor_point("north_north_west")
-        end_point = source_layout.anchor_point("north_north_east")
-    else:
-        start_point = source_layout.own_border(target_layout.center())
-        end_point = target_layout.own_border(source_layout.center())
-        if start_point is None:
-            start_point = source_layout.north_west()
-        if end_point is None:
-            end_point = target_layout.north_east()
-    segment = momapy.geometry.Segment(start_point, end_point)
+    segment = pd2af.utils.make_arc_segment_from_source_and_target(
+        source_layout, target_layout
+    )
     return _builder(
         arc_class, source=source_layout, target=target_layout, segments=(segment,)
     )
