@@ -26,6 +26,22 @@ def register_or_reuse(element, cache):
     return element
 
 
+def add_model_element_if_new(collection, model_element, seen_identities):
+    """Append ``model_element`` to ``collection`` unless an object with the
+    same identity was already appended (tracked in ``seen_identities``).
+
+    ``model_element`` is assumed to already be the canonical instance (e.g. the
+    result of :func:`register_or_reuse`); this only guards against adding the
+    same identity twice. Returns ``True`` if it was added this call, ``False``
+    if it was a duplicate.
+    """
+    if id(model_element) in seen_identities:
+        return False
+    seen_identities.add(id(model_element))
+    collection.add(model_element)
+    return True
+
+
 @dataclasses.dataclass(frozen=True)
 class _NotInIdSetSelector(momapy.styling.Selector):
     """Selects elements whose `id_` is not in `keep_ids` (or which have none).

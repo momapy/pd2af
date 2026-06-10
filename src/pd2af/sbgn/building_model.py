@@ -25,7 +25,7 @@ import momapy.sbgn.pd
 import pd2af.languages
 import pd2af.predicates
 import pd2af.sbgn.labels
-from pd2af.utils import register_or_reuse
+from pd2af.utils import add_model_element_if_new, register_or_reuse
 
 
 _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
@@ -134,9 +134,11 @@ def _make_and_add_compartments(context):
         if input_compartment is None:
             continue
         af_compartment = _get_or_make_compartment(context, input_compartment)
-        if id(af_compartment) not in seen_compartment_identities:
-            seen_compartment_identities.add(id(af_compartment))
-            context.model.compartments.add(af_compartment)
+        add_model_element_if_new(
+            context.model.compartments,
+            af_compartment,
+            seen_compartment_identities,
+        )
 
 
 def _get_or_make_compartment(context, input_compartment):
@@ -166,11 +168,10 @@ def _make_and_add_activities(context):
         input_element = _input_element_for_key(context, atom.key)
         activity = _make_activity(context, input_element, strip=strip)
         context.key_to_activity[atom.key] = activity
-        if id(activity) in seen_activity_identities:
-            continue
-        seen_activity_identities.add(id(activity))
-        context.activity_emissions.append((activity, input_element))
-        context.model.activities.add(activity)
+        if add_model_element_if_new(
+            context.model.activities, activity, seen_activity_identities
+        ):
+            context.activity_emissions.append((activity, input_element))
 
 
 def _make_activity(context, input_element, strip=False):
@@ -219,7 +220,6 @@ def _make_and_add_influences(context):
         influence_class = _INFLUENCE_PREDICATE_TO_AF_CLASS[type(atom)]
         candidate = influence_class(source=source, target=target)
         canonical = register_or_reuse(candidate, context.cache)
-        if id(canonical) in seen_influence_identities:
-            continue
-        seen_influence_identities.add(id(canonical))
-        context.model.influences.add(canonical)
+        add_model_element_if_new(
+            context.model.influences, canonical, seen_influence_identities
+        )

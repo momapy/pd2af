@@ -27,7 +27,7 @@ import momapy.celldesigner
 
 import pd2af.languages
 import pd2af.predicates
-from pd2af.utils import register_or_reuse
+from pd2af.utils import add_model_element_if_new, register_or_reuse
 
 
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
@@ -303,12 +303,6 @@ def _make_and_add_templates(context):
     strip = context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES
     seen_template_identities = set()
 
-    def record(template):
-        if id(template) in seen_template_identities:
-            return
-        seen_template_identities.add(id(template))
-        context.model.species_templates.add(template)
-
     # Register the templates each activity carries (walking subunit trees). In
     # the merged modes the registered template is the *stripped* one, so the
     # stripped species built in the species pass finds its canonical template
@@ -324,7 +318,11 @@ def _make_and_add_templates(context):
                     )
                 else:
                     canonical = register_or_reuse(input_template, context.cache)
-                record(canonical)
+                add_model_element_if_new(
+                    context.model.species_templates,
+                    canonical,
+                    seen_template_identities,
+                )
 
 
 def _walk_templates(species):
@@ -341,12 +339,15 @@ def _make_and_add_species(context):
         for atom in context.activity_atoms_by_key_class[key_class]:
             species = _resolve_activity_key(context, atom.key)
             context.key_to_species[atom.key] = species
-            if id(species) in seen_species_identities:
-                continue
-            seen_species_identities.add(id(species))
-            input_species = context.clingo_id_to_model_element[atom.key.species]
-            context.species_emissions.append((key_class, species, input_species))
-            context.model.species.add(species)
+            if add_model_element_if_new(
+                context.model.species, species, seen_species_identities
+            ):
+                input_species = context.clingo_id_to_model_element[
+                    atom.key.species
+                ]
+                context.species_emissions.append(
+                    (key_class, species, input_species)
+                )
 
 
 def _resolve_activity_key(context, key):
@@ -387,7 +388,6 @@ def _make_and_add_modulations(context):
         canonical = get_or_make_modulation(
             modulation_class, source, target, context.cache
         )
-        if id(canonical) in seen_modulation_identities:
-            continue
-        seen_modulation_identities.add(id(canonical))
-        context.model.modulations.add(canonical)
+        add_model_element_if_new(
+            context.model.modulations, canonical, seen_modulation_identities
+        )
