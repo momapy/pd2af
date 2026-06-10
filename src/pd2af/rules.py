@@ -828,7 +828,7 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
 _INFLUENCES_DERIVATION = RuleGroup(
     identifier="influences_derivation",
     profiles=_NON_CASQ_PROFILES,
-    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and the internal `influences(SOURCE_KEY, TARGET_KEY, KIND)` relation from kinded paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence each consumed reactant; inhibitor positively influences each spared reactant; the unknown modifiers contribute the unknown twins). The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
+    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and the internal `influences(SOURCE_KEY, TARGET_KEY, KIND)` relation from kinded paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant — in both cases only reactants that are themselves activities; the unknown modifiers contribute the unknown twins). The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
     rules=(
         Rule(
             identifier="influences_derivation:activity",
@@ -848,9 +848,11 @@ _INFLUENCES_DERIVATION = RuleGroup(
         ),
     ),
     # The consumption/sparing rules below are CellDesigner-only (they reason
-    # over reaction modifiers); SBGN-PD has no analog yet (consumption over
-    # modulation arcs is deferred), so its variant is empty. The shared
-    # `activity` and `path` rules above carry both languages.
+    # over reaction modifiers); SBGN-PD has no analog yet, so its variant is
+    # empty. This is a known gap to implement, not a deliberate design choice:
+    # the same biology in CellDesigner vs SBGN-PD currently yields different AF
+    # influences. The shared `activity` and `path` rules above carry both
+    # languages.
     variants={
         "sbgn_pd": (),
         "celldesigner": (
@@ -867,7 +869,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
                     activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
                     activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
                     activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="A catalyzer of a reaction negatively influences each of its reactants (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
+            docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
         ),
         Rule(
             identifier="influences_derivation:physical_stimulator_consumes_reactant",
@@ -882,7 +884,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
                     activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
                     activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
                     activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="A physical stimulator of a reaction negatively influences each of its reactants (consumption).",
+            docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption).",
         ),
         Rule(
             identifier="influences_derivation:trigger_consumes_reactant",
@@ -897,7 +899,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
                     activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
                     activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
                     activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="A trigger of a reaction negatively influences each of its reactants (consumption is depletion, hence negative — not triggering, which is only the trigger→product relationship).",
+            docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggering, which is only the trigger→product relationship).",
         ),
         Rule(
             identifier="influences_derivation:inhibitor_spares_reactant",
@@ -912,7 +914,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
                     activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
                     activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
                     activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="An inhibitor of a reaction positively influences each of its reactants (sparing).",
+            docs="An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing).",
         ),
         Rule(
             identifier="influences_derivation:unknown_catalyzer_consumes_reactant",
@@ -927,7 +929,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
                     activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
                     activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
                     activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="An unknown catalyzer of a reaction unknown-negatively influences each of its reactants (consumption, uncertain).",
+            docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain).",
         ),
         Rule(
             identifier="influences_derivation:unknown_inhibitor_spares_reactant",
@@ -942,7 +944,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
                     activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
                     activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
                     activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="An unknown inhibitor of a reaction unknown-positively influences each of its reactants (sparing, uncertain).",
+            docs="An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain).",
         ),
         ),
     },

@@ -1,7 +1,7 @@
 [project]
 name = "pd2af"
 version = "0.0.2"
-description = "Add your description here"
+description = "Transform process-description maps (SBGN-PD, CellDesigner) into SBGN-AF activity-flow maps"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

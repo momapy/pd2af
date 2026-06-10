@@ -84,6 +84,6 @@ momapy.io.core.write(new_map, path, writer="celldesigner")
 momapy.io.core.read(path, reader="celldesigner")  # must not raise
 ```
 
-Sweep harness: `/tmp/pd2af_test/sweep.py` runs all
-(mode, layout_mode) combos against every map in
-`tests/maps/celldesigner/`.
+The in-repo check is `pytest` plus the read-back above. A broader sweep over all
+(mode, layout_mode) combinations against every map in `tests/maps/celldesigner/`
+is run from a local harness that is not committed to this repo.

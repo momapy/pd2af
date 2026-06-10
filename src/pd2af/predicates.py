@@ -31,7 +31,7 @@ class activity(clorm.Predicate):
     """An activity node in the new AF map.
 
     Always wrapped by ``new(...)`` in rule heads. The ``key`` field
-    carries the activity's identity — one of the three activity-key
+    carries the activity's identity — one of the two activity-key
     wrappers.
     """
     key: _ACTIVITY_KEY
