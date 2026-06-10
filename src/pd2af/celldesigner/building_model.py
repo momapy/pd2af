@@ -27,6 +27,7 @@ import momapy.celldesigner
 
 import pd2af.languages
 import pd2af.predicates
+from pd2af.utils import register_or_reuse
 
 
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
@@ -42,18 +43,6 @@ _SPECIES_LAYER_ORDER = (
 _INFLUENCE_PREDICATE_CLASSES = tuple(
     pd2af.predicates.predicate_to_model_element_class
 )
-
-
-def register_or_reuse(element, cache):
-    """Intern ``element`` by content in ``cache``. First-registered wins:
-    if a content-equal element is already cached, return it; otherwise
-    record ``element`` as the canonical instance and return it.
-    """
-    existing = cache.get(element)
-    if existing is not None:
-        return existing
-    cache[element] = element
-    return element
 
 
 def get_or_make_kept_species_or_subunit(input_species, cache):

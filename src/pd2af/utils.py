@@ -14,6 +14,18 @@ import momapy.celldesigner
 import pydot
 
 
+def register_or_reuse(element, cache):
+    """Intern ``element`` by content in ``cache``. First-registered wins:
+    if a content-equal element is already cached, return it; otherwise
+    record ``element`` as the canonical instance and return it.
+    """
+    existing = cache.get(element)
+    if existing is not None:
+        return existing
+    cache[element] = element
+    return element
+
+
 @dataclasses.dataclass(frozen=True)
 class _NotInIdSetSelector(momapy.styling.Selector):
     """Selects elements whose `id_` is not in `keep_ids` (or which have none).

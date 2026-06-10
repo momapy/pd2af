@@ -25,6 +25,7 @@ import momapy.sbgn.pd
 import pd2af.languages
 import pd2af.predicates
 import pd2af.sbgn.labels
+from pd2af.utils import register_or_reuse
 
 
 _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
@@ -74,15 +75,6 @@ _INFLUENCE_PREDICATE_TO_AF_CLASS = {
 }
 
 _INFLUENCE_PREDICATE_CLASSES = tuple(_INFLUENCE_PREDICATE_TO_AF_CLASS)
-
-
-def register_or_reuse(element, cache):
-    """Intern ``element`` by content in ``cache``; first-registered wins."""
-    existing = cache.get(element)
-    if existing is not None:
-        return existing
-    cache[element] = element
-    return element
 
 
 def make_and_add_model(context, clingo_model):

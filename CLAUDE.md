@@ -72,7 +72,7 @@ which causes `KeyError` on read-back of the written CellDesigner XML.
 
 The right fix when this shape of bug appears is a dedup-and-remap pass
 over the constructed model (mirroring `register_model_element`), not
-ad-hoc patching. See `pd2af.dedup`.
+ad-hoc patching. See `pd2af.utils.register_or_reuse`.
 
 ## Read-back as the integration test
 
