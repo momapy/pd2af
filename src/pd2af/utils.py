@@ -263,21 +263,14 @@ def _get_flatten_dot_nodes(dot_graph):
     return dot_nodes
 
 
-def auto_layout(
-    cd_map,
-    compartment_layout_classes=(
-        momapy.celldesigner.RectangleCompartmentLayout,
-        momapy.celldesigner.OvalCompartmentLayout,
-    ),
+def _build_dot_graph(
+    new_map_builder, new_layout_builder, compartment_layout_classes
 ):
-    """Reposition an already-built layout with graphviz (dot).
-
-    Generic over the map language except for the compartment-layout classes,
-    which differ per language: pass ``compartment_layout_classes`` to identify
-    the compartment containers (so they become dot clusters rather than nodes).
-    Defaults to the CellDesigner compartment-layout classes."""
-    new_map_builder = momapy.builder.builder_from_object(cd_map)
-    new_layout_builder = new_map_builder.layout
+    """Build the pydot graph from the built layout: compartments become dot
+    clusters, Node layout elements become dot nodes (placed in their
+    compartment's cluster when there is one), and Arc layout elements become
+    dot edges. Returns the graph plus the bookkeeping the repositioning and
+    arc-geometry phases need."""
     dot_graph = pydot.Dot(graph_type="digraph")
     compartment_to_dot_cluster = {}
     compartment_layout_element_to_included_layout_elements = collections.defaultdict(
@@ -382,6 +375,19 @@ def auto_layout(
     dot_graph.set("ranksep", 1.0)
     dot_graph.set("nodesep", 0.5)
     dot_graph.set("rankdir", "BT")
+    return (
+        dot_graph,
+        id_to_layout_element,
+        descendant_id_to_top_level_id,
+        directed_pairs,
+        compartment_layout_element_to_included_layout_elements,
+    )
+
+
+def _reposition_from_dot(dot_graph, id_to_layout_element):
+    """Run graphviz `dot`, then translate every layout element to the position
+    dot computed for it. Returns id -> layout element builder (including nested
+    descendants) so the arc-geometry phase can resolve endpoints."""
     dot = dot_graph.create_dot(prog="dot").decode("utf-8")
     dot_graph = pydot.graph_from_dot_data(dot)[0]
     id_to_new_layout_element_builder = {}
@@ -409,128 +415,190 @@ def auto_layout(
                     id_to_new_layout_element_builder.setdefault(
                         descendant_id, descendant
                     )
+    return id_to_new_layout_element_builder
+
+
+def _self_loop_segments(layout_element):
+    """Segments for an arc whose source and target resolve to the same node: a
+    loop bowing out through two control points, expressed as a polyline so the
+    CellDesigner writer can recover them as edit points (it only sees segment
+    endpoints). Without this, a single Bezier collapses to start/end on the same
+    node and the reader's modulation-geometry call hits a None border."""
+    start_point = layout_element.own_angle(120)
+    end_point = layout_element.own_angle(60)
+    if start_point is None:
+        start_point = layout_element.north_west()
+    if end_point is None:
+        end_point = layout_element.north_east()
+    center = layout_element.center()
+    start_delta_x = start_point.x - center.x
+    start_delta_y = start_point.y - center.y
+    end_delta_x = end_point.x - center.x
+    end_delta_y = end_point.y - center.y
+    start_length = math.hypot(start_delta_x, start_delta_y) or 1.0
+    end_length = math.hypot(end_delta_x, end_delta_y) or 1.0
+    start_control_point = momapy.geometry.Point(
+        start_point.x + start_delta_x / start_length * _BEZIER_OFFSET,
+        start_point.y + start_delta_y / start_length * _BEZIER_OFFSET,
+    )
+    end_control_point = momapy.geometry.Point(
+        end_point.x + end_delta_x / end_length * _BEZIER_OFFSET,
+        end_point.y + end_delta_y / end_length * _BEZIER_OFFSET,
+    )
+    return [
+        momapy.geometry.Segment(start_point, start_control_point),
+        momapy.geometry.Segment(start_control_point, end_control_point),
+        momapy.geometry.Segment(end_control_point, end_point),
+    ]
+
+
+def _bidirectional_segments(
+    source_layout_element,
+    target_layout_element,
+    source_top_level_id,
+    target_top_level_id,
+):
+    """Segments for one arc of a bidirectional pair (A->B and B->A both exist):
+    a curve bowing away from its reverse via a single offset control point,
+    serialized as a polyline so the writer keeps the control point (see the
+    self-loop note)."""
+    source_center = source_layout_element.center()
+    target_center = target_layout_element.center()
+    delta_x = target_center.x - source_center.x
+    delta_y = target_center.y - source_center.y
+    length = math.hypot(delta_x, delta_y)
+    if length == 0:
+        start_point = source_layout_element.own_border(target_center)
+        end_point = target_layout_element.own_border(source_center)
+        if start_point is None:
+            start_point = source_layout_element.north_west()
+        if end_point is None:
+            end_point = target_layout_element.north_east()
+        return [momapy.geometry.Segment(start_point, end_point)]
+    normal_x = -delta_y / length
+    normal_y = delta_x / length
+    # Deterministic side rule: A→B and B→A get opposite offsets, so the two
+    # curves bow away from each other.
+    if (source_top_level_id, target_top_level_id) > (
+        target_top_level_id,
+        source_top_level_id,
+    ):
+        normal_x = -normal_x
+        normal_y = -normal_y
+    middle_x = (source_center.x + target_center.x) / 2
+    middle_y = (source_center.y + target_center.y) / 2
+    control_point = momapy.geometry.Point(
+        middle_x + _BEZIER_OFFSET * normal_x,
+        middle_y + _BEZIER_OFFSET * normal_y,
+    )
+    start_point = source_layout_element.own_border(control_point)
+    end_point = target_layout_element.own_border(control_point)
+    if start_point is None:
+        start_point = source_layout_element.north_west()
+    if end_point is None:
+        end_point = target_layout_element.north_east()
+    return [
+        momapy.geometry.Segment(start_point, control_point),
+        momapy.geometry.Segment(control_point, end_point),
+    ]
+
+
+def _simple_segments(source_layout_element, target_layout_element):
+    """Segments for a one-directional arc: a single straight segment between
+    the two node borders."""
+    start_point = source_layout_element.border(target_layout_element.center())
+    end_point = target_layout_element.border(source_layout_element.center())
+    if start_point is None:
+        start_point = source_layout_element.north_west()
+    if end_point is None:
+        end_point = target_layout_element.north_east()
+    return [momapy.geometry.Segment(start_point, end_point)]
+
+
+def _arc_geometry(
+    new_layout_builder,
+    id_to_new_layout_element_builder,
+    descendant_id_to_top_level_id,
+    directed_pairs,
+):
+    """Rebuild each arc's segments from the repositioned node geometry,
+    dispatching on whether the arc is a self-loop, one of a bidirectional pair,
+    or a plain one-directional arc."""
     for layout_element_builder in new_layout_builder.layout_elements:
-        if momapy.builder.isinstance_or_builder(
+        if not momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Arc
         ):
-            source_layout_element_builder = id_to_new_layout_element_builder[
-                layout_element_builder.source.id_
-            ]
-            target_layout_element_builder = id_to_new_layout_element_builder[
-                layout_element_builder.target.id_
-            ]
-            source_top_level_id = descendant_id_to_top_level_id.get(
-                layout_element_builder.source.id_,
-                layout_element_builder.source.id_,
+            continue
+        source_layout_element_builder = id_to_new_layout_element_builder[
+            layout_element_builder.source.id_
+        ]
+        target_layout_element_builder = id_to_new_layout_element_builder[
+            layout_element_builder.target.id_
+        ]
+        source_top_level_id = descendant_id_to_top_level_id.get(
+            layout_element_builder.source.id_,
+            layout_element_builder.source.id_,
+        )
+        target_top_level_id = descendant_id_to_top_level_id.get(
+            layout_element_builder.target.id_,
+            layout_element_builder.target.id_,
+        )
+        is_self_loop = source_top_level_id == target_top_level_id
+        is_bidirectional = not is_self_loop and (
+            target_top_level_id,
+            source_top_level_id,
+        ) in directed_pairs
+        if is_self_loop:
+            layout_element_builder.segments = _self_loop_segments(
+                source_layout_element_builder
             )
-            target_top_level_id = descendant_id_to_top_level_id.get(
-                layout_element_builder.target.id_,
-                layout_element_builder.target.id_,
-            )
-            is_self_loop = source_top_level_id == target_top_level_id
-            is_bidirectional = not is_self_loop and (
-                target_top_level_id,
+        elif is_bidirectional:
+            layout_element_builder.segments = _bidirectional_segments(
+                source_layout_element_builder,
+                target_layout_element_builder,
                 source_top_level_id,
-            ) in directed_pairs
-            if is_self_loop:
-                start_point = source_layout_element_builder.own_angle(120)
-                end_point = source_layout_element_builder.own_angle(60)
-                if start_point is None:
-                    start_point = source_layout_element_builder.north_west()
-                if end_point is None:
-                    end_point = source_layout_element_builder.north_east()
-                center = source_layout_element_builder.center()
-                start_delta_x = start_point.x - center.x
-                start_delta_y = start_point.y - center.y
-                end_delta_x = end_point.x - center.x
-                end_delta_y = end_point.y - center.y
-                start_length = math.hypot(start_delta_x, start_delta_y) or 1.0
-                end_length = math.hypot(end_delta_x, end_delta_y) or 1.0
-                start_control_point = momapy.geometry.Point(
-                    start_point.x + start_delta_x / start_length * _BEZIER_OFFSET,
-                    start_point.y + start_delta_y / start_length * _BEZIER_OFFSET,
-                )
-                end_control_point = momapy.geometry.Point(
-                    end_point.x + end_delta_x / end_length * _BEZIER_OFFSET,
-                    end_point.y + end_delta_y / end_length * _BEZIER_OFFSET,
-                )
-                # Express the loop as a polyline through the two control
-                # points so the CellDesigner writer can recover them as edit
-                # points (it only sees segment endpoints). Without this, a
-                # single Bezier collapses to start/end on the same node and
-                # the reader's modulation-geometry call hits a None border.
-                layout_element_builder.segments = [
-                    momapy.geometry.Segment(start_point, start_control_point),
-                    momapy.geometry.Segment(start_control_point, end_control_point),
-                    momapy.geometry.Segment(end_control_point, end_point),
-                ]
-            elif is_bidirectional:
-                source_center = source_layout_element_builder.center()
-                target_center = target_layout_element_builder.center()
-                delta_x = target_center.x - source_center.x
-                delta_y = target_center.y - source_center.y
-                length = math.hypot(delta_x, delta_y)
-                if length == 0:
-                    start_point = source_layout_element_builder.own_border(
-                        target_center
-                    )
-                    end_point = target_layout_element_builder.own_border(
-                        source_center
-                    )
-                    if start_point is None:
-                        start_point = source_layout_element_builder.north_west()
-                    if end_point is None:
-                        end_point = target_layout_element_builder.north_east()
-                    layout_element_builder.segments = [
-                        momapy.geometry.Segment(start_point, end_point)
-                    ]
-                else:
-                    normal_x = -delta_y / length
-                    normal_y = delta_x / length
-                    # Deterministic side rule: A→B and B→A get opposite offsets,
-                    # so the two curves bow away from each other.
-                    if (source_top_level_id, target_top_level_id) > (
-                        target_top_level_id,
-                        source_top_level_id,
-                    ):
-                        normal_x = -normal_x
-                        normal_y = -normal_y
-                    middle_x = (source_center.x + target_center.x) / 2
-                    middle_y = (source_center.y + target_center.y) / 2
-                    control_point = momapy.geometry.Point(
-                        middle_x + _BEZIER_OFFSET * normal_x,
-                        middle_y + _BEZIER_OFFSET * normal_y,
-                    )
-                    start_point = source_layout_element_builder.own_border(
-                        control_point
-                    )
-                    end_point = target_layout_element_builder.own_border(
-                        control_point
-                    )
-                    if start_point is None:
-                        start_point = source_layout_element_builder.north_west()
-                    if end_point is None:
-                        end_point = target_layout_element_builder.north_east()
-                    # Polyline through the control point so the writer
-                    # serializes it as an edit point (see self-loop note).
-                    layout_element_builder.segments = [
-                        momapy.geometry.Segment(start_point, control_point),
-                        momapy.geometry.Segment(control_point, end_point),
-                    ]
-            else:
-                start_point = source_layout_element_builder.border(
-                    target_layout_element_builder.center()
-                )
-                end_point = target_layout_element_builder.border(
-                    source_layout_element_builder.center()
-                )
-                if start_point is None:
-                    start_point = source_layout_element_builder.north_west()
-                if end_point is None:
-                    end_point = target_layout_element_builder.north_east()
-                layout_element_builder.segments = [
-                    momapy.geometry.Segment(start_point, end_point)
-                ]
+                target_top_level_id,
+            )
+        else:
+            layout_element_builder.segments = _simple_segments(
+                source_layout_element_builder,
+                target_layout_element_builder,
+            )
+
+
+def auto_layout(
+    cd_map,
+    compartment_layout_classes=(
+        momapy.celldesigner.RectangleCompartmentLayout,
+        momapy.celldesigner.OvalCompartmentLayout,
+    ),
+):
+    """Reposition an already-built layout with graphviz (dot).
+
+    Generic over the map language except for the compartment-layout classes,
+    which differ per language: pass ``compartment_layout_classes`` to identify
+    the compartment containers (so they become dot clusters rather than nodes).
+    Defaults to the CellDesigner compartment-layout classes."""
+    new_map_builder = momapy.builder.builder_from_object(cd_map)
+    new_layout_builder = new_map_builder.layout
+    (
+        dot_graph,
+        id_to_layout_element,
+        descendant_id_to_top_level_id,
+        directed_pairs,
+        compartment_layout_element_to_included_layout_elements,
+    ) = _build_dot_graph(
+        new_map_builder, new_layout_builder, compartment_layout_classes
+    )
+    id_to_new_layout_element_builder = _reposition_from_dot(
+        dot_graph, id_to_layout_element
+    )
+    _arc_geometry(
+        new_layout_builder,
+        id_to_new_layout_element_builder,
+        descendant_id_to_top_level_id,
+        directed_pairs,
+    )
     for (
         compartment_layout_element,
         included_layout_elements,
