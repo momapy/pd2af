@@ -20,6 +20,14 @@ import pd2af.celldesigner.building_model
 import pd2af.utils
 
 
+_GATE_CLASS_TO_LAYOUT_CLASS = {
+    momapy.celldesigner.AndGate: momapy.celldesigner.AndGateLayout,
+    momapy.celldesigner.OrGate: momapy.celldesigner.OrGateLayout,
+    momapy.celldesigner.NotGate: momapy.celldesigner.NotGateLayout,
+    momapy.celldesigner.UnknownGate: momapy.celldesigner.UnknownGateLayout,
+}
+
+
 _SPECIES_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.GenericProtein: momapy.celldesigner.GenericProteinLayout,
     momapy.celldesigner.TruncatedProtein: momapy.celldesigner.TruncatedProteinLayout,
@@ -147,6 +155,37 @@ def make_modulation_arc(modulation, source_layout, target_layout):
     )
 
 
+def make_synthetic_gate_layout(gate, index):
+    """Build a placeholder gate node for ``gate`` (the ``auto`` mode, when the
+    input gate has no curated layout). ``index`` seeds the position so two
+    content-equal synthetic gates stay content-distinct; ``auto_layout``
+    repositions every node before render."""
+    layout_class = _GATE_CLASS_TO_LAYOUT_CLASS.get(type(gate))
+    if layout_class is None:
+        raise ValueError(
+            f"no default layout class registered for gate type "
+            f"{type(gate).__name__}"
+        )
+    position = momapy.geometry.Point(float(index), 0.0)
+    return layout_class(position=position)
+
+
+def make_logic_arc(gate_layout, input_layout):
+    """Build a ``LogicArcLayout`` from a gate to one of its input species.
+
+    The CellDesigner writer locates a gate's inputs by scanning for logic arcs
+    whose ``source`` is the gate layout, so the arc runs gate -> input species
+    (the CellDesigner convention), not input -> gate."""
+    segment = pd2af.utils.make_arc_segment_from_source_and_target(
+        gate_layout, input_layout
+    )
+    return momapy.celldesigner.LogicArcLayout(
+        source=gate_layout,
+        target=input_layout,
+        segments=(segment,),
+    )
+
+
 def add_mappings_for_layout_and_descendants(
     input_layout_model_mapping,
     layout_element,
@@ -200,6 +239,11 @@ def make_and_add_layout(context):
     compartment_count = len(context.layout.layout_elements)
     for _key_class, species, input_species in context.species_emissions:
         _make_and_add_species_layout(context, species, input_species)
+    # Gates after species (their logic arcs target species layouts) and before
+    # modulations (a gate-sourced modulation resolves its source through the
+    # gate layout registered here).
+    for gate, input_gate in context.gate_emissions:
+        _make_and_add_gate_layout(context, gate, input_gate)
     for modulation in context.model.modulations:
         _make_and_add_modulation_layout(context, modulation)
 
@@ -264,6 +308,49 @@ def _make_and_add_species_layout(context, species, input_species):
         context.layout.layout_elements.append(synthetic_layout)
         context.layout_model_mapping.add_mapping(synthetic_layout, species)
         context.model_element_to_layout_elements[id(species)] = (synthetic_layout,)
+
+
+def _make_and_add_gate_layout(context, gate, input_gate):
+    """Place a gate glyph and its logic arcs, mirroring
+    :func:`_make_and_add_species_layout`.
+
+    The gate glyph is the curated input gate layout when one exists
+    (plain/overlay, and auto when the input had one), otherwise a synthetic
+    node (auto). It is mapped to the gate and registered in
+    ``model_element_to_layout_elements`` so the modulation pass can resolve a
+    gate-sourced modulation. One ``LogicArcLayout`` is drawn from each gate
+    glyph to each input species' layout (gate -> input, the CellDesigner
+    writer's convention)."""
+    input_layouts = (
+        context.input_map.layout_model_mapping.get_mapping(input_gate)
+        if input_gate is not None
+        else None
+    )
+    if input_layouts:
+        if context.layout_mode == "auto" and len(input_layouts) > 1:
+            input_layouts = input_layouts[:1]
+        gate_layouts = list(input_layouts)
+        context.layout.layout_elements.extend(gate_layouts)
+        for gate_layout in gate_layouts:
+            context.layout_model_mapping.add_mapping(gate_layout, gate)
+    elif context.layout_mode == "auto":
+        gate_layout = make_synthetic_gate_layout(gate, context.synthetic_index)
+        context.synthetic_index += 1
+        context.layout.layout_elements.append(gate_layout)
+        context.layout_model_mapping.add_mapping(gate_layout, gate)
+        gate_layouts = [gate_layout]
+    else:
+        return
+    context.model_element_to_layout_elements[id(gate)] = tuple(gate_layouts)
+    for gate_layout in gate_layouts:
+        for gate_input in gate.inputs:
+            input_species_layouts = context.model_element_to_layout_elements.get(
+                id(gate_input.element)
+            )
+            if not input_species_layouts:
+                continue
+            arc = make_logic_arc(gate_layout, input_species_layouts[0])
+            context.layout.layout_elements.append(arc)
 
 
 def _make_and_add_modulation_layout(context, modulation):

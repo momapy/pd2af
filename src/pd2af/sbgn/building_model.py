@@ -76,6 +76,16 @@ _INFLUENCE_PREDICATE_TO_AF_CLASS = {
 
 _INFLUENCE_PREDICATE_CLASSES = tuple(_INFLUENCE_PREDICATE_TO_AF_CLASS)
 
+# Operator-type token (``logicalOperator.type_``) -> SBGN-AF operator class.
+# The NOT token is ``not_`` because bare ``not`` is a reserved clingo keyword.
+# SBGN-PD authors only AND/OR/NOT operators (no unknown/delay), so the table
+# covers exactly the tokens the ``sbgn_pd`` rule variant can emit.
+_OPERATOR_TYPE_TO_OPERATOR_CLASS = {
+    "and": momapy.sbgn.af.AndOperator,
+    "or": momapy.sbgn.af.OrOperator,
+    "not_": momapy.sbgn.af.NotOperator,
+}
+
 
 def make_and_add_model(context, clingo_model):
     context.model = momapy.builder.get_or_make_builder_cls(
@@ -85,6 +95,7 @@ def make_and_add_model(context, clingo_model):
     _build_subunit_compartment_map(context)
     _make_and_add_compartments(context)
     _make_and_add_activities(context)
+    _make_and_add_operators(context)
     _make_and_add_influences(context)
 
 
@@ -116,6 +127,10 @@ def _collect_atoms(context, clingo_model):
             context.activity_atoms.append(payload)
         elif isinstance(payload, _INFLUENCE_PREDICATE_CLASSES):
             context.influence_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.logicalOperator):
+            context.operator_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.logicalOperatorInput):
+            context.operator_input_atoms.append(payload)
 
 
 def _input_element_for_key(context, key):
@@ -210,10 +225,77 @@ def _make_activity(context, input_element, strip=False):
     return register_or_reuse(candidate, context.cache)
 
 
+def _make_and_add_operators(context):
+    """Build a ``LogicalOperator`` for every authored operator and add those
+    that actually source an influence to ``model.logical_operators``.
+
+    Mirrors the CellDesigner gate builder: every operator is built into
+    ``key_to_operator`` (so the influence pass can resolve an operator source),
+    but only operators that source an influence are added to the model and
+    recorded for the layout pass -- an operator whose target is not an activity
+    yields no influence and would otherwise be a dangling node."""
+    inputs_by_operator = {}
+    for input_atom in context.operator_input_atoms:
+        inputs_by_operator.setdefault(input_atom.operator, []).append(
+            input_atom.input
+        )
+    used_operator_keys = {
+        atom.source
+        for atom in context.influence_atoms
+        if isinstance(atom.source, pd2af.predicates.logical_operator_key)
+    }
+    seen_operator_identities = set()
+    for atom in context.operator_atoms:
+        operator = get_or_make_operator(
+            atom.type_, inputs_by_operator.get(atom.key, ()), context
+        )
+        if operator is None:
+            continue
+        context.key_to_operator[atom.key] = operator
+        if atom.key not in used_operator_keys:
+            continue
+        if add_model_element_if_new(
+            context.model.logical_operators, operator, seen_operator_identities
+        ):
+            input_operator = context.clingo_id_to_model_element[atom.key.gate]
+            context.operator_emissions.append((operator, input_operator))
+
+
+def get_or_make_operator(operator_type, input_keys, context):
+    """Build (and intern) an SBGN-AF ``LogicalOperator`` of ``operator_type``
+    whose inputs resolve through ``key_to_activity``. Returns ``None`` for an
+    unknown token. Each ``LogicalOperatorInput`` and the operator itself are
+    interned by content (``register_or_reuse``), so content-equal operators
+    collapse to one canonical instance."""
+    operator_class = _OPERATOR_TYPE_TO_OPERATOR_CLASS.get(operator_type)
+    if operator_class is None:
+        return None
+    operator_inputs = []
+    for input_key in input_keys:
+        activity = context.key_to_activity.get(input_key)
+        if activity is None:
+            continue
+        operator_input = register_or_reuse(
+            momapy.sbgn.af.LogicalOperatorInput(element=activity), context.cache
+        )
+        operator_inputs.append(operator_input)
+    operator = operator_class(inputs=frozenset(operator_inputs))
+    return register_or_reuse(operator, context.cache)
+
+
+def _resolve_influence_source(context, source_key):
+    """Resolve an influence ``source`` key to its model element: a logical
+    operator resolves through ``key_to_operator`` (``None`` if not built); any
+    activity key resolves through ``key_to_activity`` (``None`` if not emitted)."""
+    if isinstance(source_key, pd2af.predicates.logical_operator_key):
+        return context.key_to_operator.get(source_key)
+    return context.key_to_activity.get(source_key)
+
+
 def _make_and_add_influences(context):
     seen_influence_identities = set()
     for atom in context.influence_atoms:
-        source = context.key_to_activity.get(atom.source)
+        source = _resolve_influence_source(context, atom.source)
         target = context.key_to_activity.get(atom.target)
         if source is None or target is None:
             continue

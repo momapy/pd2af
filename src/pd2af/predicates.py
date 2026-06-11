@@ -27,6 +27,25 @@ class promoted_subunit(clorm.Predicate):
 _ACTIVITY_KEY = kept_species | promoted_subunit
 
 
+class logical_operator_key(clorm.Predicate):
+    """Activity-source wrapper: the AF influence is sourced by a logical
+    operator (AND / OR / NOT / unknown) authored in the input PD map.
+
+    The single argument is the original gate ID -- a CellDesigner
+    ``BooleanLogicGate`` or an SBGN-PD ``LogicalOperator``. The solver
+    looks it up in ``clingo_id_to_model_element`` to recover the gate
+    object. An operator is only ever an influence *source*, never a
+    target, so it widens ``_INFLUENCE_SOURCE`` but not the activity key.
+    """
+    gate: clorm.ConstantStr
+
+
+# The source of an influence edge: an activity (the two activity-key
+# wrappers) or a logical operator. The target is always an activity, so
+# only the influence ``source`` field is widened to this union.
+_INFLUENCE_SOURCE = _ACTIVITY_KEY | logical_operator_key
+
+
 class activity(clorm.Predicate):
     """An activity node in the new AF map.
 
@@ -46,13 +65,13 @@ class activity(clorm.Predicate):
 
 class positivelyInfluences(clorm.Predicate):
     """A positive-influence edge (source activates target)."""
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class negativelyInfluences(clorm.Predicate):
     """A negative-influence edge (source inhibits target)."""
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
@@ -60,7 +79,7 @@ class modulates(clorm.Predicate):
     """A modulation edge: source influences target with an effect of
     unknown sign.
     """
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
@@ -68,32 +87,60 @@ class triggers(clorm.Predicate):
     """A triggering edge (necessary stimulation): source is required for
     target.
     """
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownPositivelyInfluences(clorm.Predicate):
     """A positive-influence edge whose existence is uncertain."""
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownNegativelyInfluences(clorm.Predicate):
     """A negative-influence edge whose existence is uncertain."""
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownModulates(clorm.Predicate):
     """A modulation edge whose existence is uncertain."""
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownTriggers(clorm.Predicate):
     """A triggering edge whose existence is uncertain."""
-    source: _ACTIVITY_KEY
+    source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
+
+
+class logicalOperator(clorm.Predicate):
+    """A logical operator node in the new AF map.
+
+    Always wrapped by ``new(...)`` in rule heads. ``key`` carries the
+    operator's identity; ``type_`` is the operator-type token
+    (``and`` | ``or`` | ``not_`` | ``unknown``). The NOT token is spelt
+    ``not_`` -- with a trailing underscore -- because bare ``not`` is a
+    reserved clingo keyword (default negation) and cannot appear as a
+    term. The builder maps the token to the momapy operator class per
+    output language
+    (``BooleanLogicGate`` subclass for CellDesigner, ``LogicalOperator``
+    subclass for SBGN-AF). A single token field -- rather than one
+    predicate per type -- mirrors the internal ``influences/3``
+    KIND-token idiom and avoids same-name collisions with the input
+    ontology's per-type operator functors.
+    """
+    key: logical_operator_key
+    type_: clorm.ConstantStr
+
+
+class logicalOperatorInput(clorm.Predicate):
+    """An input edge of a logical operator: one activity feeding the
+    operator. Always wrapped by ``new(...)`` in rule heads.
+    """
+    operator: logical_operator_key
+    input: _ACTIVITY_KEY
 
 
 class new(clorm.Predicate):
@@ -110,6 +157,8 @@ class new(clorm.Predicate):
         | unknownNegativelyInfluences
         | unknownModulates
         | unknownTriggers
+        | logicalOperator
+        | logicalOperatorInput
     )
 
 

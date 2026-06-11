@@ -50,6 +50,13 @@ _INFLUENCE_CLASS_TO_LAYOUT_CLASS = {
     momapy.sbgn.af.NecessaryStimulation: momapy.sbgn.af.NecessaryStimulationLayout,
 }
 
+_OPERATOR_CLASS_TO_LAYOUT_CLASS = {
+    momapy.sbgn.af.AndOperator: momapy.sbgn.af.AndOperatorLayout,
+    momapy.sbgn.af.OrOperator: momapy.sbgn.af.OrOperatorLayout,
+    momapy.sbgn.af.NotOperator: momapy.sbgn.af.NotOperatorLayout,
+    momapy.sbgn.af.DelayOperator: momapy.sbgn.af.DelayOperatorLayout,
+}
+
 # Nodes (activities, phenotypes, units of information) use momapy's default
 # layout-class sizes, so we never pass width/height when building them. The one
 # exception is a compartment in `plain` mode, which reuses its input layout size
@@ -79,6 +86,11 @@ def make_and_add_layout(context):
         _make_and_add_compartment_layout(context, compartment)
     for activity, input_element in context.activity_emissions:
         _make_and_add_activity_layout(context, activity, input_element)
+    # Operators after activities (their logic arcs target activity layouts) and
+    # before influences (an operator-sourced influence resolves its source
+    # through the operator layout registered here).
+    for operator, input_operator in context.operator_emissions:
+        _make_and_add_operator_layout(context, operator, input_operator)
     for influence in context.model.influences:
         _make_and_add_influence_layout(context, influence)
 
@@ -184,6 +196,80 @@ def _make_and_add_unit_of_information_layout(
     )
     activity_layout.layout_elements.append(unit_layout)
     context.layout_model_mapping.add_mapping(unit_layout, unit_of_information)
+
+
+def _make_and_add_operator_layout(context, operator, input_operator):
+    """Build an operator glyph and its logic arcs.
+
+    The glyph is built fresh (like every AF activity) at the input operator's
+    curated position (``plain``) or a placeholder (``auto``). One
+    ``LogicArcLayout`` runs from the operator to each input activity's layout
+    (operator -> input, the SBGN convention). The operator maps to a frozenset
+    of {glyph, logic arcs, input activity layouts} anchored on the glyph -- the
+    catalogue the SBGN-AF writer expects -- and is registered in
+    ``model_element_to_layout_elements`` so the influence pass can resolve an
+    operator-sourced influence."""
+    operator_layout_class = _OPERATOR_CLASS_TO_LAYOUT_CLASS.get(type(operator))
+    if operator_layout_class is None:
+        return
+    if context.layout_mode == "auto":
+        position = _PLACEHOLDER_POSITION
+    else:
+        input_glyph = _input_operator_glyph(context, input_operator)
+        if input_glyph is None:
+            return
+        position = input_glyph.position
+    operator_layout = _builder(operator_layout_class, position=position)
+    context.layout.layout_elements.append(operator_layout)
+    logic_arcs = []
+    input_layouts = []
+    for operator_input in operator.inputs:
+        input_activity_layouts = context.model_element_to_layout_elements.get(
+            id(operator_input.element)
+        )
+        if not input_activity_layouts:
+            continue
+        input_layout = input_activity_layouts[0]
+        arc = _make_logic_arc(operator_layout, input_layout)
+        context.layout.layout_elements.append(arc)
+        logic_arcs.append(arc)
+        input_layouts.append(input_layout)
+    frozenset_key = frozenset([operator_layout, *logic_arcs, *input_layouts])
+    context.layout_model_mapping.add_mapping(
+        frozenset_key, operator, anchor=operator_layout
+    )
+    context.model_element_to_layout_elements[id(operator)] = (operator_layout,)
+
+
+def _input_operator_glyph(context, input_operator):
+    """Return the input SBGN-PD operator's glyph layout (the node anchoring its
+    frozenset mapping), or ``None`` when the input operator has no layout."""
+    mapping = context.input_map.layout_model_mapping.get_mapping(input_operator)
+    if not mapping:
+        return None
+    for layout_key in mapping:
+        if isinstance(layout_key, frozenset):
+            for element in layout_key:
+                if (
+                    context.input_map.layout_model_mapping.get_mapping(element)
+                    is input_operator
+                ):
+                    return element
+        else:
+            return layout_key
+    return None
+
+
+def _make_logic_arc(operator_layout, input_layout):
+    segment = pd2af.utils.make_arc_segment_from_source_and_target(
+        operator_layout, input_layout
+    )
+    return _builder(
+        momapy.sbgn.af.LogicArcLayout,
+        source=operator_layout,
+        target=input_layout,
+        segments=(segment,),
+    )
 
 
 def _make_and_add_influence_layout(context, influence):

@@ -94,6 +94,14 @@ _ACTIVITY_BASE = RuleGroup(
                         hasModifier(TARGET, MODULATOR)."""),
                 docs="If a species is referred to by a reaction modulator (known *or* unknown) that modifies some target reaction, then it has activity, with reason `modulates(source, target)`. Keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
             ),
+            Rule(
+                identifier="activity_base:from_gate_input",
+                text=dedent("""\
+                    hasActivity(ELEMENT, gate_input) :-
+                        booleanLogicGateInput(INPUT),
+                        hasElement(INPUT, ELEMENT)."""),
+                docs="If a species feeds a boolean logic gate input, then it has activity, with reason `gate_input`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
+            ),
         ),
         "sbgn_pd": (
             Rule(
@@ -123,6 +131,15 @@ _ACTIVITY_BASE = RuleGroup(
                         hasSource(MODULATION, SOURCE),
                         hasTarget(MODULATION, TARGET)."""),
                 docs="If an entity pool is the source of a modulation arc (whose target is a process), then it has activity. This is the SBGN-PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
+            ),
+            Rule(
+                identifier="activity_base:sbgn_pd:from_operator_input",
+                text=dedent("""\
+                    hasActivity(ELEMENT, gate_input) :-
+                        logicalOperatorInput(INPUT),
+                        hasElement(INPUT, ELEMENT),
+                        entityPool(ELEMENT)."""),
+                docs="If an entity pool feeds a logical operator input, then it has activity, with reason `gate_input` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
             ),
         ),
     },
@@ -999,6 +1016,123 @@ _INFLUENCE_OUTPUT = RuleGroup(
 )
 
 
+# Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD
+# `LogicalOperator`). Today a gate yields `path(GATE, ...)`, but a gate id has no
+# `activityCarrier`, so `influences_derivation:path` never matches and the gate
+# is silently dropped. `_GATES` carries the gate through three rule kinds:
+#
+#   (a) operator node -- one head per gate type, carrying a type token;
+#   (b) input edges -- each gate input resolved through carrier/key (mirroring
+#       `influences_derivation:path`);
+#   (c) operator-sourced influence -- ONE rule that *reuses* `path/3`: the
+#       `paths_base` rules already emit `path(GATE, TARGET, KIND)` (the source
+#       binds to whatever the modifier refers to / the modulation source -- gate
+#       included), so `_GATES` only resolves the TARGET through carrier/key and
+#       writes `influences(logical_operator_key(G), TARGET_KEY, KIND)` directly,
+#       bypassing the carrier-keyed `influences_derivation:path`. Because `path/3`
+#       is the transitive closure, an operator influences its direct target and
+#       everything transitively downstream -- consistent with how a species
+#       activity source already behaves (Decision D1).
+#
+# The `booleanLogicGate(G)` / `logicalOperator(G)` umbrella guard in (b) and (c)
+# is essential -- it is derived from the per-type facts by the input ontology's
+# isa rules, and without it (c) would treat every `path/3` source (species
+# included) as an operator key. Provenance-agnostic: a future derived-operator
+# layer emits the same predicates and reuses this group's builder/layout/output
+# path unchanged. Not registered for casq (which keeps its own pipeline and
+# never reads `hasActivity`/`path`).
+_GATES = RuleGroup(
+    identifier="gates",
+    profiles=_NON_CASQ_PROFILES,
+    depends_on=frozenset({"activity_base", "paths_base"}),
+    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `path(GATE, TARGET, KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic and registered for the non-casq profiles only.",
+    rules=(),
+    variants={
+        "celldesigner": (
+            Rule(
+                identifier="gates:celldesigner:node_and",
+                text="new(logicalOperator(logical_operator_key(G), and)) :- andGate(G).",
+                docs="An `andGate` emits an AND logical-operator node.",
+            ),
+            Rule(
+                identifier="gates:celldesigner:node_or",
+                text="new(logicalOperator(logical_operator_key(G), or)) :- orGate(G).",
+                docs="An `orGate` emits an OR logical-operator node.",
+            ),
+            Rule(
+                identifier="gates:celldesigner:node_not",
+                text="new(logicalOperator(logical_operator_key(G), not_)) :- notGate(G).",
+                docs="A `notGate` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword.",
+            ),
+            Rule(
+                identifier="gates:celldesigner:node_unknown",
+                text="new(logicalOperator(logical_operator_key(G), unknown)) :- unknownGate(G).",
+                docs="An `unknownGate` emits an unknown-type logical-operator node.",
+            ),
+            Rule(
+                identifier="gates:celldesigner:input_edge",
+                text=dedent("""\
+                    new(logicalOperatorInput(logical_operator_key(G), INPUT_KEY)) :-
+                        booleanLogicGate(G),
+                        hasInput(G, INPUT),
+                        hasElement(INPUT, RAW_INPUT),
+                        activityCarrier(RAW_INPUT, ACTIVITY_INPUT),
+                        activityKey(ACTIVITY_INPUT, INPUT_KEY)."""),
+                docs="Each gate input is resolved through its activity carrier and key (mirroring `influences_derivation:path`), so an input that is a subunit resolves to its top-level complex's key. The `booleanLogicGate` umbrella matches every gate type via the ontology's isa rules.",
+            ),
+            Rule(
+                identifier="gates:celldesigner:influence",
+                text=dedent("""\
+                    influences(logical_operator_key(G), TARGET_KEY, KIND) :-
+                        booleanLogicGate(G),
+                        path(G, RAW_TARGET, KIND),
+                        activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                        activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths_base` rules already bind a `path/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `path/3` source would be read as an operator key.",
+            ),
+        ),
+        "sbgn_pd": (
+            Rule(
+                identifier="gates:sbgn_pd:node_and",
+                text="new(logicalOperator(logical_operator_key(G), and)) :- andOperator(G).",
+                docs="An `andOperator` emits an AND logical-operator node.",
+            ),
+            Rule(
+                identifier="gates:sbgn_pd:node_or",
+                text="new(logicalOperator(logical_operator_key(G), or)) :- orOperator(G).",
+                docs="An `orOperator` emits an OR logical-operator node.",
+            ),
+            Rule(
+                identifier="gates:sbgn_pd:node_not",
+                text="new(logicalOperator(logical_operator_key(G), not_)) :- notOperator(G).",
+                docs="A `notOperator` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. (SBGN-PD has no unknown-operator type.)",
+            ),
+            Rule(
+                identifier="gates:sbgn_pd:input_edge",
+                text=dedent("""\
+                    new(logicalOperatorInput(logical_operator_key(G), INPUT_KEY)) :-
+                        logicalOperator(G),
+                        hasInput(G, INPUT),
+                        hasElement(INPUT, RAW_INPUT),
+                        activityCarrier(RAW_INPUT, ACTIVITY_INPUT),
+                        activityKey(ACTIVITY_INPUT, INPUT_KEY)."""),
+                docs="SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules).",
+            ),
+            Rule(
+                identifier="gates:sbgn_pd:influence",
+                text=dedent("""\
+                    influences(logical_operator_key(G), TARGET_KEY, KIND) :-
+                        logicalOperator(G),
+                        path(G, RAW_TARGET, KIND),
+                        activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
+                        activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `path(OPERATOR, TARGET, KIND)` closure emitted by `paths_base`, resolving only the target through carrier/key.",
+            ),
+        ),
+    },
+)
+
+
 _CASQ_PARTICIPATION = RuleGroup(
     identifier="casq:participation",
     profiles=_CASQ_PROFILES,
@@ -1539,6 +1673,7 @@ def _build_registry() -> RuleRegistry:
             _PATHS_COMPLEX_TRAVERSAL,
             _INFLUENCES_DERIVATION,
             _INFLUENCE_OUTPUT,
+            _GATES,
             _CASQ_PARTICIPATION,
             _CASQ_DELETE,
             _CASQ_BRIDGED_PRODUCT,

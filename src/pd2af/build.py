@@ -56,6 +56,16 @@ class BuilderContext:
     influence_atoms: list = dataclasses.field(default_factory=list)
     key_to_species: dict = dataclasses.field(default_factory=dict)
 
+    # --- Logical-operator scratch (shared collection; per-language outputs) ---
+    operator_atoms: list = dataclasses.field(default_factory=list)
+    operator_input_atoms: list = dataclasses.field(default_factory=list)
+    # CellDesigner: operator key -> BooleanLogicGate; emitted (gate, input_gate).
+    key_to_gate: dict = dataclasses.field(default_factory=dict)
+    gate_emissions: list = dataclasses.field(default_factory=list)
+    # SBGN-AF: operator key -> LogicalOperator; emitted (operator, input_operator).
+    key_to_operator: dict = dataclasses.field(default_factory=dict)
+    operator_emissions: list = dataclasses.field(default_factory=list)
+
     # --- Pass-2 scratch ---
     model_element_to_layout_elements: dict = dataclasses.field(default_factory=dict)
     object_to_builder: dict = dataclasses.field(default_factory=dict)

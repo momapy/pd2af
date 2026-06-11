@@ -44,6 +44,15 @@ _INFLUENCE_PREDICATE_CLASSES = tuple(
     pd2af.predicates.predicate_to_model_element_class
 )
 
+# Operator-type token (``logicalOperator.type_``) -> CellDesigner gate class.
+# The NOT token is ``not_`` because bare ``not`` is a reserved clingo keyword.
+_OPERATOR_TYPE_TO_GATE_CLASS = {
+    "and": momapy.celldesigner.AndGate,
+    "or": momapy.celldesigner.OrGate,
+    "not_": momapy.celldesigner.NotGate,
+    "unknown": momapy.celldesigner.UnknownGate,
+}
+
 
 def get_or_make_kept_species_or_subunit(input_species, cache):
     """Canonical species for a ``kept_species`` key (non-merged modes).
@@ -262,6 +271,7 @@ def make_and_add_model(context, clingo_model):
     _make_and_add_compartments(context)
     _make_and_add_templates(context)
     _make_and_add_species(context)
+    _make_and_add_gates(context)
     _make_and_add_modulations(context)
 
 
@@ -275,6 +285,10 @@ def _collect_ingredients(context, clingo_model):
             context.activity_atoms_by_key_class[type(payload.key)].append(payload)
         elif isinstance(payload, _INFLUENCE_PREDICATE_CLASSES):
             context.influence_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.logicalOperator):
+            context.operator_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.logicalOperatorInput):
+            context.operator_input_atoms.append(payload)
 
 
 def _make_and_add_compartments(context):
@@ -377,13 +391,87 @@ def _resolve_activity_key(context, key):
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 
+def _make_and_add_gates(context):
+    """Build a ``BooleanLogicGate`` for every authored logical operator and add
+    those that actually source an influence to ``model.boolean_logic_gates``.
+
+    Every operator is built into ``key_to_gate`` (so the modulation pass can
+    resolve a gate source), but only operators that appear as an influence
+    source are added to the model and recorded for the layout pass. An operator
+    whose target is not an activity yields no influence and would otherwise be a
+    dangling node -- the CellDesigner writer emits a gate only through its
+    modulation, so dropping it keeps the output clean and round-trip-safe.
+    """
+    inputs_by_operator = {}
+    for input_atom in context.operator_input_atoms:
+        inputs_by_operator.setdefault(input_atom.operator, []).append(
+            input_atom.input
+        )
+    used_operator_keys = {
+        atom.source
+        for atom in context.influence_atoms
+        if isinstance(atom.source, pd2af.predicates.logical_operator_key)
+    }
+    seen_gate_identities = set()
+    for atom in context.operator_atoms:
+        gate = get_or_make_gate(
+            atom.type_, inputs_by_operator.get(atom.key, ()), context
+        )
+        if gate is None:
+            continue
+        context.key_to_gate[atom.key] = gate
+        if atom.key not in used_operator_keys:
+            continue
+        if add_model_element_if_new(
+            context.model.boolean_logic_gates, gate, seen_gate_identities
+        ):
+            input_gate = context.clingo_id_to_model_element[atom.key.gate]
+            context.gate_emissions.append((gate, input_gate))
+
+
+def get_or_make_gate(operator_type, input_keys, context):
+    """Build (and intern) a ``BooleanLogicGate`` of ``operator_type`` whose
+    inputs resolve through ``key_to_species``. Returns ``None`` for an unknown
+    token. Each ``BooleanLogicGateInput`` and the gate itself are interned by
+    content (``register_or_reuse``), so content-equal gates collapse to one
+    canonical instance -- preserving the dedup-and-remap invariant for the
+    modulation sources that reference them."""
+    gate_class = _OPERATOR_TYPE_TO_GATE_CLASS.get(operator_type)
+    if gate_class is None:
+        return None
+    gate_inputs = []
+    for input_key in input_keys:
+        species = context.key_to_species.get(input_key)
+        if species is None:
+            continue
+        gate_input = register_or_reuse(
+            momapy.celldesigner.BooleanLogicGateInput(element=species),
+            context.cache,
+        )
+        gate_inputs.append(gate_input)
+    gate = gate_class(inputs=frozenset(gate_inputs))
+    return register_or_reuse(gate, context.cache)
+
+
+def _resolve_influence_source(context, source_key):
+    """Resolve an influence ``source`` key to its model element: a logical
+    operator resolves through ``key_to_gate`` (``None`` if the gate was not
+    built, so the edge is skipped); any activity key resolves through
+    ``key_to_species``."""
+    if isinstance(source_key, pd2af.predicates.logical_operator_key):
+        return context.key_to_gate.get(source_key)
+    return context.key_to_species[source_key]
+
+
 def _make_and_add_modulations(context):
     seen_modulation_identities = set()
     for atom in context.influence_atoms:
         modulation_class = pd2af.predicates.predicate_to_model_element_class[
             type(atom)
         ]
-        source = context.key_to_species[atom.source]
+        source = _resolve_influence_source(context, atom.source)
+        if source is None:
+            continue
         target = context.key_to_species[atom.target]
         canonical = get_or_make_modulation(
             modulation_class, source, target, context.cache

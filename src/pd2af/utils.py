@@ -359,10 +359,13 @@ def _build_dot_graph(
             model_element = new_map_builder.layout_model_mapping.get_mapping(
                 layout_element_builder
             )
-            compartment = model_element.compartment
+            # A logical operator (CellDesigner gate / SBGN-AF operator) has no
+            # `compartment` field -- it is never placed inside a compartment
+            # cluster -- so resolve defensively.
+            compartment = getattr(model_element, "compartment", None)
             if compartment is not None:
                 compartment_dot_cluster = compartment_to_dot_cluster.get(
-                    model_element.compartment
+                    compartment
                 )
                 if compartment_dot_cluster is not None:
                     compartment_dot_cluster.add_node(dot_node)
