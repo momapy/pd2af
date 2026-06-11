@@ -130,8 +130,17 @@ def build_map(
         if language == pd2af.languages.CELLDESIGNER:
             new_map = pd2af.utils.auto_layout(new_map)
         elif language == pd2af.languages.SBGN_PD:
+            # SBGN-AF logical operators have input/output connectors: rank their
+            # logic-arc inputs upstream (reversed_arc_classes) and re-attach the
+            # operator arcs to the connector tips after graphviz repositions
+            # (operator_arc_resolver). Both hooks are no-ops on operator-free
+            # maps, so non-operator SBGN output is unchanged.
             new_map = pd2af.utils.auto_layout(
                 new_map,
                 compartment_layout_classes=(momapy.sbgn.af.CompartmentLayout,),
+                reversed_arc_classes=(momapy.sbgn.af.LogicArcLayout,),
+                operator_arc_resolver=(
+                    pd2af.sbgn.building_layout.resolve_operator_arc_segments
+                ),
             )
     return new_map

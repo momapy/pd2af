@@ -282,13 +282,22 @@ def _get_flatten_dot_nodes(dot_graph):
 
 
 def _build_dot_graph(
-    new_map_builder, new_layout_builder, compartment_layout_classes
+    new_map_builder,
+    new_layout_builder,
+    compartment_layout_classes,
+    reversed_arc_classes=(),
 ):
     """Build the pydot graph from the built layout: compartments become dot
     clusters, Node layout elements become dot nodes (placed in their
     compartment's cluster when there is one), and Arc layout elements become
     dot edges. Returns the graph plus the bookkeeping the repositioning and
-    arc-geometry phases need."""
+    arc-geometry phases need.
+
+    ``reversed_arc_classes``: arc layout classes whose dot edge is added with
+    source and target **swapped**, so graphviz ranks the arc's target upstream
+    of its source. The layout arc object is unchanged; only the ranking flips.
+    Used for SBGN logic arcs (stored operator -> input) so an operator's inputs
+    rank above it and its output target below it."""
     dot_graph = pydot.Dot(graph_type="digraph")
     compartment_to_dot_cluster = {}
     compartment_layout_element_to_included_layout_elements = collections.defaultdict(
@@ -390,6 +399,10 @@ def _build_dot_graph(
                 layout_element_builder.target.id_,
                 layout_element_builder.target.id_,
             )
+            if momapy.builder.isinstance_or_builder(
+                layout_element_builder, reversed_arc_classes
+            ):
+                source_id, target_id = target_id, source_id
             dot_graph.add_edge(pydot.Edge(source_id, target_id))
             directed_pairs.add((source_id, target_id))
         id_to_layout_element[layout_element_builder.id_] = layout_element_builder
@@ -541,10 +554,18 @@ def _arc_geometry(
     id_to_new_layout_element_builder,
     descendant_id_to_top_level_id,
     directed_pairs,
+    operator_arc_resolver=None,
 ):
     """Rebuild each arc's segments from the repositioned node geometry,
     dispatching on whether the arc is a self-loop, one of a bidirectional pair,
-    or a plain one-directional arc."""
+    or a plain one-directional arc.
+
+    ``operator_arc_resolver``: an optional ``(arc, source_builder,
+    target_builder) -> segments | None`` callback consulted first; when it
+    returns segments they are used as-is (and the arc skips the default
+    dispatch). It lets a caller attach an arc to special geometry -- e.g. an
+    SBGN operator's connector tips -- without this generic routine knowing about
+    those classes. ``None`` returned (or no callback) keeps the default."""
     for layout_element_builder in new_layout_builder.layout_elements:
         if not momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Arc
@@ -556,6 +577,15 @@ def _arc_geometry(
         target_layout_element_builder = id_to_new_layout_element_builder[
             layout_element_builder.target.id_
         ]
+        if operator_arc_resolver is not None:
+            resolved_segments = operator_arc_resolver(
+                layout_element_builder,
+                source_layout_element_builder,
+                target_layout_element_builder,
+            )
+            if resolved_segments is not None:
+                layout_element_builder.segments = resolved_segments
+                continue
         source_top_level_id = descendant_id_to_top_level_id.get(
             layout_element_builder.source.id_,
             layout_element_builder.source.id_,
@@ -593,13 +623,21 @@ def auto_layout(
         momapy.celldesigner.RectangleCompartmentLayout,
         momapy.celldesigner.OvalCompartmentLayout,
     ),
+    reversed_arc_classes=(),
+    operator_arc_resolver=None,
 ):
     """Reposition an already-built layout with graphviz (dot).
 
     Generic over the map language except for the compartment-layout classes,
     which differ per language: pass ``compartment_layout_classes`` to identify
     the compartment containers (so they become dot clusters rather than nodes).
-    Defaults to the CellDesigner compartment-layout classes."""
+    Defaults to the CellDesigner compartment-layout classes.
+
+    ``reversed_arc_classes`` flips the dot-edge direction of the given arc
+    classes for ranking only (see :func:`_build_dot_graph`);
+    ``operator_arc_resolver`` overrides the rebuilt segments of selected arcs
+    (see :func:`_arc_geometry`). Both default to inert, so callers that pass
+    neither (e.g. CellDesigner) are unaffected."""
     new_map_builder = momapy.builder.builder_from_object(cd_map)
     new_layout_builder = new_map_builder.layout
     (
@@ -609,7 +647,10 @@ def auto_layout(
         directed_pairs,
         compartment_layout_element_to_included_layout_elements,
     ) = _build_dot_graph(
-        new_map_builder, new_layout_builder, compartment_layout_classes
+        new_map_builder,
+        new_layout_builder,
+        compartment_layout_classes,
+        reversed_arc_classes=reversed_arc_classes,
     )
     id_to_new_layout_element_builder = _reposition_from_dot(
         dot_graph, id_to_layout_element
@@ -619,6 +660,7 @@ def auto_layout(
         id_to_new_layout_element_builder,
         descendant_id_to_top_level_id,
         directed_pairs,
+        operator_arc_resolver=operator_arc_resolver,
     )
     for (
         compartment_layout_element,

@@ -71,6 +71,13 @@ _SBGN_OPERATOR_MAP_PATH = os.path.join(
 )
 
 
+def _points_close(first, second, tolerance=1e-6):
+    return (
+        abs(first.x - second.x) < tolerance
+        and abs(first.y - second.y) < tolerance
+    )
+
+
 def _gate_map_paths():
     paths = []
     for path in sorted(glob.glob(os.path.join(MAPS_DIR, "*.xml"))):
@@ -375,3 +382,39 @@ class TestSbgnOperatorsShapeB:
         momapy.io.core.write(out, path, writer="sbgnml")
         back = momapy.io.core.read(path, reader="sbgnml").obj
         assert len(back.model.logical_operators) == 1
+
+    @pytest.mark.parametrize("layout_mode", ("plain", "auto"))
+    def test_arcs_attach_to_operator_connectors(self, operator_map, layout_mode):
+        """Logic arcs must meet the operator's input connector tip and the
+        operator-sourced influence arc must leave its output connector tip --
+        not the circle border. The two connectors are distinct points."""
+        if layout_mode == "auto" and not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            operator_map, mode="keep-species", layout_mode=layout_mode
+        )
+        operator_layout = next(
+            element
+            for element in out.layout.layout_elements
+            if isinstance(element, momapy.sbgn.af.AndOperatorLayout)
+        )
+        if operator_layout.left_to_right:
+            input_tip = operator_layout.left_connector_tip()
+            output_tip = operator_layout.right_connector_tip()
+        else:
+            input_tip = operator_layout.right_connector_tip()
+            output_tip = operator_layout.left_connector_tip()
+        assert input_tip != output_tip
+        logic_arc_starts = []
+        influence_arc_starts = []
+        for element in out.layout.layout_elements:
+            if isinstance(element, momapy.sbgn.af.LogicArcLayout):
+                logic_arc_starts.append(element.points()[0])
+            elif getattr(element, "source", None) is operator_layout:
+                influence_arc_starts.append(element.points()[0])
+        assert logic_arc_starts
+        assert influence_arc_starts
+        for start in logic_arc_starts:
+            assert _points_close(start, input_tip)
+        for start in influence_arc_starts:
+            assert _points_close(start, output_tip)

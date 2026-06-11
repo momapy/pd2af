@@ -26,6 +26,7 @@ Two layout modes:
 """
 
 import momapy.builder
+import momapy.core.elements
 import momapy.core.mapping
 import momapy.geometry
 import momapy.sbgn.af
@@ -56,6 +57,10 @@ _OPERATOR_CLASS_TO_LAYOUT_CLASS = {
     momapy.sbgn.af.NotOperator: momapy.sbgn.af.NotOperatorLayout,
     momapy.sbgn.af.DelayOperator: momapy.sbgn.af.DelayOperatorLayout,
 }
+
+# The operator glyph layout classes, for `isinstance_or_builder` checks (the
+# layouts are builders during construction).
+_OPERATOR_LAYOUT_CLASSES = tuple(_OPERATOR_CLASS_TO_LAYOUT_CLASS.values())
 
 # Nodes (activities, phenotypes, units of information) use momapy's default
 # layout-class sizes, so we never pass width/height when building them. The one
@@ -213,13 +218,39 @@ def _make_and_add_operator_layout(context, operator, input_operator):
     if operator_layout_class is None:
         return
     if context.layout_mode == "auto":
-        position = _PLACEHOLDER_POSITION
+        operator_layout = _builder(
+            operator_layout_class, position=_PLACEHOLDER_POSITION
+        )
+        # auto_layout reverses the logic-arc dot edges, so graphviz ranks the
+        # inputs above the operator and the target below it; a vertical,
+        # left-to-right operator then points its input connector up (toward the
+        # inputs) and its output connector down (toward the target).
+        operator_layout.direction = momapy.core.elements.Direction.VERTICAL
+        operator_layout.left_to_right = True
     else:
         input_glyph = _input_operator_glyph(context, input_operator)
         if input_glyph is None:
             return
-        position = input_glyph.position
-    operator_layout = _builder(operator_layout_class, position=position)
+        operator_layout = _builder(
+            operator_layout_class, position=input_glyph.position
+        )
+        # plain: inherit the curated input operator's connector geometry, so the
+        # arcs meet the same connectors (e.g. a vertical operator with ports
+        # up/down) the input map drew.
+        operator_layout.direction = getattr(
+            input_glyph, "direction", operator_layout.direction
+        )
+        operator_layout.left_to_right = getattr(
+            input_glyph, "left_to_right", operator_layout.left_to_right
+        )
+        operator_layout.left_connector_length = getattr(
+            input_glyph, "left_connector_length", operator_layout.left_connector_length
+        )
+        operator_layout.right_connector_length = getattr(
+            input_glyph,
+            "right_connector_length",
+            operator_layout.right_connector_length,
+        )
     context.layout.layout_elements.append(operator_layout)
     logic_arcs = []
     input_layouts = []
@@ -260,9 +291,56 @@ def _input_operator_glyph(context, input_operator):
     return None
 
 
+def _operator_connector_segment(operator_layout, other_layout, is_logic_arc):
+    """Segment between a logical operator and one of its arc endpoints, attached
+    to the operator's *connector tip* rather than its circle border.
+
+    A logic arc (operator -> input) meets the **input** connector; an influence
+    arc (operator -> target) leaves the **output** connector -- the opposite
+    side. Which physical side that is depends on the operator's ``left_to_right``
+    (and ``direction``), mirroring momapy's own connector selection in
+    ``momapy.sbgn.utils.set_arcs_to_borders``. The operator is the arc's source
+    in both cases, so its connector tip is the segment's start point."""
+    if is_logic_arc:
+        tip = (
+            operator_layout.left_connector_tip()
+            if operator_layout.left_to_right
+            else operator_layout.right_connector_tip()
+        )
+    else:
+        tip = (
+            operator_layout.right_connector_tip()
+            if operator_layout.left_to_right
+            else operator_layout.left_connector_tip()
+        )
+    other_point = other_layout.border(tip)
+    if other_point is None:
+        other_point = other_layout.center()
+    return momapy.geometry.Segment(tip, other_point)
+
+
+def resolve_operator_arc_segments(arc, source_builder, target_builder):
+    """Per-arc hook for :func:`pd2af.utils.auto_layout`'s arc-geometry step:
+    when ``arc`` is sourced by an operator glyph, return its connector-attached
+    segments recomputed from the graphviz-repositioned geometry; otherwise
+    return ``None`` so the caller keeps its normal border geometry. This reuses
+    the same connector helper as plain-mode arc creation, so the auto snap is
+    folded into the recompute that already iterates every arc."""
+    if not momapy.builder.isinstance_or_builder(
+        source_builder, _OPERATOR_LAYOUT_CLASSES
+    ):
+        return None
+    is_logic_arc = momapy.builder.isinstance_or_builder(
+        arc, momapy.sbgn.af.LogicArcLayout
+    )
+    return [
+        _operator_connector_segment(source_builder, target_builder, is_logic_arc)
+    ]
+
+
 def _make_logic_arc(operator_layout, input_layout):
-    segment = pd2af.utils.make_arc_segment_from_source_and_target(
-        operator_layout, input_layout
+    segment = _operator_connector_segment(
+        operator_layout, input_layout, is_logic_arc=True
     )
     return _builder(
         momapy.sbgn.af.LogicArcLayout,
@@ -296,9 +374,16 @@ def _make_and_add_influence_layout(context, influence):
 
 def _make_influence_arc(influence, source_layout, target_layout):
     arc_class = _INFLUENCE_CLASS_TO_LAYOUT_CLASS[type(influence)]
-    segment = pd2af.utils.make_arc_segment_from_source_and_target(
-        source_layout, target_layout
-    )
+    # An operator-sourced influence leaves the operator's output connector; every
+    # other influence runs plain border-to-border (untouched).
+    if momapy.builder.isinstance_or_builder(source_layout, _OPERATOR_LAYOUT_CLASSES):
+        segment = _operator_connector_segment(
+            source_layout, target_layout, is_logic_arc=False
+        )
+    else:
+        segment = pd2af.utils.make_arc_segment_from_source_and_target(
+            source_layout, target_layout
+        )
     return _builder(
         arc_class, source=source_layout, target=target_layout, segments=(segment,)
     )
