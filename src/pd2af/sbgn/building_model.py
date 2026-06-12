@@ -12,8 +12,9 @@ serialization of the whole entity pool (:mod:`pd2af.sbgn.labels`). In the
 merged modes (``normal``/``no-complex``) the label is built with state
 variables stripped, so distinct proteoforms collapse to one merged activity,
 and the entity's unit-of-information block is moved off the label onto the typed
-:class:`UnitOfInformation` glyph (a curator's AF map carries ``[ct:mRNA]`` on
-the glyph, not in the label); otherwise the label keeps both blocks and
+:class:`UnitOfInformation` glyph (a curator's AF map carries ``ct:mRNA`` on the
+glyph -- no brackets -- not ``[ct:mRNA]`` in the label); otherwise the label
+keeps both blocks and
 distinct proteoforms stay distinct under content-based model equality. A PD
 :class:`Phenotype` process becomes an AF :class:`Phenotype` activity. Dedup is
 honoured by interning every constructed element through the shared content
@@ -199,8 +200,9 @@ def _make_activity(context, input_element, strip=False):
     variables from the label so distinct proteoforms collapse into one merged
     activity under content-based model equality, and relocates the entity's
     unit-of-information block off the label and onto the typed unit-of-information
-    glyph (where a curator drawing AF from scratch would put it -- ``[ct:mRNA]``
-    on a nucleic-acid-feature glyph rather than inline in the label). Distinct
+    glyph (where a curator drawing AF from scratch would put it -- ``ct:mRNA`` on
+    a nucleic-acid-feature glyph, no brackets, rather than inline in the label).
+    Distinct
     units still keep activities distinct: ``UnitOfInformation.label`` is part of
     its content, so the dedup granularity is unchanged, only relocated.
     ``strip=False`` keeps the full label and a bare typed glyph, so distinct

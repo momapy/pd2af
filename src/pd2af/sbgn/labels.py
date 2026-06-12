@@ -13,15 +13,18 @@ Rules:
 - The entity **type** and its **compartment** are not part of the label (the
   type is carried by the activity's unit-of-information glyph).
 - **Units of information** are rendered ``prefix:value`` (or ``value`` with no
-  prefix) and sorted (they carry no order). In the merged ``normal`` /
-  ``no-complex`` modes (``include_units_of_information=False``) this block is
-  *not* inlined into the label: a curator building an AF map from scratch writes
-  ``mRNA`` on the nucleic-acid-feature glyph, never ``[ct:mRNA]`` in the label.
-  The block (see :func:`build_units_of_information_label`) is instead placed on
-  the activity's typed unit-of-information glyph by the model builder. The block
-  is still kept inline for a complex's recursively built **subunit name**
-  (below), which is a synthetic identity key, not a curator-facing label, so it
-  stays maximally distinguishing.
+  prefix) and sorted (they carry no order). When inlined in the activity label
+  they sit in a ``[...]`` bracket; on the unit-of-information **glyph** they
+  carry no brackets (the brackets are the label serialization device only). In
+  the merged ``normal`` / ``no-complex`` modes
+  (``include_units_of_information=False``) this block is *not* inlined into the
+  label: a curator building an AF map from scratch writes ``ct:mRNA`` on the
+  nucleic-acid-feature glyph, never ``[ct:mRNA]`` in the label. The block (see
+  :func:`build_units_of_information_label`) is instead placed on the activity's
+  typed unit-of-information glyph by the model builder. The block is still kept
+  inline for a complex's recursively built **subunit name** (below), which is a
+  synthetic identity key, not a curator-facing label, so it stays maximally
+  distinguishing.
 - **State variables** are rendered ``value@variable`` (``@variable`` with no
   value, ``value`` with no variable, empty when neither) and listed in their
   ``order`` so multi-site proteoforms stay positionally distinct without
@@ -57,28 +60,25 @@ def _unit_of_information_token(unit_of_information):
 
 
 def build_units_of_information_label(entity):
-    """Return the bracketed unit-of-information block ``[uoi1|uoi2|...]`` for an
-    SBGN-PD ``entity`` -- tokens ``prefix:value`` (or ``value`` with no prefix),
-    sorted, joined by ``|`` -- or ``None`` when the entity carries no units of
+    """Return the unit-of-information glyph label ``uoi1|uoi2|...`` for an SBGN-PD
+    ``entity`` -- tokens ``prefix:value`` (or ``value`` with no prefix), sorted,
+    joined by ``|`` -- or ``None`` when the entity carries no units of
     information.
 
-    The merged ``normal`` / ``no-complex`` modes move this block off the activity
+    The merged ``normal`` / ``no-complex`` modes move this off the activity
     *label* and onto the AF activity's typed unit-of-information glyph (see
     :func:`pd2af.sbgn.building_model._make_activity`), where a curator would put
-    it -- e.g. ``[ct:mRNA]`` on a nucleic-acid-feature glyph.
+    it -- e.g. ``ct:mRNA`` on a nucleic-acid-feature glyph. It carries **no**
+    surrounding brackets: those are only the activity-label serialization device
+    (added by :func:`build_label`), not part of the glyph text.
     """
     units_of_information = getattr(entity, "units_of_information", None)
     if not units_of_information:
         return None
-    return (
-        "["
-        + "|".join(
-            sorted(
-                _unit_of_information_token(unit)
-                for unit in units_of_information
-            )
+    return "|".join(
+        sorted(
+            _unit_of_information_token(unit) for unit in units_of_information
         )
-        + "]"
     )
 
 
@@ -99,9 +99,11 @@ def build_label(
     """
     decorations = ""
     if include_units_of_information:
-        units_block = build_units_of_information_label(entity)
-        if units_block:
-            decorations += units_block
+        units_label = build_units_of_information_label(entity)
+        if units_label:
+            # Brackets are the activity-label serialization device only; the
+            # glyph label (the helper's return value) carries none.
+            decorations += f"[{units_label}]"
     state_variables = getattr(entity, "state_variables", None)
     if include_state_variables and state_variables:
         tokens = [
