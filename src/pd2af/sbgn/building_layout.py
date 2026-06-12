@@ -205,7 +205,11 @@ def _make_and_add_unit_of_information_layout(
     if unit_of_information.label:
         unit_layout.label = (
             momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-                unit_of_information.label, unit_layout.position
+                unit_of_information.label,
+                unit_layout.position,
+                # Match the smaller auxiliary-unit font the momapy sbgn reader
+                # uses for units of information (not the default node font).
+                font_size=momapy.sbgn.io.sbgnml._reading_layout._DEFAULT_AUXILIARY_UNIT_FONT_SIZE,
             )
         )
     activity_layout.layout_elements.append(unit_layout)
