@@ -45,7 +45,7 @@ Selectable with `-m` / `mode=`. Four of the modes lie on two orthogonal axes —
 | **merge proteoforms** | `normal` *(default)*      | `no-complex`                             |
 | **keep each species** | `keep-species`            | `keep-species-no-complex`                |
 
-- **merge proteoforms** modes (`normal`, `no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout auto`.
+- **merge proteoforms** modes (`normal`, `no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout-mode auto`.
 - **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
 - **drop complexes** variants (`no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
 - **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.

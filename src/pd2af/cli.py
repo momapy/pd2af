@@ -51,8 +51,8 @@ def _run(args):
     input_map = reader_result.obj
     new_map = pd2af.transform(
         input_map,
-        mode=args.mode,
-        layout_mode=args.layout,
+        mode=args.transformation_mode,
+        layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
     )
     if args.output is None:
@@ -77,14 +77,14 @@ def main(argv=None):
     parser.add_argument("input_file", help="input CellDesigner XML file")
     parser.add_argument(
         "-m",
-        "--mode",
+        "--transformation-mode",
         choices=_MODE_CHOICES,
         default="normal",
         help=(
             "transformation mode (default: normal). 'normal' and "
             "'no-complex' merge proteoforms of the same template and "
             "compartment into a single activity (true PD->AF transform) "
-            "and require `--layout auto`. 'keep-species' and "
+            "and require `--layout-mode auto`. 'keep-species' and "
             "'keep-species-no-complex' keep each PD species as its own "
             "activity. The '*-no-complex' variants drop complexes that "
             "have an active subunit, routing influences through the "
@@ -97,15 +97,15 @@ def main(argv=None):
     )
     parser.add_argument(
         "-l",
-        "--layout",
+        "--layout-mode",
         choices=_LAYOUT_CHOICES,
         default="auto",
         help=(
             "layout strategy: auto (graphviz auto-layout, requires `dot`, "
             "default), plain (reuse original positions, model elements "
             "only), or overlay (reuse full original layout with non-model "
-            "elements greyed out). 'normal' and 'no-complex' modes "
-            "require `auto`."
+            "elements greyed out). 'normal' and 'no-complex' transformation "
+            "modes require `auto`."
         ),
     )
     parser.add_argument(
@@ -117,7 +117,7 @@ def main(argv=None):
             "how to draw an influence whose source or target maps to several "
             "layout glyphs: cross (default, one arc per source/target pair) or "
             "nearest (a single arc between the closest pair). 'nearest' only "
-            "takes effect with `--layout plain` or `overlay`, where glyph "
+            "takes effect with `--layout-mode plain` or `overlay`, where glyph "
             "positions are real; in `auto` it is ignored."
         ),
     )
