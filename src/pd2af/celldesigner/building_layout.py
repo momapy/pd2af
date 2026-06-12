@@ -145,13 +145,13 @@ def make_synthetic_layout(species, index):
 
 def make_modulation_arc(modulation, source_layout, target_layout):
     arc_class = _MODULATION_CLASS_TO_LAYOUT_CLASS[type(modulation)]
-    segment = pd2af.utils.make_arc_segment_from_source_and_target(
+    segments = pd2af.utils.make_arc_segments_from_source_and_target(
         source_layout, target_layout
     )
     return arc_class(
         source=source_layout,
         target=target_layout,
-        segments=(segment,),
+        segments=tuple(segments),
     )
 
 
@@ -176,13 +176,13 @@ def make_logic_arc(gate_layout, input_layout):
     The CellDesigner writer locates a gate's inputs by scanning for logic arcs
     whose ``source`` is the gate layout, so the arc runs gate -> input species
     (the CellDesigner convention), not input -> gate."""
-    segment = pd2af.utils.make_arc_segment_from_source_and_target(
+    segments = pd2af.utils.make_arc_segments_from_source_and_target(
         gate_layout, input_layout
     )
     return momapy.celldesigner.LogicArcLayout(
         source=gate_layout,
         target=input_layout,
-        segments=(segment,),
+        segments=tuple(segments),
     )
 
 

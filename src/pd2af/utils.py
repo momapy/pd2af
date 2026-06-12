@@ -120,22 +120,21 @@ def influence_layout_pairs(source_layouts, target_layouts, prefer_nearest):
     return list(itertools.product(source_layouts, target_layouts))
 
 
-def make_arc_segment_from_source_and_target(source_layout, target_layout):
-    """Straight Segment connecting two node layouts for a modulation /
-    influence arc. A self-loop (source is target) anchors to the node's
-    north edge; otherwise the segment runs border-to-border, falling back
-    to corner anchors when a border point is undefined."""
+def make_arc_segments_from_source_and_target(source_layout, target_layout):
+    """Segments for a modulation / influence arc connecting two node layouts.
+    A self-loop (source is target) bows out into a visible loop via
+    :func:`_make_self_loop_segments`; otherwise a single straight segment runs
+    border-to-border, falling back to corner anchors when a border point is
+    undefined. Returns a list of segments."""
     if source_layout is target_layout:
-        start_point = source_layout.anchor_point("north_north_west")
-        end_point = source_layout.anchor_point("north_north_east")
-    else:
-        start_point = source_layout.own_border(target_layout.center())
-        end_point = target_layout.own_border(source_layout.center())
-        if start_point is None:
-            start_point = source_layout.north_west()
-        if end_point is None:
-            end_point = target_layout.north_east()
-    return momapy.geometry.Segment(start_point, end_point)
+        return _make_self_loop_segments(source_layout)
+    start_point = source_layout.own_border(target_layout.center())
+    end_point = target_layout.own_border(source_layout.center())
+    if start_point is None:
+        start_point = source_layout.north_west()
+    if end_point is None:
+        end_point = target_layout.north_east()
+    return [momapy.geometry.Segment(start_point, end_point)]
 
 
 def harmonize_root_layout(layout_builder):
@@ -452,7 +451,7 @@ def _reposition_from_dot(dot_graph, id_to_layout_element):
     return id_to_new_layout_element_builder
 
 
-def _self_loop_segments(layout_element):
+def _make_self_loop_segments(layout_element):
     """Segments for an arc whose source and target resolve to the same node: a
     loop bowing out through two control points, expressed as a polyline so the
     CellDesigner writer can recover them as edit points (it only sees segment
@@ -600,7 +599,7 @@ def _arc_geometry(
             source_top_level_id,
         ) in directed_pairs
         if is_self_loop:
-            layout_element_builder.segments = _self_loop_segments(
+            layout_element_builder.segments = _make_self_loop_segments(
                 source_layout_element_builder
             )
         elif is_bidirectional:

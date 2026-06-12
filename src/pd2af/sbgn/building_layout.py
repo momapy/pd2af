@@ -390,13 +390,15 @@ def _make_influence_arc(influence, source_layout, target_layout):
     # An operator-sourced influence leaves the operator's output connector; every
     # other influence runs plain border-to-border (untouched).
     if momapy.builder.isinstance_or_builder(source_layout, _OPERATOR_LAYOUT_CLASSES):
-        segment = _operator_connector_segment(
-            source_layout, target_layout, is_logic_arc=False
+        segments = (
+            _operator_connector_segment(
+                source_layout, target_layout, is_logic_arc=False
+            ),
         )
     else:
-        segment = pd2af.utils.make_arc_segment_from_source_and_target(
+        segments = pd2af.utils.make_arc_segments_from_source_and_target(
             source_layout, target_layout
         )
     return _builder(
-        arc_class, source=source_layout, target=target_layout, segments=(segment,)
+        arc_class, source=source_layout, target=target_layout, segments=tuple(segments)
     )
