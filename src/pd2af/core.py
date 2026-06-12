@@ -6,7 +6,7 @@ import pd2af.solver
 
 
 _TRANSFORMATION_MODES = frozenset(
-    {"normal", "no-complex", "keep-species", "keep-species-no-complex", "casq"}
+    {"normal", "normal-no-complex", "keep-species", "keep-species-no-complex", "casq"}
 )
 _MERGED_PROTEOFORM_MODES = pd2af.languages.MERGED_PROTEOFORM_MODES
 _LAYOUT_MODES = frozenset({"plain", "overlay", "auto", None})
@@ -43,7 +43,7 @@ def transform(
     map_,
     mode: typing.Literal[
         "normal",
-        "no-complex",
+        "normal-no-complex",
         "keep-species",
         "keep-species-no-complex",
         "casq",

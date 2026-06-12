@@ -5,7 +5,7 @@ import pd2af.rules
 
 _PROFILES = (
     "normal",
-    "no_complex",
+    "normal_no_complex",
     "keep_species",
     "keep_species_no_complex",
     "casq",
@@ -51,13 +51,13 @@ class TestBuildProgram:
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
 
     def test_non_casq_profiles_carry_kind_through_composes_to(self):
-        for profile in ("normal", "no_complex", "keep_species", "keep_species_no_complex"):
+        for profile in ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
             assert "composesTo(triggers, positivelyInfluences)" in program
             assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" in program
 
-    def test_no_complex_variants_promote_active_subunits(self):
-        for profile in ("no_complex", "keep_species_no_complex"):
+    def test_normal_no_complex_variants_promote_active_subunits(self):
+        for profile in ("normal_no_complex", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
             assert "promotedSubunitKey" in program
 
@@ -66,8 +66,8 @@ class TestBuildProgram:
             program = pd2af.rules.build_program(profile)
             assert "promotedSubunitKey" not in program
 
-    def test_no_complex_variants_include_complex_traversal(self):
-        for profile in ("no_complex", "keep_species_no_complex"):
+    def test_normal_no_complex_variants_include_complex_traversal(self):
+        for profile in ("normal_no_complex", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" in program
@@ -104,12 +104,12 @@ class TestBuildProgram:
 
 
 class TestMergedProfilesSbgnPdVariant:
-    """`normal`/`no_complex` must emit working rules for SBGN-PD input:
+    """`normal`/`normal_no_complex` must emit working rules for SBGN-PD input:
     entity-pool carriers (not the CellDesigner `species` carrier). The
     templated/mergeable gating is gone -- keys are structural roles only and
     PTM stripping happens at the build stage."""
 
-    @pytest.mark.parametrize("profile", ("normal", "no_complex"))
+    @pytest.mark.parametrize("profile", ("normal", "normal_no_complex"))
     def test_sbgn_pd_variant_uses_entity_pool_carrier(self, profile):
         program = pd2af.rules.build_program(profile, language="sbgn_pd")
         assert "new_species_from_template" not in program
@@ -124,7 +124,7 @@ class TestMergedProfilesSbgnPdVariant:
             not in program
         )
 
-    @pytest.mark.parametrize("profile", ("normal", "no_complex"))
+    @pytest.mark.parametrize("profile", ("normal", "normal_no_complex"))
     def test_celldesigner_variant_uses_species_carrier(self, profile):
         program = pd2af.rules.build_program(profile, language="celldesigner")
         assert (

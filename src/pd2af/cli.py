@@ -10,7 +10,7 @@ import pd2af
 
 _MODE_CHOICES = (
     "normal",
-    "no-complex",
+    "normal-no-complex",
     "keep-species",
     "keep-species-no-complex",
     "casq",
@@ -82,7 +82,7 @@ def main(argv=None):
         default="normal",
         help=(
             "transformation mode (default: normal). 'normal' and "
-            "'no-complex' merge proteoforms of the same template and "
+            "'normal-no-complex' merge proteoforms of the same template and "
             "compartment into a single activity (true PD->AF transform) "
             "and require `--layout-mode auto`. 'keep-species' and "
             "'keep-species-no-complex' keep each PD species as its own "
@@ -104,7 +104,7 @@ def main(argv=None):
             "layout strategy: auto (graphviz auto-layout, requires `dot`, "
             "default), plain (reuse original positions, model elements "
             "only), or overlay (reuse full original layout with non-model "
-            "elements greyed out). 'normal' and 'no-complex' transformation "
+            "elements greyed out). 'normal' and 'normal-no-complex' transformation "
             "modes require `auto`."
         ),
     )

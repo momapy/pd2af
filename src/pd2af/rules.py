@@ -14,8 +14,8 @@ The non-CASQ rules are organised in layers:
   per-species wrappers: ``keptSpeciesKey/1`` (top-level species, and the
   top-level complex a subunit resolves to) or ``promotedSubunitKey/1`` (a
   subunit promoted to top level when its complex is dissolved in the
-  no-complex modes). Proteoform/PTM stripping for the merged modes
-  (``normal``/``no-complex``) happens at the build stage, not in the key.
+  ``*-no-complex`` modes). Proteoform/PTM stripping for the merged modes
+  (``normal``/``normal-no-complex``) happens at the build stage, not in the key.
 * **derivation** (shared across all non-CASQ profiles) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``hasActivityCarrier`` /
@@ -33,7 +33,7 @@ from textwrap import dedent
 from aspcompose import CollectionPlan, Rule, RuleGroup, RuleRegistry
 
 _NON_CASQ_PROFILES = frozenset(
-    {"normal", "no_complex", "keep_species", "keep_species_no_complex"}
+    {"normal", "normal_no_complex", "keep_species", "keep_species_no_complex"}
 )
 
 _CASQ_PROFILES = frozenset({"casq"})
@@ -120,7 +120,7 @@ _ACTIVITY_BASE = RuleGroup(
                         isSubunit(SUBUNIT),
                         hasStateVariable(SUBUNIT, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
-                docs='If a subunit carries a state variable whose value is "active", then it has activity. Its complex therefore inherits activity (keep-species), and in the no-complex modes the subunit can be promoted. The parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
+                docs='If a subunit carries a state variable whose value is "active", then it has activity. Its complex therefore inherits activity (keep-species), and in the ``*-no-complex`` modes the subunit can be promoted. The parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
             ),
             Rule(
                 identifier="activity_base:sbgn_pd:from_modulation_source",
@@ -337,13 +337,13 @@ _PREPARATION_KEEP_SPECIES_NO_COMPLEX = RuleGroup(
 )
 
 _PREPARATION_NO_COMPLEX = RuleGroup(
-    identifier="preparation:no_complex",
-    profiles=frozenset({"no_complex"}),
+    identifier="preparation:normal_no_complex",
+    profiles=frozenset({"normal_no_complex"}),
     depends_on=frozenset({"activity_base", "topology"}),
-    docs="`no-complex` preparation: a complex with any active descendant is deleted; non-deleted top-level species with activity are keyed by `keptSpeciesKey(SELF)`; subunits of deleted complexes are promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach them via `paths_complex_traversal`). PTM stripping for the merged `no-complex` mode happens at the build stage, not in the activity key.",
+    docs="`normal-no-complex` preparation: a complex with any active descendant is deleted; non-deleted top-level species with activity are keyed by `keptSpeciesKey(SELF)`; subunits of deleted complexes are promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach them via `paths_complex_traversal`). PTM stripping for the merged `normal-no-complex` mode happens at the build stage, not in the activity key.",
     rules=(
         Rule(
-            identifier="preparation:no_complex:deleted",
+            identifier="preparation:normal_no_complex:deleted",
             text=dedent("""\
                 delete(COMPLEX) :-
                     complex(COMPLEX),
@@ -351,7 +351,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
             docs="A complex with any (transitive) active descendant is deleted.",
         ),
         Rule(
-            identifier="preparation:no_complex:subunit_of_deleted_direct",
+            identifier="preparation:normal_no_complex:subunit_of_deleted_direct",
             text=dedent("""\
                 isDescendantSubunitOfDeleted(SUBUNIT) :-
                     hasSubunit(COMPLEX, SUBUNIT),
@@ -359,7 +359,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
             docs="A direct subunit of a deleted complex is itself subunit-of-deleted.",
         ),
         Rule(
-            identifier="preparation:no_complex:subunit_of_deleted_transitive",
+            identifier="preparation:normal_no_complex:subunit_of_deleted_transitive",
             text=dedent("""\
                 isDescendantSubunitOfDeleted(SUBUNIT) :-
                     hasSubunit(PARENT_COMPLEX, SUBUNIT),
@@ -370,12 +370,12 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
     variants={
         "celldesigner": (
             Rule(
-                identifier="preparation:no_complex:carrier",
+                identifier="preparation:normal_no_complex:carrier",
                 text="hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
                 docs="Each species is its own activity carrier.",
             ),
             Rule(
-                identifier="preparation:no_complex:key_top_level",
+                identifier="preparation:normal_no_complex:key_top_level",
                 text=dedent("""\
                     hasActivityKey(SPECIES, keptSpeciesKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
@@ -384,7 +384,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
                 docs="A non-deleted top-level active species is keyed by `keptSpeciesKey(SELF)`.",
             ),
             Rule(
-                identifier="preparation:no_complex:key_promoted_subunit",
+                identifier="preparation:normal_no_complex:key_promoted_subunit",
                 text=dedent("""\
                     hasActivityKey(SPECIES, promotedSubunitKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
@@ -394,22 +394,22 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
         ),
         "sbgn_pd": (
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:carrier_entity_pool",
+                identifier="preparation:normal_no_complex:sbgn_pd:carrier_entity_pool",
                 text="hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL).",
                 docs="SBGN-PD: each entity pool is its own activity carrier.",
             ),
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:carrier_phenotype",
+                identifier="preparation:normal_no_complex:sbgn_pd:carrier_phenotype",
                 text="hasActivityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
                 docs="SBGN-PD: each phenotype process is its own activity carrier.",
             ),
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:carrier_subunit",
+                identifier="preparation:normal_no_complex:sbgn_pd:carrier_subunit",
                 text="hasActivityCarrier(SUBUNIT, SUBUNIT) :- isSubunit(SUBUNIT).",
                 docs="SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths_complex_traversal`).",
             ),
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:key_top_level",
+                identifier="preparation:normal_no_complex:sbgn_pd:key_top_level",
                 text=dedent("""\
                     hasActivityKey(SPECIES, keptSpeciesKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
@@ -418,7 +418,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
                 docs="SBGN-PD: a non-deleted top-level active entity is keyed by `keptSpeciesKey(SELF)`.",
             ),
             Rule(
-                identifier="preparation:no_complex:sbgn_pd:key_promoted_subunit",
+                identifier="preparation:normal_no_complex:sbgn_pd:key_promoted_subunit",
                 text=dedent("""\
                     hasActivityKey(SPECIES, promotedSubunitKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
@@ -817,9 +817,9 @@ _PATHS_BASE = RuleGroup(
 
 _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     identifier="paths_complex_traversal",
-    profiles=frozenset({"no_complex", "keep_species_no_complex"}),
+    profiles=frozenset({"normal_no_complex", "keep_species_no_complex"}),
     depends_on=frozenset({"paths_base"}),
-    docs="Extends paths through complex containment for the no-complex profiles: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
+    docs="Extends paths through complex containment for the ``*-no-complex`` profiles: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
     rules=(
         Rule(
             identifier="paths_complex_traversal:into_subunits",

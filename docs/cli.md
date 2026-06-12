@@ -9,7 +9,7 @@ The output map is written to stdout as a [momapy](https://github.com/adrienrougn
 ## Synopsis
 
 ```bash
-pd2af <input_file> [-m {normal,no-complex,keep-species,keep-species-no-complex,casq}] [-l {plain,overlay,auto}] [-o <output_file>]
+pd2af <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,casq}] [-l {plain,overlay,auto}] [-o <output_file>]
 ```
 
 ## Arguments
@@ -32,24 +32,24 @@ The first four modes lie on two orthogonal axes — species treatment and comple
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
-| **merge proteoforms** | `normal` *(default)*      | `no-complex`                             |
+| **merge proteoforms** | `normal` *(default)*      | `normal-no-complex`                             |
 | **keep each species** | `keep-species`            | `keep-species-no-complex`                |
 
 | Mode | Description |
 |------|-------------|
 | `normal` | Merge proteoforms of the same template (and compartment) into a single activity, but keep complexes. Influences involving an active complex route through the complex; active subunits of an activity-bearing complex are subsumed into the complex. True PD→AF transform — the only style expressible in SBGN PD. Requires `--layout-mode auto`. |
-| `no-complex` | Like `normal`, but drop any complex that has an active subunit and route influences through the subunits. Requires `--layout-mode auto`. |
+| `normal-no-complex` | Like `normal`, but drop any complex that has an active subunit and route influences through the subunits. Requires `--layout-mode auto`. |
 | `keep-species` | Emit one activity per distinct PD species (template + state + compartment). Keep complexes; active subunits of an activity-bearing complex are subsumed into the complex. CellDesigner-only. |
 | `keep-species-no-complex` | Like `keep-species`, but drop complexes with an active subunit. CellDesigner-only. |
 | `casq` | Emit one activity per surviving PD species after applying CASQ-style deletion rules (heterodimer simplification, name-preserving step pruning, transport collapse), with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only. |
 
-The merging modes (`normal`, `no-complex`) require `--layout-mode auto` because positions from the original PD map cannot be reused for synthesized merged-proteoform activities.
+The merging modes (`normal`, `normal-no-complex`) require `--layout-mode auto` because positions from the original PD map cannot be reused for synthesized merged-proteoform activities.
 
 ## Layout modes (`-l`)
 
 | Mode | Description |
 |------|-------------|
-| `auto` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. **Default**, and required for `normal` and `no-complex`. |
+| `auto` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. **Default**, and required for `normal` and `normal-no-complex`. |
 | `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, and `casq`. |
 | `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex`, and `casq`. |
 
@@ -79,10 +79,10 @@ pd2af my_map.xml | momapy visualize -
 pd2af my_map.xml -o my_map_af.xml
 ```
 
-### Drop complexes via the no-complex mode
+### Drop complexes via the normal-no-complex mode
 
 ```bash
-pd2af my_map.xml -m no-complex -o my_map_af.xml
+pd2af my_map.xml -m normal-no-complex -o my_map_af.xml
 ```
 
 ### Keep each PD species as its own activity, reusing original layout

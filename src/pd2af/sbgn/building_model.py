@@ -9,7 +9,7 @@ activities and influences.
 Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
 :class:`UnitOfInformation` (the entity class) and a label that is the canonical
 serialization of the whole entity pool (:mod:`pd2af.sbgn.labels`). In the
-merged modes (``normal``/``no-complex``) the label is built with state
+merged modes (``normal``/``normal-no-complex``) the label is built with state
 variables stripped, so distinct proteoforms collapse to one merged activity,
 and the entity's unit-of-information block is moved off the label onto the typed
 :class:`UnitOfInformation` glyph (a curator's AF map carries ``ct:mRNA`` on the
@@ -45,7 +45,7 @@ _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
     momapy.sbgn.pd.UnspecifiedEntity: momapy.sbgn.af.UnspecifiedEntityUnitOfInformation,
     momapy.sbgn.pd.PerturbingAgent: momapy.sbgn.af.PerturbationUnitOfInformation,
     # Subunit classes (a promoted subunit becomes a top-level activity in the
-    # no-complex modes) map to the same unit of information as their entity-pool
+    # normal-no-complex modes) map to the same unit of information as their entity-pool
     # counterpart.
     momapy.sbgn.pd.MacromoleculeSubunit: momapy.sbgn.af.MacromoleculeUnitOfInformation,
     momapy.sbgn.pd.MacromoleculeMultimerSubunit: momapy.sbgn.af.MacromoleculeUnitOfInformation,
@@ -196,7 +196,7 @@ def _make_and_add_activities(context):
 def _make_activity(context, input_element, strip=False):
     """Build (and intern) the AF activity for ``input_element``.
 
-    ``strip=True`` (the merged modes ``normal``/``no-complex``) drops state
+    ``strip=True`` (the merged modes ``normal``/``normal-no-complex``) drops state
     variables from the label so distinct proteoforms collapse into one merged
     activity under content-based model equality, and relocates the entity's
     unit-of-information block off the label and onto the typed unit-of-information

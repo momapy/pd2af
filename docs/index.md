@@ -42,12 +42,12 @@ Selectable with `-m` / `mode=`. Four of the modes lie on two orthogonal axes —
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
-| **merge proteoforms** | `normal` *(default)*      | `no-complex`                             |
+| **merge proteoforms** | `normal` *(default)*      | `normal-no-complex`                             |
 | **keep each species** | `keep-species`            | `keep-species-no-complex`                |
 
-- **merge proteoforms** modes (`normal`, `no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout-mode auto`.
+- **merge proteoforms** modes (`normal`, `normal-no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout-mode auto`.
 - **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
-- **drop complexes** variants (`no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
+- **drop complexes** variants (`normal-no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
 - **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.
 
 A fifth mode, **`casq`**, emits one activity per surviving PD species after applying CASQ-style deletion rules — heterodimer simplification, name-preserving step pruning, and transport collapse — with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only.
@@ -56,7 +56,7 @@ A fifth mode, **`casq`**, emits one activity per surviving PD species after appl
 
 Selectable with `-l` / `layout_mode=`:
 
-- **`auto`** (default) — Graphviz `dot` auto-layout. Required for `normal` and `no-complex`.
+- **`auto`** (default) — Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
 - **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
 - **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
 

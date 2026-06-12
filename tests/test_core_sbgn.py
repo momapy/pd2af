@@ -1,10 +1,10 @@
-"""SBGN-PD -> SBGN-AF transform: `normal` and `no-complex` merged modes.
+"""SBGN-PD -> SBGN-AF transform: `normal` and `normal-no-complex` merged modes.
 
 Two layers of coverage:
 
 * Programmatic fixtures (built with momapy builders) pin the merged-mode
   semantics exactly: proteoform collapse, complex handling, and the
-  subunit-promotion parity between `normal` and `no-complex`.
+  subunit-promotion parity between `normal` and `normal-no-complex`.
 * Real committed SBGN-PD maps exercise the full pipeline including
   graphviz `auto` layout and `.sbgn` read-back (the strongest regression
   guard for the carrier bug, which produced zero influences).
@@ -72,7 +72,7 @@ def proteoform_map():
 @pytest.fixture
 def active_subunit_complex_map():
     """A complex whose single macromolecule subunit is active. The complex is
-    therefore suppressed in no-complex (subunit promoted) and kept in normal
+    therefore suppressed in normal-no-complex (subunit promoted) and kept in normal
     (complex activity + promoted subunit, in parity with CellDesigner)."""
     state_active = momapy.sbgn.pd.StateVariable(
         variable="r0", value="active", order=0
@@ -113,7 +113,7 @@ class TestProteoformMerging:
         out = pd2af.transform(proteoform_map, mode="keep-species", layout_mode=None)
         assert len(out.model.activities) == 2
 
-    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_merged_modes_collapse_proteoforms(self, proteoform_map, mode):
         out = pd2af.transform(proteoform_map, mode=mode, layout_mode=None)
         assert _activity_labels(out.model) == ["AKT"]
@@ -137,18 +137,18 @@ class TestComplexHandling:
         )
         assert len(out.model.activities) == 1
 
-    def test_no_complex_breaks_complex_into_subunit(
+    def test_normal_no_complex_breaks_complex_into_subunit(
         self, active_subunit_complex_map
     ):
         out = pd2af.transform(
-            active_subunit_complex_map, mode="no-complex", layout_mode=None
+            active_subunit_complex_map, mode="normal-no-complex", layout_mode=None
         )
         # The suppressed complex contributes no ComplexUnitOfInformation; only
         # the promoted subunit survives.
         assert not _has_complex_unit_of_information(out.model)
         assert _activity_labels(out.model) == ["RAF"]
 
-    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_merged_modes_strip_complex_and_subunit_state(
         self, stateful_complex_map, mode
     ):
@@ -184,14 +184,14 @@ class TestRealMapIntegration:
             os.path.join(SBGN_MAPS_DIR, f"{request.param}.sbgn")
         )
 
-    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_merged_mode_emits_influences(self, sbgn_map, mode):
         out = pd2af.transform(sbgn_map, mode=mode, layout_mode=None)
         # mapk_cascade and the others all carry modulation arcs, so a correct
         # carrier must yield at least one influence (was zero before the fix).
         assert len(out.model.influences) > 0
 
-    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_merged_mode_auto_layout_round_trips(self, sbgn_map, mode):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
@@ -224,7 +224,7 @@ class TestCompartments:
 
     @pytest.mark.parametrize(
         "mode",
-        ("keep-species", "keep-species-no-complex", "normal", "no-complex"),
+        ("keep-species", "keep-species-no-complex", "normal", "normal-no-complex"),
     )
     def test_model_carries_compartments(self, map_with_compartments, mode):
         out = pd2af.transform(map_with_compartments, mode=mode, layout_mode=None)

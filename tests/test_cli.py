@@ -33,7 +33,7 @@ class TestModeAndLayoutChoices:
     def test_mode_choices_lists_supported_modes(self):
         assert set(pd2af.cli._MODE_CHOICES) == {
             "normal",
-            "no-complex",
+            "normal-no-complex",
             "keep-species",
             "keep-species-no-complex",
             "casq",
@@ -87,13 +87,13 @@ class TestCliMainOutputFile:
     @pytest.mark.skipif(
         not has_dot_binary(), reason="graphviz `dot` binary not on PATH"
     )
-    def test_no_complex_mode_with_auto_layout(self, tmp_path, example_map_path):
+    def test_normal_no_complex_mode_with_auto_layout(self, tmp_path, example_map_path):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
             [
                 example_map_path,
                 "-m",
-                "no-complex",
+                "normal-no-complex",
                 "-l",
                 "auto",
                 "-o",
@@ -102,10 +102,10 @@ class TestCliMainOutputFile:
         )
         roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
         names = sorted(s.name for s in roundtrip.model.species)
-        # Under no-complex (merge proteoforms + drop complexes), D drops out.
+        # Under normal-no-complex (merge proteoforms + drop complexes), D drops out.
         assert "D" not in names
 
-    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
+    @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
     def test_merged_modes_with_plain_layout_raise(
         self, example_map_path, mode
     ):

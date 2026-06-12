@@ -19,7 +19,7 @@ class promotedSubunitKey(clorm.Predicate):
     promoted to a top-level activity (added to ``model.species``).
 
     The single argument is the synthetic ASP ID of the subunit species.
-    Emitted by ``no-complex`` and ``keep-species-no-complex`` modes.
+    Emitted by ``normal-no-complex`` and ``keep-species-no-complex`` modes.
     """
     species: clorm.ConstantStr
 

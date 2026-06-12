@@ -48,7 +48,7 @@ from tests._helpers import (
 
 _NON_CASQ_PROFILES = (
     "normal",
-    "no_complex",
+    "normal_no_complex",
     "keep_species",
     "keep_species_no_complex",
 )
@@ -285,7 +285,7 @@ class TestCelldesignerGatesShapeA:
             ("keep-species", "overlay"),
             ("keep-species", "auto"),
             ("normal", "auto"),
-            ("no-complex", "auto"),
+            ("normal-no-complex", "auto"),
         ),
     )
     def test_round_trips(self, creb_map, mode, layout_mode):
@@ -370,7 +370,7 @@ class TestSbgnOperatorsShapeB:
             ("keep-species", "plain"),
             ("keep-species", "auto"),
             ("normal", "auto"),
-            ("no-complex", "auto"),
+            ("normal-no-complex", "auto"),
         ),
     )
     def test_round_trips(self, operator_map, mode, layout_mode):

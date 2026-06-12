@@ -98,7 +98,7 @@ def test_supported_modes():
     assert pd2af.core._TRANSFORMATION_MODES == frozenset(
         {
             "normal",
-            "no-complex",
+            "normal-no-complex",
             "keep-species",
             "keep-species-no-complex",
             "casq",
@@ -107,11 +107,11 @@ def test_supported_modes():
 
 
 class TestSolveSbgnPdMergedModes:
-    """Regression guard for the SBGN-PD carrier bug: `normal`/`no-complex`
+    """Regression guard for the SBGN-PD carrier bug: `normal`/`normal-no-complex`
     over SBGN-PD input must emit a non-empty influence set (was zero before
     the entity-pool carrier was added to these profiles)."""
 
-    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_sbgn_pd_merged_mode_emits_influences(self, sbgn_example_map, mode):
         clingo_model, _ = pd2af.solver.solve(sbgn_example_map, mode=mode)
         assert len(_activity_atoms(clingo_model)) > 0

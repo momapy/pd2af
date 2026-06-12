@@ -3,7 +3,7 @@
 ``make_and_add_model`` is the model pass: it walks the activity atoms in
 layer order (keptSpeciesKey → promotedSubunitKey) and populates ``context.model``
 with canonical, content-deduped compartments, templates, species and
-modulations. In the merged modes (``normal``/``no-complex``) each activity's
+modulations. In the merged modes (``normal``/``normal-no-complex``) each activity's
 species is stripped of its PTM decorations (recursively, including subunits)
 by ``get_or_make_stripped_species``; the other modes reuse input species by
 identity.
@@ -133,7 +133,7 @@ def get_or_make_stripped_species(
     input_model_element_to_canonical_model_element,
 ):
     """Return a decoration-free canonical species for ``input_species`` (the
-    merged modes ``normal``/``no-complex``). Clears every post-translational
+    merged modes ``normal``/``normal-no-complex``). Clears every post-translational
     decoration -- ``homomultimer`` (-> 1), ``modifications``,
     ``structural_states``, and, via a stripped template,
     ``modification_residues``/``regions`` -- sets the effective ``compartment``,
@@ -366,7 +366,7 @@ def _make_and_add_species(context):
 
 def _resolve_activity_key(context, key):
     """Resolve an activity key to its output species. In the merged modes
-    (``normal``/``no-complex``) every species is stripped of its PTM decorations
+    (``normal``/``normal-no-complex``) every species is stripped of its PTM decorations
     (recursively, including subunits) so content-equal proteoforms collapse;
     otherwise the input species is reused by identity (``keptSpeciesKey``) or
     promoted with a corrected compartment (``promotedSubunitKey``)."""

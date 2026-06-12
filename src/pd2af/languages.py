@@ -20,7 +20,7 @@ SBGN_PD = "sbgn_pd"
 # ``context.mode`` is one of these; the complementary modes keep decorations.
 # (Tokens are the hyphenated transform-mode names, not the underscored ASP
 # profile names.)
-MERGED_PROTEOFORM_MODES = frozenset({"normal", "no-complex"})
+MERGED_PROTEOFORM_MODES = frozenset({"normal", "normal-no-complex"})
 
 
 def language_from_map(map_):

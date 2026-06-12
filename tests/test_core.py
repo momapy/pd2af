@@ -45,11 +45,11 @@ def out_keep_species_no_complex(example_cd_map):
 
 
 @pytest.fixture(scope="module")
-def out_no_complex(example_cd_map):
+def out_normal_no_complex(example_cd_map):
     if not has_dot_binary():
         pytest.skip("graphviz `dot` binary not on PATH")
     return pd2af.transform(
-        example_cd_map, mode="no-complex", layout_mode="auto"
+        example_cd_map, mode="normal-no-complex", layout_mode="auto"
     )
 
 
@@ -114,20 +114,20 @@ class TestTransformExampleKeepSpeciesNoComplexMode:
 
 
 class TestTransformExampleNoComplexMode:
-    """Golden test: example.xml under no-complex mode (merge proteoforms,
+    """Golden test: example.xml under normal-no-complex mode (merge proteoforms,
     drop complexes)."""
 
-    def test_returns_celldesigner_map(self, out_no_complex):
-        assert isinstance(out_no_complex, momapy.celldesigner.CellDesignerMap)
+    def test_returns_celldesigner_map(self, out_normal_no_complex):
+        assert isinstance(out_normal_no_complex, momapy.celldesigner.CellDesignerMap)
 
-    def test_complex_drops_out(self, out_no_complex):
-        # Complex D has an active subunit; no-complex drops D in favour of
+    def test_complex_drops_out(self, out_normal_no_complex):
+        # Complex D has an active subunit; normal-no-complex drops D in favour of
         # the active subunit C.
-        names = species_names(out_no_complex.model)
+        names = species_names(out_normal_no_complex.model)
         assert "D" not in names
 
-    def test_synthetic_species_have_clean_template(self, out_no_complex):
-        for species in out_no_complex.model.species:
+    def test_synthetic_species_have_clean_template(self, out_normal_no_complex):
+        for species in out_normal_no_complex.model.species:
             template = getattr(species, "template", None)
             if template is None:
                 continue
@@ -139,9 +139,9 @@ class TestTransformExampleNoComplexMode:
                 assert template.regions == frozenset()
 
     def test_synthetic_species_have_no_states_or_modifications(
-        self, out_no_complex
+        self, out_normal_no_complex
     ):
-        for species in out_no_complex.model.species:
+        for species in out_normal_no_complex.model.species:
             if not species.id_.startswith("merged__"):
                 continue
             assert species.homomultimer == 1
@@ -206,8 +206,8 @@ class TestMergedModeStripping:
         out = pd2af.transform(rich_map, mode="normal", layout_mode=None)
         _assert_recursively_stripped(out.model.species)
 
-    def test_no_complex_strips_all_decorations(self, rich_map):
-        out = pd2af.transform(rich_map, mode="no-complex", layout_mode=None)
+    def test_normal_no_complex_strips_all_decorations(self, rich_map):
+        out = pd2af.transform(rich_map, mode="normal-no-complex", layout_mode=None)
         _assert_recursively_stripped(out.model.species)
 
     def test_keep_species_retains_decorations(self, rich_map):
@@ -255,7 +255,7 @@ class TestTransformErrors:
                 example_cd_map, mode="not-a-mode", layout_mode="plain"
             )
 
-    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
+    @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
     @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
     def test_merged_modes_reject_input_derived_layout(
         self, example_cd_map, mode, layout_mode
@@ -289,7 +289,7 @@ class TestTransformIsPure:
         assert before_species == after_species
         assert before_reactions == after_reactions
 
-    def test_no_complex_does_not_mutate_template(self, example_map_path):
+    def test_normal_no_complex_does_not_mutate_template(self, example_map_path):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         cd_map = read_cd_map(example_map_path)
@@ -300,7 +300,7 @@ class TestTransformIsPure:
             t.id_: getattr(t, "modification_residues", None)
             for t in cd_map.model.species_templates
         }
-        pd2af.transform(cd_map, mode="no-complex", layout_mode="auto")
+        pd2af.transform(cd_map, mode="normal-no-complex", layout_mode="auto")
         after_template_ids = sorted(
             t.id_ for t in cd_map.model.species_templates
         )

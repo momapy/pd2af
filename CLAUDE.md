@@ -29,7 +29,7 @@ not encoded in the activity key.
 | mode                       | PTM decorations    | complexes                                                  |
 | -------------------------- | ------------------ | ---------------------------------------------------------- |
 | `normal`                   | stripped & merged  | kept (opaque; subunits carried in the label/structure, influences routed to the complex) |
-| `no-complex`               | stripped & merged  | dissolved: active subunits promoted to top-level activities |
+| `normal-no-complex`               | stripped & merged  | dissolved: active subunits promoted to top-level activities |
 | `keep-species`             | kept               | kept (opaque; subunits routed to the complex)              |
 | `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities |
 | `casq`                     | kept               | kept (CASQ-specific deletion pruning)                      |
