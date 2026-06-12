@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
   "aspcompose>=0.1.0",
   "clorm>=1.6.1",
-  "momapy>=0.11.1",
   "momapy-kb[clingo]>=0.3.0",
   "pydot>=4.0.1",
 ]
@@ -27,6 +26,7 @@ dev = [
   "griffe-inherited-docstrings>=1.1.1",
   "mkdocs-pygments>=0.0.2",
   "casq>=1.4.4",
+  "momapy",
 ]
 test = ["pytest>=7"]
 
@@ -34,6 +34,9 @@ test = ["pytest>=7"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-ra"
+
+[tool.uv.sources]
+momapy = { path = "../momapy", editable = true }
 
 [build-system]
 requires = ["hatchling"]
