@@ -10,8 +10,11 @@ Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
 :class:`UnitOfInformation` (the entity class) and a label that is the canonical
 serialization of the whole entity pool (:mod:`pd2af.sbgn.labels`). In the
 merged modes (``normal``/``no-complex``) the label is built with state
-variables stripped, so distinct proteoforms collapse to one merged activity;
-otherwise they stay distinct under content-based model equality. A PD
+variables stripped, so distinct proteoforms collapse to one merged activity,
+and the entity's unit-of-information block is moved off the label onto the typed
+:class:`UnitOfInformation` glyph (a curator's AF map carries ``[ct:mRNA]`` on
+the glyph, not in the label); otherwise the label keeps both blocks and
+distinct proteoforms stay distinct under content-based model equality. A PD
 :class:`Phenotype` process becomes an AF :class:`Phenotype` activity. Dedup is
 honoured by interning every constructed element through the shared content
 cache (``register_or_reuse``) and resolving influence endpoints through the
@@ -194,16 +197,27 @@ def _make_activity(context, input_element, strip=False):
 
     ``strip=True`` (the merged modes ``normal``/``no-complex``) drops state
     variables from the label so distinct proteoforms collapse into one merged
-    activity under content-based model equality. ``strip=False`` keeps the full
-    label, so distinct proteoforms stay distinct (keep-species behaviour)."""
+    activity under content-based model equality, and relocates the entity's
+    unit-of-information block off the label and onto the typed unit-of-information
+    glyph (where a curator drawing AF from scratch would put it -- ``[ct:mRNA]``
+    on a nucleic-acid-feature glyph rather than inline in the label). Distinct
+    units still keep activities distinct: ``UnitOfInformation.label`` is part of
+    its content, so the dedup granularity is unchanged, only relocated.
+    ``strip=False`` keeps the full label and a bare typed glyph, so distinct
+    proteoforms stay distinct (keep-species behaviour)."""
     if isinstance(input_element, momapy.sbgn.pd.Phenotype):
         candidate = momapy.sbgn.af.Phenotype(label=input_element.label)
         return register_or_reuse(candidate, context.cache)
     unit_of_information_class = _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS.get(
         type(input_element), _FALLBACK_UNIT_OF_INFORMATION_CLASS
     )
+    unit_of_information_label = (
+        pd2af.sbgn.labels.build_units_of_information_label(input_element)
+        if strip
+        else None
+    )
     unit_of_information = register_or_reuse(
-        unit_of_information_class(), context.cache
+        unit_of_information_class(label=unit_of_information_label), context.cache
     )
     input_compartment = getattr(input_element, "compartment", None)
     if input_compartment is None:
@@ -217,7 +231,9 @@ def _make_activity(context, input_element, strip=False):
         compartment = _get_or_make_compartment(context, input_compartment)
     candidate = momapy.sbgn.af.BiologicalActivity(
         label=pd2af.sbgn.labels.build_label(
-            input_element, include_state_variables=not strip
+            input_element,
+            include_state_variables=not strip,
+            include_units_of_information=not strip,
         ),
         compartment=compartment,
         units_of_information=frozenset([unit_of_information]),

@@ -199,6 +199,15 @@ def _make_and_add_unit_of_information_layout(
         layout_class,
         position=momapy.geometry.Point(north_west.x + _UNIT_OF_INFORMATION_X_OFFSET, north_west.y),
     )
+    # In the merged modes the entity's unit-of-information block is carried on
+    # the glyph (e.g. ``[ct:mRNA]``) rather than inlined in the activity label;
+    # render it so it is written out and round-trips. Bare glyphs stay bare.
+    if unit_of_information.label:
+        unit_layout.label = (
+            momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+                unit_of_information.label, unit_layout.position
+            )
+        )
     activity_layout.layout_elements.append(unit_layout)
     context.layout_model_mapping.add_mapping(unit_layout, unit_of_information)
 

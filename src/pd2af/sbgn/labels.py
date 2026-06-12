@@ -13,7 +13,15 @@ Rules:
 - The entity **type** and its **compartment** are not part of the label (the
   type is carried by the activity's unit-of-information glyph).
 - **Units of information** are rendered ``prefix:value`` (or ``value`` with no
-  prefix) and sorted (they carry no order).
+  prefix) and sorted (they carry no order). In the merged ``normal`` /
+  ``no-complex`` modes (``include_units_of_information=False``) this block is
+  *not* inlined into the label: a curator building an AF map from scratch writes
+  ``mRNA`` on the nucleic-acid-feature glyph, never ``[ct:mRNA]`` in the label.
+  The block (see :func:`build_units_of_information_label`) is instead placed on
+  the activity's typed unit-of-information glyph by the model builder. The block
+  is still kept inline for a complex's recursively built **subunit name**
+  (below), which is a synthetic identity key, not a curator-facing label, so it
+  stays maximally distinguishing.
 - **State variables** are rendered ``value@variable`` (``@variable`` with no
   value, ``value`` with no variable, empty when neither) and listed in their
   ``order`` so multi-site proteoforms stay positionally distinct without
@@ -48,28 +56,52 @@ def _unit_of_information_token(unit_of_information):
     return unit_of_information.value
 
 
-def build_label(entity, include_state_variables=True):
+def build_units_of_information_label(entity):
+    """Return the bracketed unit-of-information block ``[uoi1|uoi2|...]`` for an
+    SBGN-PD ``entity`` -- tokens ``prefix:value`` (or ``value`` with no prefix),
+    sorted, joined by ``|`` -- or ``None`` when the entity carries no units of
+    information.
+
+    The merged ``normal`` / ``no-complex`` modes move this block off the activity
+    *label* and onto the AF activity's typed unit-of-information glyph (see
+    :func:`pd2af.sbgn.building_model._make_activity`), where a curator would put
+    it -- e.g. ``[ct:mRNA]`` on a nucleic-acid-feature glyph.
+    """
+    units_of_information = getattr(entity, "units_of_information", None)
+    if not units_of_information:
+        return None
+    return (
+        "["
+        + "|".join(
+            sorted(
+                _unit_of_information_token(unit)
+                for unit in units_of_information
+            )
+        )
+        + "]"
+    )
+
+
+def build_label(
+    entity, include_state_variables=True, include_units_of_information=True
+):
     """Return the SBGN-AF activity label for an SBGN-PD ``entity`` (entity pool
     or subunit), per the rules in the module docstring.
 
     When ``include_state_variables`` is ``False`` the state-variable block is
     omitted so that distinct proteoforms (same type/name/units, different state)
-    collapse into a single merged activity. Used by the merged ``normal`` /
-    ``no-complex`` modes; the keep-species modes keep the default ``True``.
+    collapse into a single merged activity.
+
+    When ``include_units_of_information`` is ``False`` the unit-of-information
+    block is omitted too -- the merged ``normal`` / ``no-complex`` modes relocate
+    it to the activity's unit-of-information glyph instead of inlining it. The
+    keep-species modes keep both blocks (the defaults).
     """
     decorations = ""
-    units_of_information = getattr(entity, "units_of_information", None)
-    if units_of_information:
-        decorations += (
-            "["
-            + "|".join(
-                sorted(
-                    _unit_of_information_token(unit)
-                    for unit in units_of_information
-                )
-            )
-            + "]"
-        )
+    if include_units_of_information:
+        units_block = build_units_of_information_label(entity)
+        if units_block:
+            decorations += units_block
     state_variables = getattr(entity, "state_variables", None)
     if include_state_variables and state_variables:
         tokens = [
@@ -84,9 +116,20 @@ def build_label(entity, include_state_variables=True):
     if not name:
         subunits = getattr(entity, "subunits", None)
         if subunits:
+            # An unlabelled complex's name is its subunits' labels. This name is
+            # a synthetic identity key (a curator would name the complex or leave
+            # it blank, never write ``A:B``), so subunit units of information stay
+            # inline -- only the top-level entity's own units relocate to the
+            # glyph -- keeping distinct complexes distinct. State variables still
+            # follow ``include_state_variables`` (they are decoration, merged away
+            # recursively in the merged modes).
             name = ":".join(
                 sorted(
-                    build_label(subunit, include_state_variables)
+                    build_label(
+                        subunit,
+                        include_state_variables=include_state_variables,
+                        include_units_of_information=True,
+                    )
                     for subunit in subunits
                 )
             )
