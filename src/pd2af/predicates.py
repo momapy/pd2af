@@ -3,7 +3,7 @@ import clorm
 import momapy.celldesigner
 
 
-class kept_species(clorm.Predicate):
+class keptSpeciesKey(clorm.Predicate):
     """Activity-key wrapper: the AF activity reuses an input PD species
     by identity.
 
@@ -14,7 +14,7 @@ class kept_species(clorm.Predicate):
     species: clorm.ConstantStr
 
 
-class promoted_subunit(clorm.Predicate):
+class promotedSubunitKey(clorm.Predicate):
     """Activity-key wrapper: a PD subunit of a dissolved complex is
     promoted to a top-level activity (added to ``model.species``).
 
@@ -24,10 +24,10 @@ class promoted_subunit(clorm.Predicate):
     species: clorm.ConstantStr
 
 
-_ACTIVITY_KEY = kept_species | promoted_subunit
+_ACTIVITY_KEY = keptSpeciesKey | promotedSubunitKey
 
 
-class logical_operator_key(clorm.Predicate):
+class logicalOperatorKey(clorm.Predicate):
     """Activity-source wrapper: the AF influence is sourced by a logical
     operator (AND / OR / NOT / unknown) authored in the input PD map.
 
@@ -43,7 +43,7 @@ class logical_operator_key(clorm.Predicate):
 # The source of an influence edge: an activity (the two activity-key
 # wrappers) or a logical operator. The target is always an activity, so
 # only the influence ``source`` field is widened to this union.
-_INFLUENCE_SOURCE = _ACTIVITY_KEY | logical_operator_key
+_INFLUENCE_SOURCE = _ACTIVITY_KEY | logicalOperatorKey
 
 
 class activity(clorm.Predicate):
@@ -131,7 +131,7 @@ class logicalOperator(clorm.Predicate):
     KIND-token idiom and avoids same-name collisions with the input
     ontology's per-type operator functors.
     """
-    key: logical_operator_key
+    key: logicalOperatorKey
     type_: clorm.ConstantStr
 
 
@@ -139,7 +139,7 @@ class logicalOperatorInput(clorm.Predicate):
     """An input edge of a logical operator: one activity feeding the
     operator. Always wrapped by ``new(...)`` in rule heads.
     """
-    operator: logical_operator_key
+    operator: logicalOperatorKey
     input: _ACTIVITY_KEY
 
 

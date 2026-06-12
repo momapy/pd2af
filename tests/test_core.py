@@ -169,7 +169,7 @@ class TestTransformExampleNormalMode:
         assert "C" not in names
 
     def test_complex_routes_through_itself(self, out_normal):
-        # Influences involving the complex go through the complex (kept_species)
+        # Influences involving the complex go through the complex (keptSpeciesKey)
         # rather than through subunits.
         mods = modulation_set(out_normal.model)
         assert ("PositiveInfluence", "B", "D") in mods

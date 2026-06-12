@@ -23,7 +23,7 @@ class TestBuildProgram:
     def test_profile_has_activity_and_influence_rules(self, profile):
         program = pd2af.rules.build_program(profile)
         assert "hasActivity" in program
-        assert "activityKey" in program
+        assert "hasActivityKey" in program
         assert "new(activity(KEY))" in program
         assert "new(positivelyInfluences" in program
         assert "new(negativelyInfluences" in program
@@ -47,45 +47,45 @@ class TestBuildProgram:
     def test_profile_fans_out_internal_influences_relation(self, profile):
         program = pd2af.rules.build_program(profile)
         # The typed heads are derived from the internal influences/3 relation.
-        assert "influences(SOURCE, TARGET, positive)" in program
+        assert "influences(SOURCE, TARGET, positivelyInfluences)" in program
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
 
     def test_non_casq_profiles_carry_kind_through_composes_to(self):
         for profile in ("normal", "no_complex", "keep_species", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
-            assert "composesTo(triggering, positive)" in program
-            assert "composesTo(INCOMING_KIND, OUTGOING_KIND)" in program
+            assert "composesTo(triggers, positivelyInfluences)" in program
+            assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" in program
 
     def test_no_complex_variants_promote_active_subunits(self):
         for profile in ("no_complex", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
-            assert "promoted_subunit" in program
+            assert "promotedSubunitKey" in program
 
     def test_keep_complex_variants_omit_subunit_promotion(self):
         for profile in ("normal", "keep_species"):
             program = pd2af.rules.build_program(profile)
-            assert "promoted_subunit" not in program
+            assert "promotedSubunitKey" not in program
 
     def test_no_complex_variants_include_complex_traversal(self):
         for profile in ("no_complex", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
-            assert "hasSubunit(END_SPECIES, SUBUNIT)" in program
-            assert "hasSubunit(START_SPECIES, SUBUNIT)" in program
+            assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" in program
+            assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" in program
 
     def test_keep_complex_variants_omit_complex_traversal(self):
         for profile in ("normal", "keep_species"):
             program = pd2af.rules.build_program(profile)
-            assert "hasSubunit(END_SPECIES, SUBUNIT)" not in program
-            assert "hasSubunit(START_SPECIES, SUBUNIT)" not in program
+            assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" not in program
+            assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" not in program
 
     def test_complex_keeping_profiles_key_by_top_level(self):
         # `normal`/`keep-species` route every species (including subunits) to
-        # its top-level complex via the shared `topLevel` relation, so a
+        # its top-level complex via the shared `resolvesToTopLevel` relation, so a
         # subunit never gets its own key.
         for profile in ("normal", "keep_species"):
             program = pd2af.rules.build_program(profile)
-            assert "topLevel(SPECIES, TOP)" in program
-            assert "activityKey(SPECIES, kept_species(TOP))" in program
+            assert "resolvesToTopLevel(SPECIES, TOPLEVEL)" in program
+            assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
 
     def test_no_profile_uses_new_species_from_template(self):
         for profile in _PROFILES:
@@ -96,7 +96,7 @@ class TestBuildProgram:
         for profile in ("keep_species", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
             assert "new_species_from_template" not in program
-            assert "kept_species" in program
+            assert "keptSpeciesKey" in program
 
     def test_unknown_profile_raises(self):
         with pytest.raises(ValueError):
@@ -115,12 +115,12 @@ class TestMergedProfilesSbgnPdVariant:
         assert "new_species_from_template" not in program
         assert "isMergeableEntity" not in program
         assert (
-            "activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY)." in program
+            "hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL)." in program
         )
         # The CellDesigner species carrier must NOT leak into the SBGN-PD program
         # (its absence is exactly the carrier bug this variant fixes).
         assert (
-            "activityCarrier(SPECIES, SPECIES) :- species(SPECIES)."
+            "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)."
             not in program
         )
 
@@ -128,7 +128,7 @@ class TestMergedProfilesSbgnPdVariant:
     def test_celldesigner_variant_uses_species_carrier(self, profile):
         program = pd2af.rules.build_program(profile, language="celldesigner")
         assert (
-            "activityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
+            "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
         )
         assert "isMergeableEntity" not in program
         assert "new_species_from_template" not in program
@@ -152,18 +152,18 @@ class TestCasqProfile:
         assert "rule_2" in program
         assert "rule_3" in program
         assert "rule_4" in program
-        assert "bridgedProduct" in program
+        assert "bridgesToProduct" in program
 
     def test_casq_excludes_path_and_complex_traversal(self):
         program = pd2af.rules.build_program("casq")
-        assert "path(START_SPECIES" not in program
-        assert "hasSubunit(END_SPECIES, SUBUNIT)" not in program
+        assert "propagatesInfluence(" not in program
+        assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" not in program
         assert "hasContributingComplexAncestor" not in program
-        assert "promoted_subunit" not in program
+        assert "promotedSubunitKey" not in program
 
     def test_casq_uses_kept_species_keys_only(self):
         program = pd2af.rules.build_program("casq")
-        assert "kept_species" in program
+        assert "keptSpeciesKey" in program
         assert "new_species_from_template" not in program
 
     def test_casq_does_not_emit_inhibitor_spares_reactant(self):

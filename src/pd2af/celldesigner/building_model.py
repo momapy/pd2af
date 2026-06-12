@@ -1,7 +1,7 @@
 """Build the AF model from clingo activity / influence atoms.
 
 ``make_and_add_model`` is the model pass: it walks the activity atoms in
-layer order (kept_species → promoted_subunit) and populates ``context.model``
+layer order (keptSpeciesKey → promotedSubunitKey) and populates ``context.model``
 with canonical, content-deduped compartments, templates, species and
 modulations. In the merged modes (``normal``/``no-complex``) each activity's
 species is stripped of its PTM decorations (recursively, including subunits)
@@ -34,8 +34,8 @@ _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
 
 
 _SPECIES_LAYER_ORDER = (
-    pd2af.predicates.kept_species,
-    pd2af.predicates.promoted_subunit,
+    pd2af.predicates.keptSpeciesKey,
+    pd2af.predicates.promotedSubunitKey,
 )
 
 # The typed influence predicates emitted into ``new(...)`` — exactly the
@@ -54,21 +54,21 @@ _OPERATOR_TYPE_TO_GATE_CLASS = {
 }
 
 
-def get_or_make_kept_species_or_subunit(input_species, cache):
-    """Canonical species for a ``kept_species`` key (non-merged modes).
+def get_or_make_kept_species_key_or_subunit(input_species, cache):
+    """Canonical species for a ``keptSpeciesKey`` key (non-merged modes).
     The input species is the canonical instance — register it so later
     content-equal candidates collapse onto it.
     """
     return register_or_reuse(input_species, cache)
 
 
-def get_or_make_promoted_subunit_species(
+def get_or_make_promoted_subunit_key_species(
     input_subunit,
     subunit_to_top_level,
     cache,
     input_model_element_to_canonical_model_element,
 ):
-    """Canonical species for a ``promoted_subunit`` key. CellDesigner
+    """Canonical species for a ``promotedSubunitKey`` key. CellDesigner
     subunits carry ``compartment=None`` (inherited from the parent
     complex); when promoted to top-level they need the parent's
     compartment, otherwise the writer substitutes a synthetic ``default``
@@ -77,7 +77,7 @@ def get_or_make_promoted_subunit_species(
 
     Two distinct input subunits promoted to the same compartment
     collapse via the cache; if a content-equal kept species is already
-    cached (from the kept_species layer), the corrected version
+    cached (from the keptSpeciesKey layer), the corrected version
     collapses onto that.
 
     Records ``id(input_subunit) -> canonical_species`` in
@@ -143,7 +143,7 @@ def get_or_make_stripped_species(
     content-equal stripped twins still intern to one canonical because ``id_``
     is ``compare=False``. Records ``id(input) -> canonical`` when they differ so
     Pass 2 can substitute stale references (mirrors
-    ``get_or_make_promoted_subunit_species``).
+    ``get_or_make_promoted_subunit_key_species``).
     """
     fields = {}
     if hasattr(input_species, "homomultimer"):
@@ -368,8 +368,8 @@ def _resolve_activity_key(context, key):
     """Resolve an activity key to its output species. In the merged modes
     (``normal``/``no-complex``) every species is stripped of its PTM decorations
     (recursively, including subunits) so content-equal proteoforms collapse;
-    otherwise the input species is reused by identity (``kept_species``) or
-    promoted with a corrected compartment (``promoted_subunit``)."""
+    otherwise the input species is reused by identity (``keptSpeciesKey``) or
+    promoted with a corrected compartment (``promotedSubunitKey``)."""
     input_species = context.clingo_id_to_model_element[key.species]
     if context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES:
         compartment = _compartment_for_input_species(context, input_species)
@@ -379,15 +379,15 @@ def _resolve_activity_key(context, key):
             context.cache,
             context.input_model_element_to_canonical_model_element,
         )
-    if isinstance(key, pd2af.predicates.promoted_subunit):
-        return get_or_make_promoted_subunit_species(
+    if isinstance(key, pd2af.predicates.promotedSubunitKey):
+        return get_or_make_promoted_subunit_key_species(
             input_species,
             context.subunit_to_top_level,
             context.cache,
             context.input_model_element_to_canonical_model_element,
         )
-    if isinstance(key, pd2af.predicates.kept_species):
-        return get_or_make_kept_species_or_subunit(input_species, context.cache)
+    if isinstance(key, pd2af.predicates.keptSpeciesKey):
+        return get_or_make_kept_species_key_or_subunit(input_species, context.cache)
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 
@@ -410,7 +410,7 @@ def _make_and_add_gates(context):
     used_operator_keys = {
         atom.source
         for atom in context.influence_atoms
-        if isinstance(atom.source, pd2af.predicates.logical_operator_key)
+        if isinstance(atom.source, pd2af.predicates.logicalOperatorKey)
     }
     seen_gate_identities = set()
     for atom in context.operator_atoms:
@@ -458,7 +458,7 @@ def _resolve_influence_source(context, source_key):
     operator resolves through ``key_to_gate`` (``None`` if the gate was not
     built, so the edge is skipped); any activity key resolves through
     ``key_to_species``."""
-    if isinstance(source_key, pd2af.predicates.logical_operator_key):
+    if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
         return context.key_to_gate.get(source_key)
     return context.key_to_species[source_key]
 

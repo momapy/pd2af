@@ -4,7 +4,7 @@ influences.
 
 Coverage mirrors the plan's verification list:
 
-* predicate level -- each typed influence accepts a ``logical_operator_key``
+* predicate level -- each typed influence accepts a ``logicalOperatorKey``
   source; ``new`` wraps the operator node and input predicates;
 * rule level -- the ``_GATES`` group is present in every non-casq profile and
   absent in casq, the gate-input activation clause is emitted per language, and
@@ -91,7 +91,7 @@ def _gate_map_paths():
 class TestOperatorPredicates:
     def test_logical_operator_key_is_clorm_predicate(self):
         assert issubclass(
-            pd2af.predicates.logical_operator_key, clorm.Predicate
+            pd2af.predicates.logicalOperatorKey, clorm.Predicate
         )
 
     def test_logical_operator_is_clorm_predicate(self):
@@ -103,36 +103,36 @@ class TestOperatorPredicates:
         )
 
     def test_logical_operator_key_can_be_constructed(self):
-        atom = pd2af.predicates.logical_operator_key(gate="some_gate")
+        atom = pd2af.predicates.logicalOperatorKey(gate="some_gate")
         assert atom.gate == "some_gate"
 
     def test_logical_operator_carries_type_token(self):
         atom = pd2af.predicates.logicalOperator(
-            key=pd2af.predicates.logical_operator_key(gate="g"), type_="and"
+            key=pd2af.predicates.logicalOperatorKey(gate="g"), type_="and"
         )
         assert atom.type_ == "and"
-        assert isinstance(atom.key, pd2af.predicates.logical_operator_key)
+        assert isinstance(atom.key, pd2af.predicates.logicalOperatorKey)
 
     def test_each_typed_influence_accepts_operator_source(self):
         for name in _TYPED_INFLUENCE_NAMES:
             predicate = getattr(pd2af.predicates, name)
             atom = predicate(
-                source=pd2af.predicates.logical_operator_key(gate="g"),
-                target=pd2af.predicates.kept_species(species="t"),
+                source=pd2af.predicates.logicalOperatorKey(gate="g"),
+                target=pd2af.predicates.keptSpeciesKey(species="t"),
             )
             assert isinstance(
-                atom.source, pd2af.predicates.logical_operator_key
+                atom.source, pd2af.predicates.logicalOperatorKey
             ), name
-            assert isinstance(atom.target, pd2af.predicates.kept_species), name
+            assert isinstance(atom.target, pd2af.predicates.keptSpeciesKey), name
 
     def test_new_wraps_operator_node_and_input(self):
-        key = pd2af.predicates.logical_operator_key(gate="g")
+        key = pd2af.predicates.logicalOperatorKey(gate="g")
         node = pd2af.predicates.new(
             object_=pd2af.predicates.logicalOperator(key=key, type_="or")
         )
         edge = pd2af.predicates.new(
             object_=pd2af.predicates.logicalOperatorInput(
-                operator=key, input=pd2af.predicates.kept_species(species="i")
+                operator=key, input=pd2af.predicates.keptSpeciesKey(species="i")
             )
         )
         assert isinstance(node.object_, pd2af.predicates.logicalOperator)
@@ -144,9 +144,9 @@ class TestGateRules:
     @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
     def test_gates_group_present_in_non_casq(self, profile, language):
         program = pd2af.rules.build_program(profile, language=language)
-        assert "new(logicalOperator(logical_operator_key(G)," in program
-        assert "new(logicalOperatorInput(logical_operator_key(G)," in program
-        assert "influences(logical_operator_key(G), TARGET_KEY, KIND)" in program
+        assert "new(logicalOperator(logicalOperatorKey(OPERATOR)," in program
+        assert "new(logicalOperatorInput(logicalOperatorKey(OPERATOR)," in program
+        assert "influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND)" in program
 
     def test_gates_group_absent_in_casq(self):
         # The _GATES group (operator nodes, input edges, operator-sourced
@@ -156,7 +156,7 @@ class TestGateRules:
         # reference is a rule head, never a body condition -- so casq emits 0
         # gates (asserted end-to-end in TestCelldesignerGatesAreAdditive).
         program = pd2af.rules.build_program("casq")
-        assert "logical_operator_key" not in program
+        assert "logicalOperatorKey" not in program
         assert "logicalOperator" not in program
         assert "new(logicalOperator" not in program
 
@@ -164,12 +164,12 @@ class TestGateRules:
         program = pd2af.rules.build_program(
             "keep_species", language="celldesigner"
         )
-        assert "hasActivity(ELEMENT, gate_input)" in program
+        assert "hasActivity(ELEMENT, isGateInput)" in program
         assert "booleanLogicGateInput(INPUT)" in program
 
     def test_sbgn_pd_operator_input_activation_is_entity_pool_guarded(self):
         program = pd2af.rules.build_program("keep_species", language="sbgn_pd")
-        assert "hasActivity(ELEMENT, gate_input)" in program
+        assert "hasActivity(ELEMENT, isGateInput)" in program
         assert "logicalOperatorInput(INPUT)" in program
         assert "entityPool(ELEMENT)" in program
 
@@ -178,7 +178,7 @@ class TestGateRules:
         program = pd2af.rules.build_program(
             "keep_species", language="celldesigner"
         )
-        assert "logicalOperator(logical_operator_key(G), not_)) :- notGate(G)." in program
+        assert "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR)." in program
 
     def test_gates_influence_rule_guards_on_umbrella(self):
         # Without the booleanLogicGate/logicalOperator umbrella guard, every
@@ -186,11 +186,11 @@ class TestGateRules:
         cd_program = pd2af.rules.build_program(
             "keep_species", language="celldesigner"
         )
-        assert "booleanLogicGate(G)" in cd_program
+        assert "booleanLogicGate(OPERATOR)" in cd_program
         sbgn_program = pd2af.rules.build_program(
             "keep_species", language="sbgn_pd"
         )
-        assert "logicalOperator(G)" in sbgn_program
+        assert "logicalOperator(OPERATOR)" in sbgn_program
 
 
 class TestOperatorClassMapsAreTotal:

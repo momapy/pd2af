@@ -63,7 +63,7 @@ class TestSolve:
         self, solved_keep_species
     ):
         # B, D, E, F, G. Active subunit C of complex D no longer gets its own
-        # activity -- it resolves to D's top-level `kept_species(D)`, the same
+        # activity -- it resolves to D's top-level `keptSpeciesKey(D)`, the same
         # key D itself carries, so it adds no distinct activity atom.
         clingo_model, _ = solved_keep_species
         atoms = _activity_atoms(clingo_model)
@@ -129,12 +129,12 @@ class TestSolveCasq:
         assert isinstance(clingo_model, clorm.FactBase)
         assert isinstance(id_to_model_element, dict)
 
-    def test_activity_keys_are_kept_species(self, solved_casq):
+    def test_activity_keys_are_kept_species_key(self, solved_casq):
         clingo_model, _ = solved_casq
         atoms = _activity_atoms(clingo_model)
         assert len(atoms) > 0
         for atom in atoms:
-            assert isinstance(atom.key, pd2af.predicates.kept_species)
+            assert isinstance(atom.key, pd2af.predicates.keptSpeciesKey)
 
     def test_emits_some_influences(self, solved_casq):
         clingo_model, _ = solved_casq

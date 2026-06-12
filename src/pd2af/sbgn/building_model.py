@@ -1,7 +1,7 @@
 """Build the SBGN-AF model from clingo activity / influence atoms.
 
 ``make_and_add_model`` is the AF model pass: it walks the activity atoms
-(``kept_species`` / ``promoted_subunit`` keys, each resolving to an input
+(``keptSpeciesKey`` / ``promotedSubunitKey`` keys, each resolving to an input
 SBGN-PD entity pool, phenotype or promoted subunit) and the influence atoms,
 and populates ``context.model`` with canonical, content-deduped compartments,
 activities and influences.
@@ -260,7 +260,7 @@ def _make_and_add_operators(context):
     used_operator_keys = {
         atom.source
         for atom in context.influence_atoms
-        if isinstance(atom.source, pd2af.predicates.logical_operator_key)
+        if isinstance(atom.source, pd2af.predicates.logicalOperatorKey)
     }
     seen_operator_identities = set()
     for atom in context.operator_atoms:
@@ -305,7 +305,7 @@ def _resolve_influence_source(context, source_key):
     """Resolve an influence ``source`` key to its model element: a logical
     operator resolves through ``key_to_operator`` (``None`` if not built); any
     activity key resolves through ``key_to_activity`` (``None`` if not emitted)."""
-    if isinstance(source_key, pd2af.predicates.logical_operator_key):
+    if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
         return context.key_to_operator.get(source_key)
     return context.key_to_activity.get(source_key)
 

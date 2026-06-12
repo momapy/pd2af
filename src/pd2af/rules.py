@@ -3,27 +3,27 @@
 The non-CASQ rules are organised in layers:
 
 * **topology** (shared across all non-CASQ profiles) — structural
-  helpers: ``isSubunit``, ``hasActiveDescendant``.
+  helpers: ``isSubunit``, ``hasActiveDescendantSubunit``.
 * **top_level** (the complex-keeping modes ``keep-species`` and
-  ``normal``) — ``topLevel(SPECIES, TOP)`` resolves every species to its
+  ``normal``) — ``resolvesToTopLevel(SPECIES, TOPLEVEL)`` resolves every species to its
   outermost top-level entity, so a subunit is keyed by (and its
   influences routed to) its top-level complex rather than itself.
 * **preparation** (one rule group per non-CASQ mode) — emits
-  ``activityCarrier(RAW_SPECIES, ACTIVITY_BEARER)`` and
-  ``activityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of two
-  per-species wrappers: ``kept_species/1`` (top-level species, and the
-  top-level complex a subunit resolves to) or ``promoted_subunit/1`` (a
+  ``hasActivityCarrier(RAW_SPECIES, ACTIVITY_BEARER)`` and
+  ``hasActivityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of two
+  per-species wrappers: ``keptSpeciesKey/1`` (top-level species, and the
+  top-level complex a subunit resolves to) or ``promotedSubunitKey/1`` (a
   subunit promoted to top level when its complex is dissolved in the
   no-complex modes). Proteoform/PTM stripping for the merged modes
   (``normal``/``no-complex``) happens at the build stage, not in the key.
 * **derivation** (shared across all non-CASQ profiles) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
-  ``new(negativelyInfluences(...))`` from ``activityCarrier`` /
-  ``activityKey``.
+  ``new(negativelyInfluences(...))`` from ``hasActivityCarrier`` /
+  ``hasActivityKey``.
 
 The ``casq`` profile keeps its own pipeline (deletion rules,
 bridged-product rewiring, direct reactant→product / modifier→product
-influence emission). It uses ``kept_species/1`` for every surviving
+influence emission). It uses ``keptSpeciesKey/1`` for every surviving
 species's activity key, sharing only the predicate type with the
 non-CASQ layers.
 """
@@ -54,69 +54,69 @@ _ACTIVITY_BASE = RuleGroup(
     rules=(
         Rule(
             identifier="activity_base:from_phenotype",
-            text="hasActivity(PHENOTYPE, phenotype) :- phenotype(PHENOTYPE).",
-            docs="If a species/process is a phenotype, then it has activity, with reason `phenotype`. Shared: both languages emit the `phenotype` functor.",
+            text="hasActivity(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE).",
+            docs="If a species/process is a phenotype, then it has activity, with reason `isPhenotype`. Shared: both languages emit the `phenotype` functor.",
         ),
     ),
     variants={
         "celldesigner": (
             Rule(
                 identifier="activity_base:from_active_flag",
-                text="hasActivity(SPECIES, active) :- species(SPECIES), hasActive(SPECIES, 1).",
-                docs="If a species has its `hasActive` flag set to 1, then it has activity, with reason `active`.",
+                text="hasActivity(SPECIES, isActive) :- species(SPECIES), hasActive(SPECIES, 1).",
+                docs="If a species has its `hasActive` flag set to 1, then it has activity, with reason `isActive`.",
             ),
             Rule(
                 identifier="activity_base:from_active_structural_state",
                 text=dedent("""\
-                    hasActivity(SPECIES, structural_state_active) :-
+                    hasActivity(SPECIES, hasActiveStructuralState) :-
                         species(SPECIES),
                         hasStructuralState(SPECIES, STRUCTURAL_STATE),
                         hasValue(STRUCTURAL_STATE, "active")."""),
-                docs='If a species carries a structural state whose value is "active", then it has activity, with reason `structural_state_active`.',
+                docs='If a species carries a structural state whose value is "active", then it has activity, with reason `hasActiveStructuralState`.',
             ),
             Rule(
                 identifier="activity_base:from_modulation_source",
                 text=dedent("""\
-                    hasActivity(SOURCE, modulates(SOURCE, TARGET)) :-
+                    hasActivity(SOURCE, isModulationSource) :-
                         species(SOURCE),
                         knownOrUnknownModulation(MODULATION),
                         hasSource(MODULATION, SOURCE),
-                        hasTarget(MODULATION, TARGET)."""),
-                docs="If a species is the source of a modulation arc (known *or* unknown) with some target, then it has activity, with reason `modulates(source, target)`. Keying on `knownOrUnknownModulation` rather than `modulation` is what lets the source of an unknown modulation become an activity node.",
+                        hasTarget(MODULATION, _)."""),
+                docs="If a species is the source of a modulation arc (known *or* unknown) with some target, then it has activity, with reason `isModulationSource`. Keying on `knownOrUnknownModulation` rather than `modulation` is what lets the source of an unknown modulation become an activity node.",
             ),
             Rule(
                 identifier="activity_base:from_reaction_modulator",
                 text=dedent("""\
-                    hasActivity(SOURCE, modulates(SOURCE, TARGET)) :-
+                    hasActivity(SOURCE, isReactionModifier) :-
                         species(SOURCE),
                         knownOrUnknownModulator(MODULATOR),
                         hasReferredSpecies(MODULATOR, SOURCE),
-                        hasModifier(TARGET, MODULATOR)."""),
-                docs="If a species is referred to by a reaction modulator (known *or* unknown) that modifies some target reaction, then it has activity, with reason `modulates(source, target)`. Keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
+                        hasModifier(_, MODULATOR)."""),
+                docs="If a species is referred to by a reaction modulator (known *or* unknown) that modifies some target reaction, then it has activity, with reason `isReactionModifier`. Keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
             ),
             Rule(
                 identifier="activity_base:from_gate_input",
                 text=dedent("""\
-                    hasActivity(ELEMENT, gate_input) :-
+                    hasActivity(ELEMENT, isGateInput) :-
                         booleanLogicGateInput(INPUT),
                         hasElement(INPUT, ELEMENT)."""),
-                docs="If a species feeds a boolean logic gate input, then it has activity, with reason `gate_input`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
+                docs="If a species feeds a boolean logic gate input, then it has activity, with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="activity_base:sbgn_pd:from_active_state_variable",
                 text=dedent("""\
-                    hasActivity(ENTITY, active_state_variable) :-
-                        entityPool(ENTITY),
-                        hasStateVariable(ENTITY, STATE_VARIABLE),
+                    hasActivity(ENTITY_POOL, hasActiveStateVariable) :-
+                        entityPool(ENTITY_POOL),
+                        hasStateVariable(ENTITY_POOL, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
-                docs='If an entity pool carries a state variable whose value is "active", then it has activity (the SBGN-PD parallel of CellDesigner\'s active structural state).',
+                docs='If an entity pool carries a state variable whose value is "active", then it has activity (the SBGN-PD parallel of CellDesigner\'s active structural state), with reason `hasActiveStateVariable`.',
             ),
             Rule(
                 identifier="activity_base:sbgn_pd:from_active_subunit_state_variable",
                 text=dedent("""\
-                    hasActivity(SUBUNIT, active_state_variable) :-
+                    hasActivity(SUBUNIT, hasActiveStateVariable) :-
                         isSubunit(SUBUNIT),
                         hasStateVariable(SUBUNIT, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
@@ -125,21 +125,21 @@ _ACTIVITY_BASE = RuleGroup(
             Rule(
                 identifier="activity_base:sbgn_pd:from_modulation_source",
                 text=dedent("""\
-                    hasActivity(SOURCE, modulates(SOURCE, TARGET)) :-
+                    hasActivity(SOURCE, isModulationSource) :-
                         entityPool(SOURCE),
                         modulation(MODULATION),
                         hasSource(MODULATION, SOURCE),
-                        hasTarget(MODULATION, TARGET)."""),
-                docs="If an entity pool is the source of a modulation arc (whose target is a process), then it has activity. This is the SBGN-PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
+                        hasTarget(MODULATION, _)."""),
+                docs="If an entity pool is the source of a modulation arc (whose target is a process), then it has activity, with reason `isModulationSource`. This is the SBGN-PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
             ),
             Rule(
                 identifier="activity_base:sbgn_pd:from_operator_input",
                 text=dedent("""\
-                    hasActivity(ELEMENT, gate_input) :-
+                    hasActivity(ELEMENT, isGateInput) :-
                         logicalOperatorInput(INPUT),
                         hasElement(INPUT, ELEMENT),
                         entityPool(ELEMENT)."""),
-                docs="If an entity pool feeds a logical operator input, then it has activity, with reason `gate_input` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
+                docs="If an entity pool feeds a logical operator input, then it has activity, with reason `isGateInput` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
             ),
         ),
     },
@@ -148,7 +148,7 @@ _ACTIVITY_BASE = RuleGroup(
 _TOPOLOGY = RuleGroup(
     identifier="topology",
     profiles=_NON_CASQ_PROFILES,
-    docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendant`.",
+    docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendantSubunit`.",
     rules=(
         Rule(
             identifier="topology:is_subunit",
@@ -158,7 +158,7 @@ _TOPOLOGY = RuleGroup(
         Rule(
             identifier="topology:has_active_descendant_direct",
             text=dedent("""\
-                hasActiveDescendant(COMPLEX) :-
+                hasActiveDescendantSubunit(COMPLEX) :-
                     complex(COMPLEX),
                     hasSubunit(COMPLEX, SUBUNIT),
                     hasActivity(SUBUNIT, _)."""),
@@ -167,11 +167,11 @@ _TOPOLOGY = RuleGroup(
         Rule(
             identifier="topology:has_active_descendant_transitive",
             text=dedent("""\
-                hasActiveDescendant(COMPLEX) :-
+                hasActiveDescendantSubunit(COMPLEX) :-
                     complex(COMPLEX),
                     hasSubunit(COMPLEX, NESTED_COMPLEX),
-                    hasActiveDescendant(NESTED_COMPLEX)."""),
-            docs="The `hasActiveDescendant` relation is transitive through complex containment.",
+                    hasActiveDescendantSubunit(NESTED_COMPLEX)."""),
+            docs="The `hasActiveDescendantSubunit` relation is transitive through complex containment.",
         ),
     ),
 )
@@ -185,9 +185,9 @@ _TOP_LEVEL = RuleGroup(
         Rule(
             identifier="top_level:recursive",
             text=dedent("""\
-                topLevel(SPECIES, TOP) :-
-                    hasSubunit(PARENT, SPECIES),
-                    topLevel(PARENT, TOP)."""),
+                resolvesToTopLevel(SUBUNIT, TOPLEVEL) :-
+                    hasSubunit(PARENT_COMPLEX, SUBUNIT),
+                    resolvesToTopLevel(PARENT_COMPLEX, TOPLEVEL)."""),
             docs="A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex.",
         ),
     ),
@@ -196,7 +196,7 @@ _TOP_LEVEL = RuleGroup(
             Rule(
                 identifier="top_level:celldesigner:self",
                 text=dedent("""\
-                    topLevel(SPECIES, SPECIES) :-
+                    resolvesToTopLevel(SPECIES, SPECIES) :-
                         species(SPECIES),
                         not hasSubunit(_, SPECIES)."""),
                 docs="CellDesigner: a species that is not a subunit of any complex is its own top-level entity.",
@@ -206,9 +206,9 @@ _TOP_LEVEL = RuleGroup(
             Rule(
                 identifier="top_level:sbgn_pd:self",
                 text=dedent("""\
-                    topLevel(ENTITY, ENTITY) :-
-                        entityPool(ENTITY),
-                        not hasSubunit(_, ENTITY)."""),
+                    resolvesToTopLevel(ENTITY_POOL, ENTITY_POOL) :-
+                        entityPool(ENTITY_POOL),
+                        not hasSubunit(_, ENTITY_POOL)."""),
                 docs="SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity.",
             ),
         ),
@@ -219,15 +219,15 @@ _PREPARATION_KEEP_SPECIES = RuleGroup(
     identifier="preparation:keep_species",
     profiles=frozenset({"keep_species"}),
     depends_on=frozenset({"activity_base", "topology", "top_level"}),
-    docs="`keep-species` preparation: a species with activity is keyed by the `kept_species` of its top-level entity (`top_level` group) -- itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own: it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key.",
+    docs="`keep-species` preparation: a species with activity is keyed by the `keptSpeciesKey` of its top-level entity (`top_level` group) -- itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own: it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key.",
     rules=(
         Rule(
             identifier="preparation:keep_species:key",
             text=dedent("""\
-                activityKey(SPECIES, kept_species(TOP)) :-
+                hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL)) :-
                     hasActivity(SPECIES, _),
-                    topLevel(SPECIES, TOP)."""),
-            docs="A species with activity is keyed by the `kept_species` of its top-level entity (itself when top-level; its outermost complex when a subunit).",
+                    resolvesToTopLevel(SPECIES, TOPLEVEL)."""),
+            docs="A species with activity is keyed by the `keptSpeciesKey` of its top-level entity (itself when top-level; its outermost complex when a subunit).",
         ),
     ),
     # The activity carrier is a per-language variant: a CellDesigner species is
@@ -237,19 +237,19 @@ _PREPARATION_KEEP_SPECIES = RuleGroup(
         "celldesigner": (
             Rule(
                 identifier="preparation:keep_species:carrier",
-                text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+                text="hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
                 docs="Each species is its own activity carrier (no rerouting).",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="preparation:keep_species:sbgn_pd:carrier_entity_pool",
-                text="activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY).",
+                text="hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL).",
                 docs="SBGN-PD: each entity pool is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:keep_species:sbgn_pd:carrier_phenotype",
-                text="activityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
+                text="hasActivityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
                 docs="SBGN-PD: each phenotype process is its own activity carrier (phenotypes are activities, not entity pools).",
             ),
         ),
@@ -260,48 +260,48 @@ _PREPARATION_KEEP_SPECIES_NO_COMPLEX = RuleGroup(
     identifier="preparation:keep_species_no_complex",
     profiles=frozenset({"keep_species_no_complex"}),
     depends_on=frozenset({"activity_base", "topology"}),
-    docs="`keep-species-no-complex` preparation: a complex with any active descendant is suppressed; non-suppressed top-level species with activity contribute their own `kept_species(SELF)` activity; subunits of suppressed complexes are promoted to top-level activities keyed by `promoted_subunit(SELF)`.",
+    docs="`keep-species-no-complex` preparation: a complex with any active descendant is deleted; non-deleted top-level species with activity contribute their own `keptSpeciesKey(SELF)` activity; subunits of deleted complexes are promoted to top-level activities keyed by `promotedSubunitKey(SELF)`.",
     rules=(
         Rule(
-            identifier="preparation:keep_species_no_complex:suppressed",
+            identifier="preparation:keep_species_no_complex:deleted",
             text=dedent("""\
-                suppressed(COMPLEX) :-
+                delete(COMPLEX) :-
                     complex(COMPLEX),
-                    hasActiveDescendant(COMPLEX)."""),
-            docs="A complex with any (transitive) active descendant is suppressed.",
+                    hasActiveDescendantSubunit(COMPLEX)."""),
+            docs="A complex with any (transitive) active descendant is deleted.",
         ),
         Rule(
-            identifier="preparation:keep_species_no_complex:subunit_of_suppressed_direct",
+            identifier="preparation:keep_species_no_complex:subunit_of_deleted_direct",
             text=dedent("""\
-                subunitOfSuppressed(SUBUNIT) :-
+                isDescendantSubunitOfDeleted(SUBUNIT) :-
                     hasSubunit(COMPLEX, SUBUNIT),
-                    suppressed(COMPLEX)."""),
-            docs="A direct subunit of a suppressed complex is itself subunit-of-suppressed.",
+                    delete(COMPLEX)."""),
+            docs="A direct subunit of a deleted complex is itself subunit-of-deleted.",
         ),
         Rule(
-            identifier="preparation:keep_species_no_complex:subunit_of_suppressed_transitive",
+            identifier="preparation:keep_species_no_complex:subunit_of_deleted_transitive",
             text=dedent("""\
-                subunitOfSuppressed(SUBUNIT) :-
-                    hasSubunit(PARENT, SUBUNIT),
-                    subunitOfSuppressed(PARENT)."""),
-            docs="Subunit-of-suppressed is transitive through nested complexes.",
+                isDescendantSubunitOfDeleted(SUBUNIT) :-
+                    hasSubunit(PARENT_COMPLEX, SUBUNIT),
+                    isDescendantSubunitOfDeleted(PARENT_COMPLEX)."""),
+            docs="Subunit-of-deleted is transitive through nested complexes.",
         ),
         Rule(
             identifier="preparation:keep_species_no_complex:key_top_level",
             text=dedent("""\
-                activityKey(SPECIES, kept_species(SPECIES)) :-
+                hasActivityKey(SPECIES, keptSpeciesKey(SPECIES)) :-
                     hasActivity(SPECIES, _),
                     not isSubunit(SPECIES),
-                    not suppressed(SPECIES)."""),
-            docs="A non-suppressed top-level species with activity is keyed by `kept_species(SELF)`.",
+                    not delete(SPECIES)."""),
+            docs="A non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`.",
         ),
         Rule(
             identifier="preparation:keep_species_no_complex:key_promoted_subunit",
             text=dedent("""\
-                activityKey(SPECIES, promoted_subunit(SPECIES)) :-
+                hasActivityKey(SPECIES, promotedSubunitKey(SPECIES)) :-
                     hasActivity(SPECIES, _),
-                    subunitOfSuppressed(SPECIES)."""),
-            docs="A subunit of a suppressed complex with activity is keyed by `promoted_subunit(SELF)` and added at top level.",
+                    isDescendantSubunitOfDeleted(SPECIES)."""),
+            docs="A subunit of a deleted complex with activity is keyed by `promotedSubunitKey(SELF)` and added at top level.",
         ),
     ),
     # The activity carrier is a per-language variant. In SBGN-PD a promoted
@@ -312,24 +312,24 @@ _PREPARATION_KEEP_SPECIES_NO_COMPLEX = RuleGroup(
         "celldesigner": (
             Rule(
                 identifier="preparation:keep_species_no_complex:carrier",
-                text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+                text="hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
                 docs="Each species is its own activity carrier.",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="preparation:keep_species_no_complex:sbgn_pd:carrier_entity_pool",
-                text="activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY).",
+                text="hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL).",
                 docs="SBGN-PD: each entity pool is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:keep_species_no_complex:sbgn_pd:carrier_phenotype",
-                text="activityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
+                text="hasActivityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
                 docs="SBGN-PD: each phenotype process is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:keep_species_no_complex:sbgn_pd:carrier_subunit",
-                text="activityCarrier(SUBUNIT, SUBUNIT) :- isSubunit(SUBUNIT).",
+                text="hasActivityCarrier(SUBUNIT, SUBUNIT) :- isSubunit(SUBUNIT).",
                 docs="SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint.",
             ),
         ),
@@ -340,90 +340,90 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
     identifier="preparation:no_complex",
     profiles=frozenset({"no_complex"}),
     depends_on=frozenset({"activity_base", "topology"}),
-    docs="`no-complex` preparation: a complex with any active descendant is suppressed; non-suppressed top-level species with activity are keyed by `kept_species(SELF)`; subunits of suppressed complexes are promoted to top level, keyed by `promoted_subunit(SELF)` (paths reach them via `paths_complex_traversal`). PTM stripping for the merged `no-complex` mode happens at the build stage, not in the activity key.",
+    docs="`no-complex` preparation: a complex with any active descendant is deleted; non-deleted top-level species with activity are keyed by `keptSpeciesKey(SELF)`; subunits of deleted complexes are promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach them via `paths_complex_traversal`). PTM stripping for the merged `no-complex` mode happens at the build stage, not in the activity key.",
     rules=(
         Rule(
-            identifier="preparation:no_complex:suppressed",
+            identifier="preparation:no_complex:deleted",
             text=dedent("""\
-                suppressed(COMPLEX) :-
+                delete(COMPLEX) :-
                     complex(COMPLEX),
-                    hasActiveDescendant(COMPLEX)."""),
-            docs="A complex with any (transitive) active descendant is suppressed.",
+                    hasActiveDescendantSubunit(COMPLEX)."""),
+            docs="A complex with any (transitive) active descendant is deleted.",
         ),
         Rule(
-            identifier="preparation:no_complex:subunit_of_suppressed_direct",
+            identifier="preparation:no_complex:subunit_of_deleted_direct",
             text=dedent("""\
-                subunitOfSuppressed(SUBUNIT) :-
+                isDescendantSubunitOfDeleted(SUBUNIT) :-
                     hasSubunit(COMPLEX, SUBUNIT),
-                    suppressed(COMPLEX)."""),
-            docs="A direct subunit of a suppressed complex is itself subunit-of-suppressed.",
+                    delete(COMPLEX)."""),
+            docs="A direct subunit of a deleted complex is itself subunit-of-deleted.",
         ),
         Rule(
-            identifier="preparation:no_complex:subunit_of_suppressed_transitive",
+            identifier="preparation:no_complex:subunit_of_deleted_transitive",
             text=dedent("""\
-                subunitOfSuppressed(SUBUNIT) :-
-                    hasSubunit(PARENT, SUBUNIT),
-                    subunitOfSuppressed(PARENT)."""),
-            docs="Subunit-of-suppressed is transitive through nested complexes.",
+                isDescendantSubunitOfDeleted(SUBUNIT) :-
+                    hasSubunit(PARENT_COMPLEX, SUBUNIT),
+                    isDescendantSubunitOfDeleted(PARENT_COMPLEX)."""),
+            docs="Subunit-of-deleted is transitive through nested complexes.",
         ),
     ),
     variants={
         "celldesigner": (
             Rule(
                 identifier="preparation:no_complex:carrier",
-                text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+                text="hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
                 docs="Each species is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:no_complex:key_top_level",
                 text=dedent("""\
-                    activityKey(SPECIES, kept_species(SPECIES)) :-
+                    hasActivityKey(SPECIES, keptSpeciesKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
                         not isSubunit(SPECIES),
-                        not suppressed(SPECIES)."""),
-                docs="A non-suppressed top-level active species is keyed by `kept_species(SELF)`.",
+                        not delete(SPECIES)."""),
+                docs="A non-deleted top-level active species is keyed by `keptSpeciesKey(SELF)`.",
             ),
             Rule(
                 identifier="preparation:no_complex:key_promoted_subunit",
                 text=dedent("""\
-                    activityKey(SPECIES, promoted_subunit(SPECIES)) :-
+                    hasActivityKey(SPECIES, promotedSubunitKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
-                        subunitOfSuppressed(SPECIES)."""),
-                docs="A subunit of a suppressed complex with activity is promoted to top level, keyed by `promoted_subunit(SELF)`.",
+                        isDescendantSubunitOfDeleted(SPECIES)."""),
+                docs="A subunit of a deleted complex with activity is promoted to top level, keyed by `promotedSubunitKey(SELF)`.",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="preparation:no_complex:sbgn_pd:carrier_entity_pool",
-                text="activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY).",
+                text="hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL).",
                 docs="SBGN-PD: each entity pool is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:no_complex:sbgn_pd:carrier_phenotype",
-                text="activityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
+                text="hasActivityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
                 docs="SBGN-PD: each phenotype process is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:no_complex:sbgn_pd:carrier_subunit",
-                text="activityCarrier(SUBUNIT, SUBUNIT) :- isSubunit(SUBUNIT).",
+                text="hasActivityCarrier(SUBUNIT, SUBUNIT) :- isSubunit(SUBUNIT).",
                 docs="SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths_complex_traversal`).",
             ),
             Rule(
                 identifier="preparation:no_complex:sbgn_pd:key_top_level",
                 text=dedent("""\
-                    activityKey(SPECIES, kept_species(SPECIES)) :-
+                    hasActivityKey(SPECIES, keptSpeciesKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
                         not isSubunit(SPECIES),
-                        not suppressed(SPECIES)."""),
-                docs="SBGN-PD: a non-suppressed top-level active entity is keyed by `kept_species(SELF)`.",
+                        not delete(SPECIES)."""),
+                docs="SBGN-PD: a non-deleted top-level active entity is keyed by `keptSpeciesKey(SELF)`.",
             ),
             Rule(
                 identifier="preparation:no_complex:sbgn_pd:key_promoted_subunit",
                 text=dedent("""\
-                    activityKey(SPECIES, promoted_subunit(SPECIES)) :-
+                    hasActivityKey(SPECIES, promotedSubunitKey(SPECIES)) :-
                         hasActivity(SPECIES, _),
-                        subunitOfSuppressed(SPECIES)."""),
-                docs="SBGN-PD: a subunit of a suppressed complex with activity is promoted to top level, keyed by `promoted_subunit(SELF)`.",
+                        isDescendantSubunitOfDeleted(SPECIES)."""),
+                docs="SBGN-PD: a subunit of a deleted complex with activity is promoted to top level, keyed by `promotedSubunitKey(SELF)`.",
             ),
         ),
     },
@@ -433,34 +433,34 @@ _PREPARATION_NORMAL = RuleGroup(
     identifier="preparation:normal",
     profiles=frozenset({"normal"}),
     depends_on=frozenset({"activity_base", "topology", "top_level"}),
-    docs="`normal` preparation: same activity keying as `keep-species` -- a species with activity is keyed by the `kept_species` of its top-level entity (`top_level` group), so a subunit is never its own activity and its influences attach to its top-level complex. `normal` differs from `keep-species` only at the build stage (proteoform/PTM stripping in the merged modes), not in the activity keys. Carriers are identity.",
+    docs="`normal` preparation: same activity keying as `keep-species` -- a species with activity is keyed by the `keptSpeciesKey` of its top-level entity (`top_level` group), so a subunit is never its own activity and its influences attach to its top-level complex. `normal` differs from `keep-species` only at the build stage (proteoform/PTM stripping in the merged modes), not in the activity keys. Carriers are identity.",
     rules=(
         Rule(
             identifier="preparation:normal:key",
             text=dedent("""\
-                activityKey(SPECIES, kept_species(TOP)) :-
+                hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL)) :-
                     hasActivity(SPECIES, _),
-                    topLevel(SPECIES, TOP)."""),
-            docs="A species with activity is keyed by the `kept_species` of its top-level entity (itself when top-level; its outermost complex when a subunit).",
+                    resolvesToTopLevel(SPECIES, TOPLEVEL)."""),
+            docs="A species with activity is keyed by the `keptSpeciesKey` of its top-level entity (itself when top-level; its outermost complex when a subunit).",
         ),
     ),
     variants={
         "celldesigner": (
             Rule(
                 identifier="preparation:normal:carrier",
-                text="activityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
+                text="hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES).",
                 docs="Each species is its own activity carrier (no rerouting; a subunit endpoint is rerouted to its top-level complex by the `top_level` key, not by the carrier).",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="preparation:normal:sbgn_pd:carrier_entity_pool",
-                text="activityCarrier(ENTITY, ENTITY) :- entityPool(ENTITY).",
+                text="hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL).",
                 docs="SBGN-PD: each entity pool is its own activity carrier.",
             ),
             Rule(
                 identifier="preparation:normal:sbgn_pd:carrier_phenotype",
-                text="activityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
+                text="hasActivityCarrier(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
                 docs="SBGN-PD: each phenotype process is its own activity carrier.",
             ),
         ),
@@ -478,26 +478,26 @@ _PREPARATION_NORMAL = RuleGroup(
 _PATHS_BASE_SBGN_PD = (
     Rule(
         identifier="paths_base:sbgn_pd:modulation_kind_necessary_stimulation",
-        text="modulationKind(MODULATION, triggering) :- necessaryStimulation(MODULATION).",
+        text="hasModulationKind(MODULATION, triggers) :- necessaryStimulation(MODULATION).",
         docs="An SBGN-PD necessary stimulation contributes a `triggering` kind.",
     ),
     Rule(
         identifier="paths_base:sbgn_pd:modulation_kind_stimulation",
         text=dedent("""\
-            modulationKind(MODULATION, positive) :-
+            hasModulationKind(MODULATION, positivelyInfluences) :-
                 stimulation(MODULATION),
                 not necessaryStimulation(MODULATION)."""),
         docs="A stimulation (catalysis included) that is not a necessary stimulation contributes a `positive` kind.",
     ),
     Rule(
         identifier="paths_base:sbgn_pd:modulation_kind_inhibition",
-        text="modulationKind(MODULATION, negative) :- inhibition(MODULATION).",
+        text="hasModulationKind(MODULATION, negativelyInfluences) :- inhibition(MODULATION).",
         docs="An SBGN-PD inhibition contributes a `negative` kind.",
     ),
     Rule(
         identifier="paths_base:sbgn_pd:modulation_kind_modulation",
         text=dedent("""\
-            modulationKind(MODULATION, modulation) :-
+            hasModulationKind(MODULATION, modulates) :-
                 modulation(MODULATION),
                 not stimulation(MODULATION),
                 not inhibition(MODULATION)."""),
@@ -506,47 +506,47 @@ _PATHS_BASE_SBGN_PD = (
     Rule(
         identifier="paths_base:sbgn_pd:modulation_to_product",
         text=dedent("""\
-            path(SOURCE, PRODUCT_ENTITY, KIND) :-
-                modulationKind(MODULATION, KIND),
-                hasSource(MODULATION, SOURCE),
+            propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, INFLUENCE_KIND) :-
+                hasModulationKind(MODULATION, INFLUENCE_KIND),
+                hasSource(MODULATION, SOURCE_ENTITY_POOL),
                 hasTarget(MODULATION, PROCESS),
                 hasProduct(PROCESS, PRODUCT),
-                hasElement(PRODUCT, PRODUCT_ENTITY)."""),
+                hasElement(PRODUCT, TARGET_ENTITY_POOL)."""),
         docs="A modulation arc's entity-pool source influences each product of its target process, carrying the arc's kind.",
     ),
     Rule(
         identifier="paths_base:sbgn_pd:modulation_to_phenotype",
         text=dedent("""\
-            path(SOURCE, PHENOTYPE, KIND) :-
-                modulationKind(MODULATION, KIND),
-                hasSource(MODULATION, SOURCE),
-                hasTarget(MODULATION, PHENOTYPE),
-                phenotype(PHENOTYPE)."""),
+            propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, INFLUENCE_KIND) :-
+                hasModulationKind(MODULATION, INFLUENCE_KIND),
+                hasSource(MODULATION, SOURCE_ENTITY_POOL),
+                hasTarget(MODULATION, TARGET_ENTITY_POOL),
+                phenotype(TARGET_ENTITY_POOL)."""),
         docs="A modulation arc whose target is a phenotype influences the phenotype itself (a phenotype process has no products; it is the activity).",
     ),
     Rule(
         identifier="paths_base:sbgn_pd:transitive_through_process",
         text=dedent("""\
-            path(START, END, OUTGOING_KIND) :-
-                path(START, INTERMEDIATE, INCOMING_KIND),
-                composesTo(INCOMING_KIND, OUTGOING_KIND),
+            propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, OUTGOING_INFLUENCE_KIND) :-
+                propagatesInfluence(SOURCE_ENTITY_POOL, INTERMEDIATE_ENTITY_POOL, INCOMING_INFLUENCE_KIND),
+                composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
                 hasReactant(PROCESS, REACTANT),
-                hasElement(REACTANT, INTERMEDIATE),
+                hasElement(REACTANT, INTERMEDIATE_ENTITY_POOL),
                 hasProduct(PROCESS, PRODUCT),
-                hasElement(PRODUCT, END)."""),
-        docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positive).",
+                hasElement(PRODUCT, TARGET_ENTITY_POOL)."""),
+        docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences).",
     ),
     Rule(
         identifier="paths_base:composes_to",
         text=dedent("""\
-            composesTo(positive, positive).
-            composesTo(negative, negative).
-            composesTo(modulation, modulation).
-            composesTo(triggering, positive).
-            composesTo(unknown_positive, unknown_positive).
-            composesTo(unknown_negative, unknown_negative).
-            composesTo(unknown_modulation, unknown_modulation).
-            composesTo(unknown_triggering, unknown_positive)."""),
+            composesTo(positivelyInfluences, positivelyInfluences).
+            composesTo(negativelyInfluences, negativelyInfluences).
+            composesTo(modulates, modulates).
+            composesTo(triggers, positivelyInfluences).
+            composesTo(unknownPositivelyInfluences, unknownPositivelyInfluences).
+            composesTo(unknownNegativelyInfluences, unknownNegativelyInfluences).
+            composesTo(unknownModulates, unknownModulates).
+            composesTo(unknownTriggers, unknownPositivelyInfluences)."""),
         docs="How an influence kind transforms across a process reactant->product hop (shared logic with CellDesigner; identity except triggering->positive and unknown_triggering->unknown_positive).",
     ),
 )
@@ -555,7 +555,7 @@ _PATHS_BASE_SBGN_PD = (
 _PATHS_BASE = RuleGroup(
     identifier="paths_base",
     profiles=_NON_CASQ_PROFILES,
-    docs="Builds the kinded `path(START_SPECIES, END_SPECIES, KIND)` relation from PD reactions and modulation arcs. KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Reactant-chained transitivity extends paths through reactions, degrading `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at each reaction hop via `composesTo`.",
+    docs="Builds the kinded `propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND)` relation from PD reactions and modulation arcs. INFLUENCE_KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Reactant-chained transitivity extends paths through reactions, degrading `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at each reaction hop via `composesTo`.",
     rules=(),
     variants={
         "sbgn_pd": _PATHS_BASE_SBGN_PD,
@@ -563,148 +563,148 @@ _PATHS_BASE = RuleGroup(
         Rule(
             identifier="paths_base:catalyzer_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     catalyzer(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by a catalyzer of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
         ),
         Rule(
             identifier="paths_base:physical_stimulator_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     physicalStimulator(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
         ),
         Rule(
             identifier="paths_base:trigger_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, triggering) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, triggers) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     trigger(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by a trigger of a reaction and another species is referred to by a product of that reaction, then there is a triggering path from the first to the second (a trigger→product edge is direct, so it keeps the `triggering` kind).",
         ),
         Rule(
             identifier="paths_base:catalysis_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     catalysis(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is a catalysis, then there is a positive path from its source to its target. (The predicate is `catalysis`; an earlier `catalyzis` typo silently disabled this rule.)",
         ),
         Rule(
             identifier="paths_base:positive_influence_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     positiveInfluence(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation is a positiveInfluence, then there is a positive path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:physical_stimulation_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     physicalStimulation(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation is a physicalStimulation, then there is a positive path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:triggering_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, triggering) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, triggers) :-
                     triggering(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
-            docs="If a modulation arc is a triggering, then there is a triggering path from its source to its target (a direct arc keeps the `triggering` kind).",
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
+            docs="If a modulation arc is a triggers, then there is a triggering path from its source to its target (a direct arc keeps the `triggering` kind).",
         ),
         Rule(
             identifier="paths_base:inhibitor_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, negative) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     inhibitor(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by an inhibitor of a reaction and another species is referred to by a product of that reaction, then there is a negative path from the first to the second.",
         ),
         Rule(
             identifier="paths_base:modulator_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, modulation) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, modulates) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     modulator(MODIFIER),
                     not physicalStimulator(MODIFIER),
                     not inhibitor(MODIFIER),
                     not trigger(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by a *bare* modulator of a reaction (a generic MODULATION modifier — not a physical stimulator, inhibitor or trigger; catalyzers are physical stimulators) and another species is referred to by a product of that reaction, then there is a modulation path from the first to the second.",
         ),
         Rule(
             identifier="paths_base:unknown_catalyzer_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownPositivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     unknownCatalyzer(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by an unknown catalyzer of a reaction and another species is referred to by a product of that reaction, then there is an unknown-positive path from the first to the second.",
         ),
         Rule(
             identifier="paths_base:unknown_inhibitor_to_product",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_negative) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownNegativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
                     unknownInhibitor(MODIFIER),
-                    hasReferredSpecies(MODIFIER, START_SPECIES),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If a species is referred to by an unknown inhibitor of a reaction and another species is referred to by a product of that reaction, then there is an unknown-negative path from the first to the second.",
         ),
         Rule(
             identifier="paths_base:inhibition_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, negative) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, negativelyInfluences) :-
                     inhibition(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation is an inhibition, then there is a negative path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:negative_influence_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, negative) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, negativelyInfluences) :-
                     negativeInfluence(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation is a negativeInfluence, then there is a negative path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:modulation_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, modulation) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, modulates) :-
                     modulation(MODULATION),
                     not catalysis(MODULATION),
                     not physicalStimulation(MODULATION),
@@ -712,68 +712,68 @@ _PATHS_BASE = RuleGroup(
                     not triggering(MODULATION),
                     not positiveInfluence(MODULATION),
                     not negativeInfluence(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is a *bare* modulation (the generic MODULATION arc — not one of the signed/typed subtypes), then there is a modulation path from its source to its target. The negations exclude the subtypes, which `modulation` is the umbrella over.",
         ),
         Rule(
             identifier="paths_base:unknown_catalysis_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownPositivelyInfluences) :-
                     unknownCatalysis(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is an unknown catalysis, then there is an unknown-positive path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:unknown_physical_stimulation_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownPositivelyInfluences) :-
                     unknownPhysicalStimulation(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is an unknown physical stimulation, then there is an unknown-positive path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:unknown_positive_influence_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_positive) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownPositivelyInfluences) :-
                     unknownPositiveInfluence(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is an unknown positive influence, then there is an unknown-positive path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:unknown_inhibition_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_negative) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownNegativelyInfluences) :-
                     unknownInhibition(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is an unknown inhibition, then there is an unknown-negative path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:unknown_negative_influence_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_negative) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownNegativelyInfluences) :-
                     unknownNegativeInfluence(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is an unknown negative influence, then there is an unknown-negative path from its source to its target.",
         ),
         Rule(
             identifier="paths_base:unknown_triggering_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_triggering) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownTriggers) :-
                     unknownTriggering(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
-            docs="If a modulation arc is an unknown triggering, then there is an unknown-triggering path from its source to its target (kept on the direct edge; it degrades to `unknown_positive` when composed through a reaction).",
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
+            docs="If a modulation arc is an unknown triggers, then there is an unknown-triggering path from its source to its target (kept on the direct edge; it degrades to `unknown_positive` when composed through a reaction).",
         ),
         Rule(
             identifier="paths_base:unknown_modulation_modulation",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, unknown_modulation) :-
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownModulates) :-
                     unknownModulation(MODULATION),
                     not unknownCatalysis(MODULATION),
                     not unknownPhysicalStimulation(MODULATION),
@@ -781,35 +781,35 @@ _PATHS_BASE = RuleGroup(
                     not unknownTriggering(MODULATION),
                     not unknownPositiveInfluence(MODULATION),
                     not unknownNegativeInfluence(MODULATION),
-                    hasSource(MODULATION, START_SPECIES),
-                    hasTarget(MODULATION, END_SPECIES)."""),
+                    hasSource(MODULATION, SOURCE_SPECIES),
+                    hasTarget(MODULATION, TARGET_SPECIES)."""),
             docs="If a modulation arc is a *bare* unknown modulation (not one of the unknown subtypes), then there is an unknown-modulation path from its source to its target. The negations exclude the subtypes, which `unknownModulation` is the umbrella over.",
         ),
         Rule(
             identifier="paths_base:transitive_through_reaction",
             text=dedent("""\
-                path(START_SPECIES, END_SPECIES, OUTGOING_KIND) :-
-                    path(START_SPECIES, INTERMEDIATE_SPECIES, INCOMING_KIND),
-                    composesTo(INCOMING_KIND, OUTGOING_KIND),
+                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, OUTGOING_INFLUENCE_KIND) :-
+                    propagatesInfluence(SOURCE_SPECIES, INTERMEDIATE_SPECIES, INCOMING_INFLUENCE_KIND),
+                    composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
                     reaction(REACTION),
                     hasReactant(REACTION, REACTANT),
                     hasReferredSpecies(REACTANT, INTERMEDIATE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, END_SPECIES)."""),
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
             docs="If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. The kind is carried through `composesTo`, which degrades `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at the reaction hop while leaving every other kind unchanged.",
         ),
         Rule(
             identifier="paths_base:composes_to",
             text=dedent("""\
-                composesTo(positive, positive).
-                composesTo(negative, negative).
-                composesTo(modulation, modulation).
-                composesTo(triggering, positive).
-                composesTo(unknown_positive, unknown_positive).
-                composesTo(unknown_negative, unknown_negative).
-                composesTo(unknown_modulation, unknown_modulation).
-                composesTo(unknown_triggering, unknown_positive)."""),
-            docs="`composesTo(INCOMING_KIND, OUTGOING_KIND)`: how an influence kind transforms when a path is extended by one reaction reactant→product hop. Identity for every kind except `triggering` (a necessary-stimulation relationship is a property of the direct edge; composed through a reaction it weakens to a plain `positive` influence) and its unknown twin `unknown_triggering` → `unknown_positive`. Modulation composes like the signed kinds (stays `modulation`).",
+                composesTo(positivelyInfluences, positivelyInfluences).
+                composesTo(negativelyInfluences, negativelyInfluences).
+                composesTo(modulates, modulates).
+                composesTo(triggers, positivelyInfluences).
+                composesTo(unknownPositivelyInfluences, unknownPositivelyInfluences).
+                composesTo(unknownNegativelyInfluences, unknownNegativelyInfluences).
+                composesTo(unknownModulates, unknownModulates).
+                composesTo(unknownTriggers, unknownPositivelyInfluences)."""),
+            docs="`composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)`: how an influence kind transforms when a path is extended by one reaction reactant→product hop. Identity for every kind except `triggering` (a necessary-stimulation relationship is a property of the direct edge; composed through a reaction it weakens to a plain `positive` influence) and its unknown twin `unknown_triggering` → `unknown_positive`. Modulation composes like the signed kinds (stays `modulation`).",
         ),
         ),
     },
@@ -824,20 +824,20 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
         Rule(
             identifier="paths_complex_traversal:into_subunits",
             text=dedent("""\
-                path(START_SPECIES, SUBUNIT, SIGN) :-
-                    path(START_SPECIES, END_SPECIES, SIGN),
-                    complex(END_SPECIES),
-                    hasSubunit(END_SPECIES, SUBUNIT)."""),
-            docs="If there is a path of a given sign from a species to a complex, then there is a path of that same sign from the species to each subunit of the complex.",
+                propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND) :-
+                    propagatesInfluence(SOURCE, COMPLEX, INFLUENCE_KIND),
+                    complex(COMPLEX),
+                    hasSubunit(COMPLEX, SUBUNIT)."""),
+            docs="If an influence of a given kind propagates from a source to a complex, then it also propagates from the source to each subunit of the complex.",
         ),
         Rule(
             identifier="paths_complex_traversal:from_subunits",
             text=dedent("""\
-                path(SUBUNIT, END_SPECIES, SIGN) :-
-                    path(START_SPECIES, END_SPECIES, SIGN),
-                    complex(START_SPECIES),
-                    hasSubunit(START_SPECIES, SUBUNIT)."""),
-            docs="If there is a path of a given sign from a complex to a species, then there is a path of that same sign from each subunit of the complex to the species.",
+                propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND) :-
+                    propagatesInfluence(COMPLEX, TARGET, INFLUENCE_KIND),
+                    complex(COMPLEX),
+                    hasSubunit(COMPLEX, SUBUNIT)."""),
+            docs="If an influence of a given kind propagates from a complex to a target, then it also propagates from each subunit of the complex to the target.",
         ),
     ),
 )
@@ -845,122 +845,122 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
 _INFLUENCES_DERIVATION = RuleGroup(
     identifier="influences_derivation",
     profiles=_NON_CASQ_PROFILES,
-    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and the internal `influences(SOURCE_KEY, TARGET_KEY, KIND)` relation from kinded paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant — in both cases only reactants that are themselves activities; the unknown modifiers contribute the unknown twins). The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
+    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation from kinded paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant — in both cases only reactants that are themselves activities; the unknown modifiers contribute the unknown twins). The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
     rules=(
         Rule(
             identifier="influences_derivation:activity",
-            text="new(activity(KEY)) :- activityKey(_, KEY).",
+            text="new(activity(KEY)) :- hasActivityKey(_, KEY).",
             docs="Every species with an activity key emits an activity node with that key.",
         ),
         Rule(
             identifier="influences_derivation:path",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, KIND) :-
-                    path(RAW_SOURCE, RAW_TARGET, KIND),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="A path of any kind between two raw species yields an influence of that same kind between their activity-key images (via their carriers).",
+                influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND) :-
+                    propagatesInfluence(SOURCE, TARGET, INFLUENCE_KIND),
+                    hasActivityCarrier(SOURCE, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
+            docs="A propagated influence of any kind between two raw nodes yields an influence of that same kind between their activity-key images (via their carriers).",
         ),
     ),
     # The consumption/sparing rules below are CellDesigner-only (they reason
     # over reaction modifiers); SBGN-PD has no analog yet, so its variant is
     # empty. This is a known gap to implement, not a deliberate design choice:
     # the same biology in CellDesigner vs SBGN-PD currently yields different AF
-    # influences. The shared `activity` and `path` rules above carry both
-    # languages.
+    # influences. The shared `activity` and `propagatesInfluence` rules above
+    # carry both languages.
     variants={
         "sbgn_pd": (),
         "celldesigner": (
         Rule(
             identifier="influences_derivation:catalyzer_consumes_reactant",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
-                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, RAW_TARGET),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                    hasReferredSpecies(REACTANT, TARGET_SPECIES),
+                    hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
             docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
         ),
         Rule(
             identifier="influences_derivation:physical_stimulator_consumes_reactant",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
-                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, RAW_TARGET),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                    hasReferredSpecies(REACTANT, TARGET_SPECIES),
+                    hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
             docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption).",
         ),
         Rule(
             identifier="influences_derivation:trigger_consumes_reactant",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
-                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, RAW_TARGET),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-            docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggering, which is only the trigger→product relationship).",
+                    hasReferredSpecies(REACTANT, TARGET_SPECIES),
+                    hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
+            docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship).",
         ),
         Rule(
             identifier="influences_derivation:inhibitor_spares_reactant",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
-                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, RAW_TARGET),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                    hasReferredSpecies(REACTANT, TARGET_SPECIES),
+                    hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
             docs="An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing).",
         ),
         Rule(
             identifier="influences_derivation:unknown_catalyzer_consumes_reactant",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownCatalyzer(MODIFIER),
-                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, RAW_TARGET),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                    hasReferredSpecies(REACTANT, TARGET_SPECIES),
+                    hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
             docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain).",
         ),
         Rule(
             identifier="influences_derivation:unknown_inhibitor_spares_reactant",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownInhibitor(MODIFIER),
-                    hasReferredSpecies(MODIFIER, RAW_SOURCE),
+                    hasReferredSpecies(MODIFIER, SOURCE_SPECIES),
                     hasReactant(REACTION, REACTANT),
-                    hasReferredSpecies(REACTANT, RAW_TARGET),
-                    activityCarrier(RAW_SOURCE, ACTIVITY_SOURCE),
-                    activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                    activityKey(ACTIVITY_SOURCE, SOURCE_KEY),
-                    activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
+                    hasReferredSpecies(REACTANT, TARGET_SPECIES),
+                    hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
             docs="An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain).",
         ),
         ),
@@ -970,46 +970,46 @@ _INFLUENCES_DERIVATION = RuleGroup(
 _INFLUENCE_OUTPUT = RuleGroup(
     identifier="influence_output",
     profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Shared fan-out from the internal `influences(SOURCE, TARGET, KIND)` relation to the typed `new(...)` influence heads — one rule per kind. All pipelines (non-casq and casq) converge on `influences/3`; this group is the single place that turns a kind into its output predicate.",
+    docs="Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind. All pipelines (non-casq and casq) converge on `influences/3`; this group is the single place that turns a kind into its output predicate.",
     rules=(
         Rule(
             identifier="influence_output:positive",
-            text="new(positivelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, positive).",
+            text="new(positivelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, positivelyInfluences).",
             docs="A `positive` influence emits a `positivelyInfluences` edge (PositiveInfluence).",
         ),
         Rule(
             identifier="influence_output:negative",
-            text="new(negativelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, negative).",
+            text="new(negativelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, negativelyInfluences).",
             docs="A `negative` influence emits a `negativelyInfluences` edge (NegativeInfluence).",
         ),
         Rule(
             identifier="influence_output:modulation",
-            text="new(modulates(SOURCE, TARGET)) :- influences(SOURCE, TARGET, modulation).",
+            text="new(modulates(SOURCE, TARGET)) :- influences(SOURCE, TARGET, modulates).",
             docs="A `modulation` influence emits a `modulates` edge (Modulation).",
         ),
         Rule(
             identifier="influence_output:triggering",
-            text="new(triggers(SOURCE, TARGET)) :- influences(SOURCE, TARGET, triggering).",
+            text="new(triggers(SOURCE, TARGET)) :- influences(SOURCE, TARGET, triggers).",
             docs="A `triggering` influence emits a `triggers` edge (Triggering).",
         ),
         Rule(
             identifier="influence_output:unknown_positive",
-            text="new(unknownPositivelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknown_positive).",
+            text="new(unknownPositivelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknownPositivelyInfluences).",
             docs="An `unknown_positive` influence emits an `unknownPositivelyInfluences` edge (UnknownPositiveInfluence).",
         ),
         Rule(
             identifier="influence_output:unknown_negative",
-            text="new(unknownNegativelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknown_negative).",
+            text="new(unknownNegativelyInfluences(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknownNegativelyInfluences).",
             docs="An `unknown_negative` influence emits an `unknownNegativelyInfluences` edge (UnknownNegativeInfluence).",
         ),
         Rule(
             identifier="influence_output:unknown_modulation",
-            text="new(unknownModulates(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknown_modulation).",
+            text="new(unknownModulates(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknownModulates).",
             docs="An `unknown_modulation` influence emits an `unknownModulates` edge (UnknownModulation).",
         ),
         Rule(
             identifier="influence_output:unknown_triggering",
-            text="new(unknownTriggers(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknown_triggering).",
+            text="new(unknownTriggers(SOURCE, TARGET)) :- influences(SOURCE, TARGET, unknownTriggers).",
             docs="An `unknown_triggering` influence emits an `unknownTriggers` edge (UnknownTriggering).",
         ),
     ),
@@ -1017,116 +1017,116 @@ _INFLUENCE_OUTPUT = RuleGroup(
 
 
 # Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD
-# `LogicalOperator`). Today a gate yields `path(GATE, ...)`, but a gate id has no
-# `activityCarrier`, so `influences_derivation:path` never matches and the gate
+# `LogicalOperator`). Today a gate yields `propagatesInfluence(OPERATOR, ...)`, but a gate id has no
+# `hasActivityCarrier`, so `influences_derivation:path` never matches and the gate
 # is silently dropped. `_GATES` carries the gate through three rule kinds:
 #
 #   (a) operator node -- one head per gate type, carrying a type token;
 #   (b) input edges -- each gate input resolved through carrier/key (mirroring
 #       `influences_derivation:path`);
-#   (c) operator-sourced influence -- ONE rule that *reuses* `path/3`: the
-#       `paths_base` rules already emit `path(GATE, TARGET, KIND)` (the source
+#   (c) operator-sourced influence -- ONE rule that *reuses* `propagatesInfluence/3`: the
+#       `paths_base` rules already emit `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` (the source
 #       binds to whatever the modifier refers to / the modulation source -- gate
 #       included), so `_GATES` only resolves the TARGET through carrier/key and
-#       writes `influences(logical_operator_key(G), TARGET_KEY, KIND)` directly,
-#       bypassing the carrier-keyed `influences_derivation:path`. Because `path/3`
+#       writes `influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND)` directly,
+#       bypassing the carrier-keyed `influences_derivation:path`. Because `propagatesInfluence/3`
 #       is the transitive closure, an operator influences its direct target and
 #       everything transitively downstream -- consistent with how a species
 #       activity source already behaves (Decision D1).
 #
-# The `booleanLogicGate(G)` / `logicalOperator(G)` umbrella guard in (b) and (c)
+# The `booleanLogicGate(OPERATOR)` / `logicalOperator(OPERATOR)` umbrella guard in (b) and (c)
 # is essential -- it is derived from the per-type facts by the input ontology's
-# isa rules, and without it (c) would treat every `path/3` source (species
+# isa rules, and without it (c) would treat every `propagatesInfluence/3` source (species
 # included) as an operator key. Provenance-agnostic: a future derived-operator
 # layer emits the same predicates and reuses this group's builder/layout/output
 # path unchanged. Not registered for casq (which keeps its own pipeline and
-# never reads `hasActivity`/`path`).
+# never reads `hasActivity`/`propagatesInfluence`).
 _GATES = RuleGroup(
     identifier="gates",
     profiles=_NON_CASQ_PROFILES,
     depends_on=frozenset({"activity_base", "paths_base"}),
-    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `path(GATE, TARGET, KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic and registered for the non-casq profiles only.",
+    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic and registered for the non-casq profiles only.",
     rules=(),
     variants={
         "celldesigner": (
             Rule(
                 identifier="gates:celldesigner:node_and",
-                text="new(logicalOperator(logical_operator_key(G), and)) :- andGate(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), and)) :- andGate(OPERATOR).",
                 docs="An `andGate` emits an AND logical-operator node.",
             ),
             Rule(
                 identifier="gates:celldesigner:node_or",
-                text="new(logicalOperator(logical_operator_key(G), or)) :- orGate(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), or)) :- orGate(OPERATOR).",
                 docs="An `orGate` emits an OR logical-operator node.",
             ),
             Rule(
                 identifier="gates:celldesigner:node_not",
-                text="new(logicalOperator(logical_operator_key(G), not_)) :- notGate(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR).",
                 docs="A `notGate` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword.",
             ),
             Rule(
                 identifier="gates:celldesigner:node_unknown",
-                text="new(logicalOperator(logical_operator_key(G), unknown)) :- unknownGate(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), unknown)) :- unknownGate(OPERATOR).",
                 docs="An `unknownGate` emits an unknown-type logical-operator node.",
             ),
             Rule(
                 identifier="gates:celldesigner:input_edge",
                 text=dedent("""\
-                    new(logicalOperatorInput(logical_operator_key(G), INPUT_KEY)) :-
-                        booleanLogicGate(G),
-                        hasInput(G, INPUT),
-                        hasElement(INPUT, RAW_INPUT),
-                        activityCarrier(RAW_INPUT, ACTIVITY_INPUT),
-                        activityKey(ACTIVITY_INPUT, INPUT_KEY)."""),
+                    new(logicalOperatorInput(logicalOperatorKey(OPERATOR), INPUT_KEY)) :-
+                        booleanLogicGate(OPERATOR),
+                        hasInput(OPERATOR, INPUT),
+                        hasElement(INPUT, INPUT_SPECIES),
+                        hasActivityCarrier(INPUT_SPECIES, INPUT_CARRIER),
+                        hasActivityKey(INPUT_CARRIER, INPUT_KEY)."""),
                 docs="Each gate input is resolved through its activity carrier and key (mirroring `influences_derivation:path`), so an input that is a subunit resolves to its top-level complex's key. The `booleanLogicGate` umbrella matches every gate type via the ontology's isa rules.",
             ),
             Rule(
                 identifier="gates:celldesigner:influence",
                 text=dedent("""\
-                    influences(logical_operator_key(G), TARGET_KEY, KIND) :-
-                        booleanLogicGate(G),
-                        path(G, RAW_TARGET, KIND),
-                        activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                        activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths_base` rules already bind a `path/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `path/3` source would be read as an operator key.",
+                    influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND) :-
+                        booleanLogicGate(OPERATOR),
+                        propagatesInfluence(OPERATOR, TARGET_SPECIES, INFLUENCE_KIND),
+                        hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
+                        hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
+                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths_base` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key.",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="gates:sbgn_pd:node_and",
-                text="new(logicalOperator(logical_operator_key(G), and)) :- andOperator(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), and)) :- andOperator(OPERATOR).",
                 docs="An `andOperator` emits an AND logical-operator node.",
             ),
             Rule(
                 identifier="gates:sbgn_pd:node_or",
-                text="new(logicalOperator(logical_operator_key(G), or)) :- orOperator(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), or)) :- orOperator(OPERATOR).",
                 docs="An `orOperator` emits an OR logical-operator node.",
             ),
             Rule(
                 identifier="gates:sbgn_pd:node_not",
-                text="new(logicalOperator(logical_operator_key(G), not_)) :- notOperator(G).",
+                text="new(logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notOperator(OPERATOR).",
                 docs="A `notOperator` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. (SBGN-PD has no unknown-operator type.)",
             ),
             Rule(
                 identifier="gates:sbgn_pd:input_edge",
                 text=dedent("""\
-                    new(logicalOperatorInput(logical_operator_key(G), INPUT_KEY)) :-
-                        logicalOperator(G),
-                        hasInput(G, INPUT),
-                        hasElement(INPUT, RAW_INPUT),
-                        activityCarrier(RAW_INPUT, ACTIVITY_INPUT),
-                        activityKey(ACTIVITY_INPUT, INPUT_KEY)."""),
+                    new(logicalOperatorInput(logicalOperatorKey(OPERATOR), INPUT_KEY)) :-
+                        logicalOperator(OPERATOR),
+                        hasInput(OPERATOR, INPUT),
+                        hasElement(INPUT, INPUT_ENTITY_POOL),
+                        hasActivityCarrier(INPUT_ENTITY_POOL, INPUT_CARRIER),
+                        hasActivityKey(INPUT_CARRIER, INPUT_KEY)."""),
                 docs="SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules).",
             ),
             Rule(
                 identifier="gates:sbgn_pd:influence",
                 text=dedent("""\
-                    influences(logical_operator_key(G), TARGET_KEY, KIND) :-
-                        logicalOperator(G),
-                        path(G, RAW_TARGET, KIND),
-                        activityCarrier(RAW_TARGET, ACTIVITY_TARGET),
-                        activityKey(ACTIVITY_TARGET, TARGET_KEY)."""),
-                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `path(OPERATOR, TARGET, KIND)` closure emitted by `paths_base`, resolving only the target through carrier/key.",
+                    influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND) :-
+                        logicalOperator(OPERATOR),
+                        propagatesInfluence(OPERATOR, TARGET_ENTITY_POOL, INFLUENCE_KIND),
+                        hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
+                        hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
+                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths_base`, resolving only the target through carrier/key.",
             ),
         ),
     },
@@ -1202,15 +1202,15 @@ _CASQ_DELETE = RuleGroup(
             text=dedent("""\
                 delete(RECEPTOR, rule_1) :-
                     heterodimerAssociation(REACTION),
-                    hasReactant(REACTION, RT_RECEPTOR),
-                    hasReferredSpecies(RT_RECEPTOR, RECEPTOR),
+                    hasReactant(REACTION, RECEPTOR_REACTANT),
+                    hasReferredSpecies(RECEPTOR_REACTANT, RECEPTOR),
                     receptor(RECEPTOR),
-                    hasReactant(REACTION, RT_PARTNER),
-                    hasReferredSpecies(RT_PARTNER, PARTNER),
+                    hasReactant(REACTION, PARTNER_REACTANT),
+                    hasReferredSpecies(PARTNER_REACTANT, PARTNER),
                     RECEPTOR != PARTNER,
-                    #count{ X : hasReactant(REACTION, RT), hasReferredSpecies(RT, X) } = 2,
-                    #count{ R1 : participates(RECEPTOR, R1) } = 1,
-                    #count{ R2 : participates(PARTNER, R2) } = 1."""),
+                    #count{ REACTANT_SPECIES : hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, REACTANT_SPECIES) } = 2,
+                    #count{ RECEPTOR_REACTION : participates(RECEPTOR, RECEPTOR_REACTION) } = 1,
+                    #count{ PARTNER_REACTION : participates(PARTNER, PARTNER_REACTION) } = 1."""),
             docs="A receptor in a 2-reactant heterodimer association where receptor and partner each participate in only this reaction is deleted (rule_1).",
         ),
         Rule(
@@ -1218,42 +1218,42 @@ _CASQ_DELETE = RuleGroup(
             text=dedent("""\
                 delete(SPECIES_1, rule_2) :-
                     heterodimerAssociation(REACTION),
-                    hasReactant(REACTION, RT1), hasReferredSpecies(RT1, SPECIES_1),
-                    hasReactant(REACTION, RT2), hasReferredSpecies(RT2, SPECIES_2),
+                    hasReactant(REACTION, FIRST_REACTANT), hasReferredSpecies(FIRST_REACTANT, SPECIES_1),
+                    hasReactant(REACTION, SECOND_REACTANT), hasReferredSpecies(SECOND_REACTANT, SPECIES_2),
                     SPECIES_1 != SPECIES_2,
                     not receptor(SPECIES_1),
                     not receptor(SPECIES_2),
-                    #count{ X : hasReactant(REACTION, RT), hasReferredSpecies(RT, X) } = 2,
-                    #count{ R1 : activeParticipates(SPECIES_1, R1) } = 1,
-                    #count{ R2 : activeParticipates(SPECIES_2, R2) } = 1."""),
+                    #count{ REACTANT_SPECIES : hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, REACTANT_SPECIES) } = 2,
+                    #count{ FIRST_SPECIES_REACTION : activeParticipates(SPECIES_1, FIRST_SPECIES_REACTION) } = 1,
+                    #count{ SECOND_SPECIES_REACTION : activeParticipates(SPECIES_2, SECOND_SPECIES_REACTION) } = 1."""),
             docs="In a 2-reactant heterodimer association where neither reactant is a receptor and each actively participates only in this reaction, both reactant species are deleted (rule_2). The rule fires symmetrically for each side.",
         ),
         Rule(
             identifier="casq:delete:rule_3",
             text=dedent("""\
-                delete(REACTANT, rule_3) :-
+                delete(REACTANT_SPECIES, rule_3) :-
                     reaction(REACTION),
-                    hasReactant(REACTION, RT), hasReferredSpecies(RT, REACTANT),
-                    hasProduct(REACTION, P), hasReferredSpecies(P, PRODUCT),
-                    REACTANT != PRODUCT,
-                    hasName(REACTANT, NAME), hasName(PRODUCT, NAME),
-                    not isProducedSpecies(REACTANT),
-                    not isModifierSpecies(REACTANT),
-                    #count{ X : hasProduct(REACTION, P2), hasReferredSpecies(P2, X) } = 1,
-                    #count{ R : hasReactant(R, RT2), hasReferredSpecies(RT2, REACTANT) } = 1."""),
+                    hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, REACTANT_SPECIES),
+                    hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, PRODUCT_SPECIES),
+                    REACTANT_SPECIES != PRODUCT_SPECIES,
+                    hasName(REACTANT_SPECIES, NAME), hasName(PRODUCT_SPECIES, NAME),
+                    not isProducedSpecies(REACTANT_SPECIES),
+                    not isModifierSpecies(REACTANT_SPECIES),
+                    #count{ COUNTED_PRODUCT_SPECIES : hasProduct(REACTION, COUNTED_PRODUCT), hasReferredSpecies(COUNTED_PRODUCT, COUNTED_PRODUCT_SPECIES) } = 1,
+                    #count{ CONSUMING_REACTION : hasReactant(CONSUMING_REACTION, CONSUMING_REACTANT), hasReferredSpecies(CONSUMING_REACTANT, REACTANT_SPECIES) } = 1."""),
             docs="In a single-product reaction where reactant and product share a name, the reactant is deleted (rule_3) if it is not produced anywhere else, never appears as a modifier, and is consumed only by this reaction.",
         ),
         Rule(
             identifier="casq:delete:rule_4",
             text=dedent("""\
-                delete(REACTANT, rule_4) :-
+                delete(REACTANT_SPECIES, rule_4) :-
                     transport(REACTION),
-                    hasReactant(REACTION, RT), hasReferredSpecies(RT, REACTANT),
-                    hasProduct(REACTION, P), hasReferredSpecies(P, PRODUCT),
-                    REACTANT != PRODUCT,
-                    hasName(REACTANT, NAME), hasName(PRODUCT, NAME),
-                    #count{ R : activeParticipates(REACTANT, R) } = 1,
-                    #count{ X : hasProduct(REACTION, P2), hasReferredSpecies(P2, X) } = 1."""),
+                    hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, REACTANT_SPECIES),
+                    hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, PRODUCT_SPECIES),
+                    REACTANT_SPECIES != PRODUCT_SPECIES,
+                    hasName(REACTANT_SPECIES, NAME), hasName(PRODUCT_SPECIES, NAME),
+                    #count{ PARTICIPATED_REACTION : activeParticipates(REACTANT_SPECIES, PARTICIPATED_REACTION) } = 1,
+                    #count{ COUNTED_PRODUCT_SPECIES : hasProduct(REACTION, COUNTED_PRODUCT), hasReferredSpecies(COUNTED_PRODUCT, COUNTED_PRODUCT_SPECIES) } = 1."""),
             docs="In a single-product transport where reactant and product share a name and the reactant actively participates only in this reaction, the reactant is deleted (rule_4).",
         ),
     ),
@@ -1268,25 +1268,25 @@ _CASQ_BRIDGED_PRODUCT = RuleGroup(
         Rule(
             identifier="casq:bridged_product:from_rule_2",
             text=dedent("""\
-                bridgedProduct(REACTION_1, PRODUCT) :-
-                    delete(SPECIES, rule_2),
+                bridgesToProduct(REACTION_1, PRODUCT_SPECIES) :-
+                    delete(DELETED_SPECIES, rule_2),
                     reaction(REACTION_1),
-                    hasProduct(REACTION_1, P1), hasReferredSpecies(P1, SPECIES),
+                    hasProduct(REACTION_1, REACTION_1_PRODUCT), hasReferredSpecies(REACTION_1_PRODUCT, DELETED_SPECIES),
                     reaction(REACTION_2),
-                    hasReactant(REACTION_2, RT2), hasReferredSpecies(RT2, SPECIES),
-                    hasProduct(REACTION_2, P2), hasReferredSpecies(P2, PRODUCT)."""),
-            docs="One-hop rewiring across a species deleted by rule_2: REACTION_1 produces SPECIES and REACTION_2 consumes SPECIES and produces PRODUCT, so REACTION_1 is treated as also producing PRODUCT.",
+                    hasReactant(REACTION_2, REACTION_2_REACTANT), hasReferredSpecies(REACTION_2_REACTANT, DELETED_SPECIES),
+                    hasProduct(REACTION_2, REACTION_2_PRODUCT), hasReferredSpecies(REACTION_2_PRODUCT, PRODUCT_SPECIES)."""),
+            docs="One-hop rewiring across a species deleted by rule_2: REACTION_1 produces DELETED_SPECIES and REACTION_2 consumes DELETED_SPECIES and produces PRODUCT_SPECIES, so REACTION_1 is treated as also producing PRODUCT_SPECIES.",
         ),
         Rule(
             identifier="casq:bridged_product:from_rule_4",
             text=dedent("""\
-                bridgedProduct(REACTION_1, PRODUCT) :-
-                    delete(SPECIES, rule_4),
+                bridgesToProduct(REACTION_1, PRODUCT_SPECIES) :-
+                    delete(DELETED_SPECIES, rule_4),
                     reaction(REACTION_1),
-                    hasProduct(REACTION_1, P1), hasReferredSpecies(P1, SPECIES),
+                    hasProduct(REACTION_1, REACTION_1_PRODUCT), hasReferredSpecies(REACTION_1_PRODUCT, DELETED_SPECIES),
                     reaction(REACTION_2),
-                    hasReactant(REACTION_2, RT2), hasReferredSpecies(RT2, SPECIES),
-                    hasProduct(REACTION_2, P2), hasReferredSpecies(P2, PRODUCT)."""),
+                    hasReactant(REACTION_2, REACTION_2_REACTANT), hasReferredSpecies(REACTION_2_REACTANT, DELETED_SPECIES),
+                    hasProduct(REACTION_2, REACTION_2_PRODUCT), hasReferredSpecies(REACTION_2_PRODUCT, PRODUCT_SPECIES)."""),
             docs="One-hop rewiring across a species deleted by rule_4 (analog of casq:bridged_product:from_rule_2 for transport-driven deletes).",
         ),
     ),
@@ -1296,12 +1296,12 @@ _CASQ_ACTIVITY = RuleGroup(
     identifier="casq:activity",
     profiles=_CASQ_PROFILES,
     depends_on=frozenset({"casq:delete"}),
-    docs="`casq` activity emission: every species resolves to its outermost top-level complex (recursively), and only surviving top-level entities become activities. A standalone top-level species resolves to itself and is keyed `kept_species(SELF)`. A subunit -- at any nesting depth -- resolves to the outermost complex that contains it and is keyed by *that complex's* `kept_species`; it is never emitted as its own activity. This mirrors casq, which collapses a subunit's participation onto its complex (a subunit is never a node in its own right). When the resolved top-level complex is deleted, the subunit has no surviving carrier and contributes no key, so its participation is dropped -- matching casq's deletion behaviour. Influence endpoints are resolved through `activityKey` (in casq:influences), so an influence touching a subunit references its top-level complex's `kept_species` key. The recursive resolution also fixes a casq bug: casq collapses only one nesting level and silently drops influences from more deeply nested subunits.",
+    docs="`casq` activity emission: every species resolves to its outermost top-level complex (recursively), and only surviving top-level entities become activities. A standalone top-level species resolves to itself and is keyed `keptSpeciesKey(SELF)`. A subunit -- at any nesting depth -- resolves to the outermost complex that contains it and is keyed by *that complex's* `keptSpeciesKey`; it is never emitted as its own activity. This mirrors casq, which collapses a subunit's participation onto its complex (a subunit is never a node in its own right). When the resolved top-level complex is deleted, the subunit has no surviving carrier and contributes no key, so its participation is dropped -- matching casq's deletion behaviour. Influence endpoints are resolved through `hasActivityKey` (in casq:influences), so an influence touching a subunit references its top-level complex's `keptSpeciesKey` key. The recursive resolution also fixes a casq bug: casq collapses only one nesting level and silently drops influences from more deeply nested subunits.",
     rules=(
         Rule(
             identifier="casq:activity:top_level_self",
             text=dedent("""\
-                topLevel(SPECIES, SPECIES) :-
+                resolvesToTopLevel(SPECIES, SPECIES) :-
                     species(SPECIES),
                     not hasSubunit(_, SPECIES)."""),
             docs="A species that is not a subunit of any complex is its own top-level entity.",
@@ -1309,22 +1309,22 @@ _CASQ_ACTIVITY = RuleGroup(
         Rule(
             identifier="casq:activity:top_level_recursive",
             text=dedent("""\
-                topLevel(SPECIES, TOP) :-
-                    hasSubunit(PARENT, SPECIES),
-                    topLevel(PARENT, TOP)."""),
+                resolvesToTopLevel(SUBUNIT, TOPLEVEL) :-
+                    hasSubunit(PARENT_COMPLEX, SUBUNIT),
+                    resolvesToTopLevel(PARENT_COMPLEX, TOPLEVEL)."""),
             docs="A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex.",
         ),
         Rule(
             identifier="casq:activity:key",
             text=dedent("""\
-                activityKey(SPECIES, kept_species(TOP)) :-
-                    topLevel(SPECIES, TOP),
-                    not delete(TOP, _)."""),
-            docs="A species is keyed by the `kept_species` activity of its surviving top-level complex (or of itself, when it is top-level). Subunits never get their own activity; when the top-level complex is deleted there is no key, so nothing it contains contributes.",
+                hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL)) :-
+                    resolvesToTopLevel(SPECIES, TOPLEVEL),
+                    not delete(TOPLEVEL, _)."""),
+            docs="A species is keyed by the `keptSpeciesKey` activity of its surviving top-level complex (or of itself, when it is top-level). Subunits never get their own activity; when the top-level complex is deleted there is no key, so nothing it contains contributes.",
         ),
         Rule(
             identifier="casq:activity:emit",
-            text="new(activity(KEY)) :- activityKey(_, KEY).",
+            text="new(activity(KEY)) :- hasActivityKey(_, KEY).",
             docs="Every distinct activity key emits an activity node with that key.",
         ),
     ),
@@ -1334,120 +1334,120 @@ _CASQ_INFLUENCES = RuleGroup(
     identifier="casq:influences",
     profiles=_CASQ_PROFILES,
     depends_on=frozenset({"casq:bridged_product", "casq:activity"}),
-    docs="Casq-specific influence emission, written into the internal `influences(SOURCE, TARGET, KIND)` relation (the shared `influence_output` group fans it out to the typed heads). Directly wires reactant/catalyzer/stimulator → product (positive), trigger → product (triggering), inhibitor → product (negative), the generic and unknown modifiers (modulation / unknown_*), and the species→species modulation arcs, each with a bridged-product variant to route across deleted intermediates. Because a bridged product crosses a reaction boundary, the bridged trigger variant degrades to positive (mirroring `composesTo`).",
+    docs="Casq-specific influence emission, written into the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation (the shared `influence_output` group fans it out to the typed heads). Directly wires reactant/catalyzer/stimulator → product (positivelyInfluences), trigger → product (triggers), inhibitor → product (negativelyInfluences), the generic and unknown modifiers (modulation / unknown_*), and the species→species modulation arcs, each with a bridged-product variant to route across deleted intermediates. Because a bridged product crosses a reaction boundary, the bridged trigger variant degrades to positive (mirroring `composesTo`).",
     rules=(
         Rule(
             identifier="casq:influences:reactant_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A reactant of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:reactant_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
-            docs="Same as casq:influences:reactant_to_product but routed through a deleted intermediate via bridgedProduct.",
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
+            docs="Same as casq:influences:reactant_to_product but routed through a deleted intermediate via bridgesToProduct.",
         ),
         Rule(
             identifier="casq:influences:catalyzer_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A catalyzer of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:catalyzer_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:catalyzer_to_product.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulator_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A physical stimulator of a reaction positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulator_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:physical_stimulator_to_product.",
         ),
         Rule(
             identifier="casq:influences:trigger_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, triggering) :-
+                influences(SOURCE_KEY, TARGET_KEY, triggers) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A trigger of a reaction triggers a product of that reaction (direct trigger→product, so it keeps the triggering kind).",
         ),
         Rule(
             identifier="casq:influences:trigger_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:trigger_to_product. A bridged product crosses a reaction boundary, so the triggering degrades to a plain positive influence (the casq analog of composesTo).",
         ),
         Rule(
             identifier="casq:influences:inhibitor_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An inhibitor of a reaction negatively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:inhibitor_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:inhibitor_to_product.",
         ),
         Rule(
             identifier="casq:influences:modulator_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, modulation) :-
+                influences(SOURCE_KEY, TARGET_KEY, modulates) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), modulator(MODIFIER),
                     not physicalStimulator(MODIFIER),
@@ -1455,125 +1455,125 @@ _CASQ_INFLUENCES = RuleGroup(
                     not trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A bare modulator (generic MODULATION modifier) of a reaction modulates a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:modulator_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, modulation) :-
+                influences(SOURCE_KEY, TARGET_KEY, modulates) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), modulator(MODIFIER),
                     not physicalStimulator(MODIFIER),
                     not inhibitor(MODIFIER),
                     not trigger(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:modulator_to_product.",
         ),
         Rule(
             identifier="casq:influences:unknown_catalyzer_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownCatalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown catalyzer of a reaction unknown-positively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:unknown_catalyzer_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownCatalyzer(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:unknown_catalyzer_to_product.",
         ),
         Rule(
             identifier="casq:influences:unknown_inhibitor_to_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownInhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown inhibitor of a reaction unknown-negatively influences a product of that reaction.",
         ),
         Rule(
             identifier="casq:influences:unknown_inhibitor_to_bridged_product",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownInhibitor(MODIFIER),
                     hasReferredSpecies(MODIFIER, SOURCE),
-                    bridgedProduct(REACTION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    bridgesToProduct(REACTION, TARGET),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="Bridged variant of casq:influences:unknown_inhibitor_to_product.",
         ),
         Rule(
             identifier="casq:influences:catalysis_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     catalysis(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A catalysis modulation arc emits a positive influence between its source and target activities. (The predicate is `catalysis`; an earlier `catalyzis` typo silently disabled this rule.)",
         ),
         Rule(
             identifier="casq:influences:positive_influence_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     positiveInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A positiveInfluence modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:physical_stimulation_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     physicalStimulation(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A physicalStimulation modulation arc emits a positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:triggering_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, triggering) :-
+                influences(SOURCE_KEY, TARGET_KEY, triggers) :-
                     triggering(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A triggering modulation arc emits a triggering influence between its source and target activities (direct arc keeps the triggering kind).",
         ),
         Rule(
             identifier="casq:influences:inhibition_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     inhibition(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An inhibition modulation arc emits a negative influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:negative_influence_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     negativeInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A negativeInfluence modulation arc emits a negative influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:modulation_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, modulation) :-
+                influences(SOURCE_KEY, TARGET_KEY, modulates) :-
                     modulation(MODULATION),
                     not catalysis(MODULATION),
                     not physicalStimulation(MODULATION),
@@ -1582,67 +1582,67 @@ _CASQ_INFLUENCES = RuleGroup(
                     not positiveInfluence(MODULATION),
                     not negativeInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A bare modulation arc (the generic MODULATION arc, not one of the typed subtypes) emits a modulation influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_catalysis_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     unknownCatalysis(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown catalysis modulation arc emits an unknown-positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_physical_stimulation_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     unknownPhysicalStimulation(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown physical stimulation modulation arc emits an unknown-positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_positive_influence_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_positive) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     unknownPositiveInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown positive influence modulation arc emits an unknown-positive influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_inhibition_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     unknownInhibition(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown inhibition modulation arc emits an unknown-negative influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_negative_influence_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_negative) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     unknownNegativeInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown negative influence modulation arc emits an unknown-negative influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_triggering_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_triggering) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownTriggers) :-
                     unknownTriggering(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="An unknown triggering modulation arc emits an unknown-triggering influence between its source and target activities.",
         ),
         Rule(
             identifier="casq:influences:unknown_modulation_modulation",
             text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknown_modulation) :-
+                influences(SOURCE_KEY, TARGET_KEY, unknownModulates) :-
                     unknownModulation(MODULATION),
                     not unknownCatalysis(MODULATION),
                     not unknownPhysicalStimulation(MODULATION),
@@ -1651,7 +1651,7 @@ _CASQ_INFLUENCES = RuleGroup(
                     not unknownPositiveInfluence(MODULATION),
                     not unknownNegativeInfluence(MODULATION),
                     hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    activityKey(SOURCE, SOURCE_KEY), activityKey(TARGET, TARGET_KEY)."""),
+                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
             docs="A bare unknown modulation arc (not one of the unknown subtypes) emits an unknown-modulation influence between its source and target activities.",
         ),
     ),
