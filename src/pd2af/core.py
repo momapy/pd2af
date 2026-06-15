@@ -12,9 +12,25 @@ _MERGED_PROTEOFORM_MODES = pd2af.languages.MERGED_PROTEOFORM_MODES
 _LAYOUT_MODES = frozenset({"plain", "overlay", "auto", None})
 _INFLUENCE_PAIRINGS = frozenset({"cross", "nearest"})
 
+# The concrete layout modes (excluding the `None` sentinel), in display order.
+LAYOUT_MODES = ("plain", "overlay", "auto")
+
 # SBGN-AF output supports the curated-geometry `plain` mode and the graphviz
 # `auto` mode; the `overlay` dimming is CellDesigner-only.
-_SBGN_AF_LAYOUT_MODES = frozenset({"plain", "auto", None})
+SBGN_AF_LAYOUT_MODES = frozenset({"plain", "auto", None})
+_SBGN_AF_LAYOUT_MODES = SBGN_AF_LAYOUT_MODES
+
+
+def get_compatible_layout_modes_for_transformation_mode(mode):
+    """Return the concrete layout modes valid for a transformation mode.
+
+    The merged-proteoform modes only accept `auto`, because their synthesized
+    merged activities have no original geometry to reuse; every other mode
+    accepts all three layout modes.
+    """
+    if mode in _MERGED_PROTEOFORM_MODES:
+        return ("auto",)
+    return LAYOUT_MODES
 
 
 def _normalize_layout_mode(layout_mode):
