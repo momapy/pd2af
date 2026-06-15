@@ -150,6 +150,7 @@ def _run(args):
         mode=args.transformation_mode,
         layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
+        active_ids=args.active,
     )
     if args.output is None:
         _write_map_to_stdout(new_map)
@@ -360,6 +361,19 @@ def _add_transform_parser(subparsers):
             "nearest (a single arc between the closest pair). 'nearest' only "
             "takes effect with `--layout-mode plain` or `overlay`, where glyph "
             "positions are real; in `auto` it is ignored."
+        ),
+    )
+    parser.add_argument(
+        "-a",
+        "--active",
+        action="append",
+        default=None,
+        metavar="ID",
+        dest="active",
+        help=(
+            "mark the element with this id_ (a species or entity pool) as "
+            "active, emitting hasActivity(..., isInputParameter). Repeatable: "
+            "-a sa1 -a sa2."
         ),
     )
     parser.add_argument(
