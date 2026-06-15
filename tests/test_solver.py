@@ -118,6 +118,93 @@ class TestSolveSbgnPdMergedModes:
         assert len(_influence_atoms(clingo_model)) > 0
 
 
+def _named_influence_edges(clingo_model, id_to_model_element):
+    """Return the set of (influence-class-name, source-name, target-name)
+    tuples for every emitted influence atom, resolving the activity keys
+    back to species names."""
+    edges = set()
+    for atom in _influence_atoms(clingo_model):
+        source = id_to_model_element[atom.source.species].name
+        target = id_to_model_element[atom.target.species].name
+        edges.add((type(atom).__name__, source, target))
+    return edges
+
+
+def _species(name, active=False):
+    return momapy.celldesigner.Species(name=name, active=active)
+
+
+def _reaction(reactant, product, modifiers=()):
+    return momapy.celldesigner.Reaction(
+        reversible=False,
+        reactants=frozenset(
+            {momapy.celldesigner.Reactant(referred_species=reactant)}
+        ),
+        products=frozenset(
+            {momapy.celldesigner.Product(referred_species=product)}
+        ),
+        modifiers=frozenset(modifiers),
+    )
+
+
+def _map_from(species, reactions):
+    model = momapy.celldesigner.CellDesignerModel(
+        species=frozenset(species), reactions=frozenset(reactions)
+    )
+    return momapy.celldesigner.CellDesignerMap(model=model)
+
+
+class TestCycleAwareInfluences:
+    """A source feeding a production cycle must not leak influence back
+    around the loop onto members it directly depletes; transitivity across
+    non-cycle edges is untouched. See plans/cycle-aware-influence-paths.md."""
+
+    def test_cyclic_production_blocks_leaked_influence(self):
+        # A catalyses B->C; C->B closes the production cycle; B and C active.
+        species_a = _species("A")
+        species_b = _species("B", active=True)
+        species_c = _species("C", active=True)
+        catalyzer = momapy.celldesigner.Catalyzer(referred_species=species_a)
+        cyclic_map = _map_from(
+            (species_a, species_b, species_c),
+            (
+                _reaction(species_b, species_c, modifiers=(catalyzer,)),
+                _reaction(species_c, species_b),
+            ),
+        )
+        clingo_model, id_to_model_element = pd2af.solver.solve(
+            cyclic_map, mode="normal"
+        )
+        edges = _named_influence_edges(clingo_model, id_to_model_element)
+        # Consumption survives: A depletes its catalysed reactant B.
+        assert ("negativelyInfluences", "A", "B") in edges
+        # Base path survives: A activates the product C.
+        assert ("positivelyInfluences", "A", "C") in edges
+        # Cyclic leak removed: the A->C->B hop crosses a within-cycle edge.
+        assert ("positivelyInfluences", "A", "B") not in edges
+
+    def test_acyclic_production_keeps_transitive_influence(self):
+        # A catalyses B->C, then C->D (no cycle); transitivity must reach D.
+        species_a = _species("A")
+        species_b = _species("B", active=True)
+        species_c = _species("C", active=True)
+        species_d = _species("D", active=True)
+        catalyzer = momapy.celldesigner.Catalyzer(referred_species=species_a)
+        acyclic_map = _map_from(
+            (species_a, species_b, species_c, species_d),
+            (
+                _reaction(species_b, species_c, modifiers=(catalyzer,)),
+                _reaction(species_c, species_d),
+            ),
+        )
+        clingo_model, id_to_model_element = pd2af.solver.solve(
+            acyclic_map, mode="normal"
+        )
+        edges = _named_influence_edges(clingo_model, id_to_model_element)
+        # Transitivity across the non-cycle C->D edge is preserved.
+        assert ("positivelyInfluences", "A", "D") in edges
+
+
 @pytest.fixture(scope="module")
 def solved_casq(example_cd_map):
     return pd2af.solver.solve(example_cd_map, mode="casq")

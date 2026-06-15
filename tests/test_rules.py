@@ -103,6 +103,45 @@ class TestBuildProgram:
             pd2af.rules.build_program("does-not-exist")
 
 
+class TestCycleAwareTransitivity:
+    """Transitive influence extension is gated by the production-cycle
+    relations so a source feeding a production cycle does not leak influence
+    back around the loop. The relations exist in every non-casq profile (which
+    has `path`) and are absent from casq (which has none)."""
+
+    _NON_CASQ = ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex")
+
+    @pytest.mark.parametrize("profile", _NON_CASQ)
+    @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
+    def test_non_casq_profiles_define_cycle_relations(self, profile, language):
+        program = pd2af.rules.build_program(profile, language=language)
+        assert "isDirectlyTransformedTo" in program
+        assert "isTransformedTo" in program
+        assert "isCyclicallyTransformedTo" in program
+
+    @pytest.mark.parametrize("profile", _NON_CASQ)
+    def test_celldesigner_transitivity_guards_against_cycles(self, profile):
+        program = pd2af.rules.build_program(profile, language="celldesigner")
+        assert (
+            "not isCyclicallyTransformedTo(INTERMEDIATE_SPECIES, TARGET_SPECIES)"
+            in program
+        )
+
+    @pytest.mark.parametrize("profile", _NON_CASQ)
+    def test_sbgn_pd_transitivity_guards_against_cycles(self, profile):
+        program = pd2af.rules.build_program(profile, language="sbgn_pd")
+        assert (
+            "not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)"
+            in program
+        )
+
+    def test_casq_omits_cycle_relations(self):
+        program = pd2af.rules.build_program("casq")
+        assert "isDirectlyTransformedTo" not in program
+        assert "isTransformedTo" not in program
+        assert "isCyclicallyTransformedTo" not in program
+
+
 class TestMergedProfilesSbgnPdVariant:
     """`normal`/`normal_no_complex` must emit working rules for SBGN-PD input:
     entity-pool carriers (not the CellDesigner `species` carrier). The
