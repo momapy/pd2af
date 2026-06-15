@@ -30,8 +30,9 @@ momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
 ### Command-line interface
 
 ```bash
-pd2af my_map.xml -o my_map_af.xml
-pd2af my_map.xml -m keep-species -l plain -o my_map_af.xml
+pd2af transform my_map.xml -o my_map_af.xml
+pd2af transform my_map.xml -m keep-species -l plain -o my_map_af.xml
+pd2af list-modes
 ```
 
 See [CLI reference](cli.md) for all options.
