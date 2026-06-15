@@ -205,6 +205,33 @@ class TestCycleAwareInfluences:
         assert ("positivelyInfluences", "A", "D") in edges
 
 
+class TestActiveIds:
+    """User-declared active elements: `active_ids` injects
+    `hasActivity(..., isInputParameter)` for a species that carries no
+    structural activity signal of its own."""
+
+    def test_active_id_adds_activity_for_non_active_species(
+        self, example_cd_map, solved_keep_species
+    ):
+        # Species A (id `s1`) is a bare, non-active top-level species: it is
+        # absent from the baseline activities (B, D, E, F, G).
+        baseline_model, _ = solved_keep_species
+        baseline_count = len(_activity_atoms(baseline_model))
+        clingo_model, id_to_model_element = pd2af.solver.solve(
+            example_cd_map, mode="keep-species", active_ids=["s1"]
+        )
+        atoms = _activity_atoms(clingo_model)
+        names = {id_to_model_element[atom.key.species].name for atom in atoms}
+        assert "A" in names
+        assert len(atoms) == baseline_count + 1
+
+    def test_unknown_active_id_raises(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.solver.solve(
+                example_cd_map, mode="keep-species", active_ids=["not-an-id"]
+            )
+
+
 @pytest.fixture(scope="module")
 def solved_casq(example_cd_map):
     return pd2af.solver.solve(example_cd_map, mode="casq")

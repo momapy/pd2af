@@ -1,3 +1,4 @@
+import argparse
 import io
 import json
 import os
@@ -10,6 +11,13 @@ import momapy.io.core
 import pd2af.cli
 
 from tests._helpers import has_dot_binary
+
+
+def _parse_transform_args(argv):
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+    pd2af.cli._add_transform_parser(subparsers)
+    return parser.parse_args(argv)
 
 
 class TestWriterForOutput:
@@ -149,6 +157,39 @@ class TestCliMainStdout:
         with unittest.mock.patch("sys.stdout", new=fake_stdout):
             pd2af.cli.main(["transform", example_map_path])
         assert captured.tell() > 0
+
+
+class TestActiveFlag:
+    def test_active_flag_defaults_to_none(self):
+        args = _parse_transform_args(["transform", "map.xml"])
+        assert args.active is None
+
+    def test_active_flag_is_repeatable_and_accumulates(self):
+        args = _parse_transform_args(
+            ["transform", "map.xml", "-a", "s1", "-a", "s3"]
+        )
+        assert args.active == ["s1", "s3"]
+
+    def test_active_flag_marks_species_active(self, tmp_path, example_map_path):
+        out_path = tmp_path / "out.pickle"
+        pd2af.cli.main(
+            [
+                "transform",
+                example_map_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-a",
+                "s1",
+                "-o",
+                str(out_path),
+            ]
+        )
+        roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
+        names = sorted(s.name for s in roundtrip.model.species)
+        # Species A (id `s1`) is not an activity without the flag; -a surfaces it.
+        assert "A" in names
 
 
 class TestListModes:

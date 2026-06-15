@@ -248,6 +248,35 @@ class TestTransformLayoutModes:
         assert len(out.layout.layout_elements) > 0
 
 
+class TestTransformActiveIds:
+    """`active_ids` marks elements active by id_, surfacing them as
+    activities even when the map gives them no structural activity signal."""
+
+    def test_active_id_surfaces_non_active_species(self, example_cd_map):
+        # Species A (id `s1`) is a bare, non-active species: absent from the
+        # baseline keep-species activities.
+        baseline = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode="plain"
+        )
+        assert "A" not in species_names(baseline.model)
+        with_active = pd2af.transform(
+            example_cd_map,
+            mode="keep-species",
+            layout_mode="plain",
+            active_ids=["s1"],
+        )
+        assert "A" in species_names(with_active.model)
+
+    def test_unknown_active_id_raises(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map,
+                mode="keep-species",
+                layout_mode="plain",
+                active_ids=["not-an-id"],
+            )
+
+
 class TestTransformErrors:
     def test_unknown_mode_raises_value_error(self, example_cd_map):
         with pytest.raises(ValueError):
