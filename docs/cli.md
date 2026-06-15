@@ -9,7 +9,7 @@ The output map is written to stdout as a [momapy](https://github.com/adrienrougn
 ## Synopsis
 
 ```bash
-pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,casq}] [-l {plain,overlay,auto}] [-p {cross,nearest}] [-o <output_file>]
+pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,casq}] [-l {plain,overlay,auto}] [-p {cross,nearest}] [-a <id> ...] [-o <output_file>]
 pd2af list-modes [--json]
 ```
 
@@ -33,6 +33,7 @@ The CLI is organised into subcommands:
 | `--transformation-mode` | `-m` | Transformation mode (default: `normal`); see below |
 | `--layout-mode` | `-l` | Layout strategy (default: `auto`); see below |
 | `--influence-pairing` | `-p` | How to draw an influence whose source/target maps to several glyphs: `cross` (default) or `nearest` |
+| `--active` | `-a` | Mark the element with this `id_` (a species or entity pool) as active, surfacing it as an activity even when the map gives it no structural activity signal. Repeatable: `-a sa1 -a sa2`. Unknown ids raise an error |
 | `--output` | `-o` | Write output to this file instead of stdout |
 
 ## Transformation modes (`-m`)
@@ -127,6 +128,12 @@ pd2af transform my_map.xml -m keep-species-no-complex -l overlay -o my_map_af.xm
 
 ```bash
 pd2af transform my_map.xml -m casq -l plain -o my_map_af.xml
+```
+
+### Mark elements active by id (input parameters)
+
+```bash
+pd2af transform my_map.xml -a sa1 -a sa2 -o my_map_af.xml
 ```
 
 ## Getting help
