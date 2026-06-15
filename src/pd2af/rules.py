@@ -525,6 +525,16 @@ _PATHS_BASE_SBGN_PD = (
         docs="A modulation arc whose target is a phenotype influences the phenotype itself (a phenotype process has no products; it is the activity).",
     ),
     Rule(
+        identifier="paths_base:sbgn_pd:is_directly_transformed_to",
+        text=dedent("""\
+            isDirectlyTransformedTo(UPSTREAM_ENTITY_POOL, DOWNSTREAM_ENTITY_POOL) :-
+                hasReactant(PROCESS, REACTANT),
+                hasElement(REACTANT, UPSTREAM_ENTITY_POOL),
+                hasProduct(PROCESS, PRODUCT),
+                hasElement(PRODUCT, DOWNSTREAM_ENTITY_POOL)."""),
+        docs="The single reactant->product hop in the production graph: the upstream entity pool is an element of a reactant and the downstream pool an element of a product of the same process. Passive voice (the process does the transforming, not the pool) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
+    ),
+    Rule(
         identifier="paths_base:sbgn_pd:transitive_through_process",
         text=dedent("""\
             propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, OUTGOING_INFLUENCE_KIND) :-
@@ -533,8 +543,9 @@ _PATHS_BASE_SBGN_PD = (
                 hasReactant(PROCESS, REACTANT),
                 hasElement(REACTANT, INTERMEDIATE_ENTITY_POOL),
                 hasProduct(PROCESS, PRODUCT),
-                hasElement(PRODUCT, TARGET_ENTITY_POOL)."""),
-        docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences).",
+                hasElement(PRODUCT, TARGET_ENTITY_POOL),
+                not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)."""),
+        docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences). Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
     ),
     Rule(
         identifier="paths_base:composes_to",
@@ -555,8 +566,26 @@ _PATHS_BASE_SBGN_PD = (
 _PATHS_BASE = RuleGroup(
     identifier="paths_base",
     profiles=_NON_CASQ_PROFILES,
-    docs="Builds the kinded `propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND)` relation from PD reactions and modulation arcs. INFLUENCE_KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Reactant-chained transitivity extends paths through reactions, degrading `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at each reaction hop via `composesTo`.",
-    rules=(),
+    docs="Builds the kinded `propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND)` relation from PD reactions and modulation arcs. INFLUENCE_KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Reactant-chained transitivity extends paths through reactions, degrading `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at each reaction hop via `composesTo`. Transitive extension is gated by the production-cycle relations: each variant defines the single reactant->product hop `isDirectlyTransformedTo/2`, the shared `isTransformedTo/2` is its transitive closure, and `isCyclicallyTransformedTo/2` marks the hops that lie inside a cycle so transitivity never propagates influence back around a production loop.",
+    rules=(
+        Rule(
+            identifier="paths_base:is_transformed_to",
+            text=dedent("""\
+                isTransformedTo(UPSTREAM, DOWNSTREAM) :- isDirectlyTransformedTo(UPSTREAM, DOWNSTREAM).
+                isTransformedTo(UPSTREAM, DOWNSTREAM) :-
+                    isTransformedTo(UPSTREAM, INTERMEDIATE),
+                    isDirectlyTransformedTo(INTERMEDIATE, DOWNSTREAM)."""),
+            docs="Transitive closure of the single-hop `isDirectlyTransformedTo/2`: `isTransformedTo(UPSTREAM, DOWNSTREAM)` holds when DOWNSTREAM is reachable from UPSTREAM through one or more reactant->product hops (the direct hop included, as the base case). Language-agnostic; `isDirectlyTransformedTo/2` is supplied per language variant. Depends only on `isDirectlyTransformedTo`, never on `propagatesInfluence`, so the negation that gates transitivity stays stratified.",
+        ),
+        Rule(
+            identifier="paths_base:is_cyclically_transformed_to",
+            text=dedent("""\
+                isCyclicallyTransformedTo(UPSTREAM, DOWNSTREAM) :-
+                    isTransformedTo(UPSTREAM, DOWNSTREAM),
+                    isTransformedTo(DOWNSTREAM, UPSTREAM)."""),
+            docs="UPSTREAM and DOWNSTREAM are mutually reachable through the production graph -- both lie on a common cycle. At every transitivity guard site the hop in question is already a direct reactant->product edge, so requiring mutual reachability there is exactly equivalent to 'this hop is on a cycle'. The transitivity rules forbid extending a path across such a hop, blocking influence from leaking around production loops.",
+        ),
+    ),
     variants={
         "sbgn_pd": _PATHS_BASE_SBGN_PD,
         "celldesigner": (
@@ -786,6 +815,17 @@ _PATHS_BASE = RuleGroup(
             docs="If a modulation arc is a *bare* unknown modulation (not one of the unknown subtypes), then there is an unknown-modulation path from its source to its target. The negations exclude the subtypes, which `unknownModulation` is the umbrella over.",
         ),
         Rule(
+            identifier="paths_base:is_directly_transformed_to",
+            text=dedent("""\
+                isDirectlyTransformedTo(UPSTREAM_SPECIES, DOWNSTREAM_SPECIES) :-
+                    reaction(REACTION),
+                    hasReactant(REACTION, REACTANT),
+                    hasReferredSpecies(REACTANT, UPSTREAM_SPECIES),
+                    hasProduct(REACTION, PRODUCT),
+                    hasReferredSpecies(PRODUCT, DOWNSTREAM_SPECIES)."""),
+            docs="The single reactant->product hop in the production graph: the upstream species is referred to by a reactant and the downstream species by a product of the same reaction. Passive voice (the reaction does the transforming, not the species) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
+        ),
+        Rule(
             identifier="paths_base:transitive_through_reaction",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, OUTGOING_INFLUENCE_KIND) :-
@@ -795,8 +835,9 @@ _PATHS_BASE = RuleGroup(
                     hasReactant(REACTION, REACTANT),
                     hasReferredSpecies(REACTANT, INTERMEDIATE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
-                    hasReferredSpecies(PRODUCT, TARGET_SPECIES)."""),
-            docs="If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. The kind is carried through `composesTo`, which degrades `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at the reaction hop while leaving every other kind unchanged.",
+                    hasReferredSpecies(PRODUCT, TARGET_SPECIES),
+                    not isCyclicallyTransformedTo(INTERMEDIATE_SPECIES, TARGET_SPECIES)."""),
+            docs="If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. The kind is carried through `composesTo`, which degrades `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at the reaction hop while leaving every other kind unchanged. Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
         ),
         Rule(
             identifier="paths_base:composes_to",
