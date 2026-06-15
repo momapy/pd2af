@@ -1136,7 +1136,7 @@ _GATES = RuleGroup(
 _CASQ_PARTICIPATION = RuleGroup(
     identifier="casq:participation",
     profiles=_CASQ_PROFILES,
-    docs="CASQ helper relations describing how species participate in reactions (`activeParticipates` for reactant/modifier roles, `participates` adding products, `isProducedSpecies` and `isModifierSpecies`), used as conditions of the CASQ deletion rules.",
+    docs="CASQ helper relations describing how species participate in reactions (`activeParticipates` for reactant/modifier roles, `participates` adding products, `isProducedSpecies`, `isModifierSpecies` and `isModulationTarget`), used as conditions of the CASQ deletion rules.",
     rules=(
         Rule(
             identifier="casq:participation:active_from_reactant",
@@ -1188,6 +1188,14 @@ _CASQ_PARTICIPATION = RuleGroup(
                     hasReferredSpecies(MODIFIER, SPECIES)."""),
             docs="A species is a modifier if some reaction has a modifier referring to it.",
         ),
+        Rule(
+            identifier="casq:participation:is_modulation_target",
+            text=dedent("""\
+                isModulationTarget(SPECIES) :-
+                    modulation(MODULATION),
+                    hasTarget(MODULATION, SPECIES)."""),
+            docs="A species is a modulation target if some direct influence/modulation arc (`modulation/1` -- the umbrella over every typed arc: catalysis, inhibition, positiveInfluence, ...) points at it. Unlike a reaction-product influence into a deleted species (rewired via `bridgesToProduct` or blocked by the participation/`isProducedSpecies` guards), a modulation arc has no rewiring, so deleting its target would silently drop the influence. The deletion rules use `not isModulationTarget(...)` to refuse such deletions -- mirroring casq, whose deletions guard on the species having no incoming transitions (a CellDesigner influence arc is a reaction whose product is its target, so it counts as a transition).",
+        ),
     ),
 )
 
@@ -1205,13 +1213,14 @@ _CASQ_DELETE = RuleGroup(
                     hasReactant(REACTION, RECEPTOR_REACTANT),
                     hasReferredSpecies(RECEPTOR_REACTANT, RECEPTOR),
                     receptor(RECEPTOR),
+                    not isModulationTarget(RECEPTOR),
                     hasReactant(REACTION, PARTNER_REACTANT),
                     hasReferredSpecies(PARTNER_REACTANT, PARTNER),
                     RECEPTOR != PARTNER,
                     #count{ REACTANT_SPECIES : hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, REACTANT_SPECIES) } = 2,
                     #count{ RECEPTOR_REACTION : participates(RECEPTOR, RECEPTOR_REACTION) } = 1,
                     #count{ PARTNER_REACTION : participates(PARTNER, PARTNER_REACTION) } = 1."""),
-            docs="A receptor in a 2-reactant heterodimer association where receptor and partner each participate in only this reaction is deleted (rule_1).",
+            docs="A receptor in a 2-reactant heterodimer association where receptor and partner each participate in only this reaction is deleted (rule_1), unless the receptor is the target of a modulation arc -- deleting it would silently drop that influence (which, unlike a reaction-product influence, is never rewired), so `not isModulationTarget(RECEPTOR)` blocks the deletion, mirroring casq's no-incoming-transitions guard.",
         ),
         Rule(
             identifier="casq:delete:rule_2",
@@ -1223,10 +1232,12 @@ _CASQ_DELETE = RuleGroup(
                     SPECIES_1 != SPECIES_2,
                     not receptor(SPECIES_1),
                     not receptor(SPECIES_2),
+                    not isModulationTarget(SPECIES_1),
+                    not isModulationTarget(SPECIES_2),
                     #count{ REACTANT_SPECIES : hasReactant(REACTION, REACTANT), hasReferredSpecies(REACTANT, REACTANT_SPECIES) } = 2,
                     #count{ FIRST_SPECIES_REACTION : activeParticipates(SPECIES_1, FIRST_SPECIES_REACTION) } = 1,
                     #count{ SECOND_SPECIES_REACTION : activeParticipates(SPECIES_2, SECOND_SPECIES_REACTION) } = 1."""),
-            docs="In a 2-reactant heterodimer association where neither reactant is a receptor and each actively participates only in this reaction, both reactant species are deleted (rule_2). The rule fires symmetrically for each side.",
+            docs="In a 2-reactant heterodimer association where neither reactant is a receptor and each actively participates only in this reaction, both reactant species are deleted (rule_2). The rule fires symmetrically for each side. The deletion is blocked if *either* reactant is the target of a modulation arc (`not isModulationTarget(SPECIES_1)`, `not isModulationTarget(SPECIES_2)`): such an influence is never rewired, so dropping either reactant would silently lose it -- and casq likewise refuses to delete the pair when either has incoming transitions.",
         ),
         Rule(
             identifier="casq:delete:rule_3",
@@ -1239,9 +1250,10 @@ _CASQ_DELETE = RuleGroup(
                     hasName(REACTANT_SPECIES, NAME), hasName(PRODUCT_SPECIES, NAME),
                     not isProducedSpecies(REACTANT_SPECIES),
                     not isModifierSpecies(REACTANT_SPECIES),
+                    not isModulationTarget(REACTANT_SPECIES),
                     #count{ COUNTED_PRODUCT_SPECIES : hasProduct(REACTION, COUNTED_PRODUCT), hasReferredSpecies(COUNTED_PRODUCT, COUNTED_PRODUCT_SPECIES) } = 1,
                     #count{ CONSUMING_REACTION : hasReactant(CONSUMING_REACTION, CONSUMING_REACTANT), hasReferredSpecies(CONSUMING_REACTANT, REACTANT_SPECIES) } = 1."""),
-            docs="In a single-product reaction where reactant and product share a name, the reactant is deleted (rule_3) if it is not produced anywhere else, never appears as a modifier, and is consumed only by this reaction.",
+            docs="In a single-product reaction where reactant and product share a name, the reactant is deleted (rule_3) if it is not produced anywhere else, never appears as a modifier, is not the target of a modulation arc (`not isModulationTarget` -- such an influence is never rewired and would be silently lost), and is consumed only by this reaction.",
         ),
         Rule(
             identifier="casq:delete:rule_4",
@@ -1252,9 +1264,10 @@ _CASQ_DELETE = RuleGroup(
                     hasProduct(REACTION, PRODUCT), hasReferredSpecies(PRODUCT, PRODUCT_SPECIES),
                     REACTANT_SPECIES != PRODUCT_SPECIES,
                     hasName(REACTANT_SPECIES, NAME), hasName(PRODUCT_SPECIES, NAME),
+                    not isModulationTarget(REACTANT_SPECIES),
                     #count{ PARTICIPATED_REACTION : activeParticipates(REACTANT_SPECIES, PARTICIPATED_REACTION) } = 1,
                     #count{ COUNTED_PRODUCT_SPECIES : hasProduct(REACTION, COUNTED_PRODUCT), hasReferredSpecies(COUNTED_PRODUCT, COUNTED_PRODUCT_SPECIES) } = 1."""),
-            docs="In a single-product transport where reactant and product share a name and the reactant actively participates only in this reaction, the reactant is deleted (rule_4).",
+            docs="In a single-product transport where reactant and product share a name and the reactant actively participates only in this reaction, the reactant is deleted (rule_4), unless it is the target of a modulation arc (`not isModulationTarget` -- that influence has no rewiring and would be silently dropped).",
         ),
     ),
 )
