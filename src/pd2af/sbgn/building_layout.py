@@ -32,6 +32,7 @@ import momapy.core.mapping
 import momapy.geometry
 import momapy.sbgn.af
 import momapy.sbgn.io.sbgnml._reading_layout
+import momapy.sbgn.layout
 
 import pd2af.utils
 
@@ -210,7 +211,7 @@ def _make_and_add_unit_of_information_layout(
                 unit_layout.position,
                 # Match the smaller auxiliary-unit font the momapy sbgn reader
                 # uses for units of information (not the default node font).
-                font_size=momapy.sbgn.io.sbgnml._reading_layout._DEFAULT_AUXILIARY_UNIT_FONT_SIZE,
+                font_size=momapy.sbgn.layout.DEFAULT_AUXILIARY_UNIT_FONT_SIZE,
             )
         )
     activity_layout.layout_elements.append(unit_layout)
