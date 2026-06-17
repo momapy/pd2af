@@ -142,8 +142,33 @@ def _write_map_to_stdout(cd_map):
         os.unlink(tmp_path)
 
 
+def _read_input_map(input_file):
+    """Read the input map from a file path, or from stdin if `input_file` is None.
+
+    `momapy.io.core.read` needs a file path (for content-based format
+    auto-detection and for the reader), so stdin bytes are buffered to a
+    temporary file before reading, mirroring `momapy visualize`.
+    """
+    if input_file is not None:
+        return momapy.io.core.read(input_file)
+    if sys.stdin.isatty():
+        print("error: no input file and stdin is not a pipe", file=sys.stderr)
+        sys.exit(1)
+    data = sys.stdin.buffer.read()
+    if not data:
+        print("error: no input received on stdin", file=sys.stderr)
+        sys.exit(1)
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp_path = tmp.name
+        tmp.write(data)
+    try:
+        return momapy.io.core.read(tmp_path)
+    finally:
+        os.unlink(tmp_path)
+
+
 def _run(args):
-    reader_result = momapy.io.core.read(args.input_file)
+    reader_result = _read_input_map(args.input_file)
     input_map = reader_result.obj
     transform_result = pd2af.transform(
         input_map,
@@ -316,7 +341,12 @@ def _add_transform_parser(subparsers):
             ".pickle/.pkl -> pickle; defaults to pickle)."
         ),
     )
-    parser.add_argument("input_file", help="input CellDesigner XML file")
+    parser.add_argument(
+        "input_file",
+        nargs="?",
+        default=None,
+        help="input CellDesigner XML file (reads from stdin if omitted)",
+    )
     parser.add_argument(
         "-m",
         "--transformation-mode",
