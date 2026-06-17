@@ -79,6 +79,11 @@ _BEZIER_OFFSET = 30.0
 
 _ROOT_LAYOUT_SEP = 15.0
 
+# Padding (in points) dot leaves between a compartment's contents and its
+# cluster bounding box. graphviz defaults to 8, which is too tight; this is the
+# auto-layout equivalent of the old set_fit xsep/ysep.
+_DOT_CLUSTER_SEP = 40.0
+
 
 def nearest_layout_pair(source_layouts, target_layouts):
     """Return the (source_layout, target_layout) pair whose ``.position``s are
@@ -308,6 +313,7 @@ def _build_dot_graph(
         if compartment_layout_elements is not None:
             compartment_layout_element = compartment_layout_elements[0]
             dot_cluster = pydot.Cluster(compartment.id_)
+            dot_cluster.set("margin", _DOT_CLUSTER_SEP)
             compartment_to_dot_cluster[compartment] = dot_cluster
             dot_cluster_name_to_compartment_layout_element[dot_cluster.get_name()] = (
                 compartment_layout_element
