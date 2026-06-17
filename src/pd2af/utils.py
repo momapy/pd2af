@@ -1,4 +1,3 @@
-import collections
 import dataclasses
 import itertools
 import math
@@ -299,9 +298,9 @@ def _build_dot_graph(
     rank above it and its output target below it."""
     dot_graph = pydot.Dot(graph_type="digraph")
     compartment_to_dot_cluster = {}
-    compartment_layout_element_to_included_layout_elements = collections.defaultdict(
-        list
-    )
+    # dot cluster name -> compartment layout element, so the repositioning phase
+    # can copy each cluster's dot-computed bounding box onto its compartment.
+    dot_cluster_name_to_compartment_layout_element = {}
     for compartment in new_map_builder.model.compartments:
         compartment_layout_elements = new_map_builder.layout_model_mapping.get_mapping(
             compartment
@@ -310,19 +309,9 @@ def _build_dot_graph(
             compartment_layout_element = compartment_layout_elements[0]
             dot_cluster = pydot.Cluster(compartment.id_)
             compartment_to_dot_cluster[compartment] = dot_cluster
-            # `outside` is a CellDesigner-only relation (compartment nesting);
-            # SBGN compartments have no such concept, so don't assume it exists.
-            outside_compartment = getattr(compartment, "outside", None)
-            outside_compartment_layout_elements = (
-                new_map_builder.layout_model_mapping.get_mapping(outside_compartment)
+            dot_cluster_name_to_compartment_layout_element[dot_cluster.get_name()] = (
+                compartment_layout_element
             )
-            if outside_compartment_layout_elements is not None:
-                outside_compartment_layout_element = (
-                    outside_compartment_layout_elements[0]
-                )
-                compartment_layout_element_to_included_layout_elements[
-                    outside_compartment_layout_element
-                ].append(compartment_layout_element)
     for compartment, compartment_dot_cluster in compartment_to_dot_cluster.items():
         outside_compartment = getattr(compartment, "outside", None)
         if outside_compartment is not None:
@@ -377,12 +366,6 @@ def _build_dot_graph(
                 )
                 if compartment_dot_cluster is not None:
                     compartment_dot_cluster.add_node(dot_node)
-                    compartment_layout_element = (
-                        new_map_builder.layout_model_mapping.get_mapping(compartment)[0]
-                    )
-                    compartment_layout_element_to_included_layout_elements[
-                        compartment_layout_element
-                    ].append(layout_element_builder)
                 else:
                     dot_graph.add_node(dot_node)
             else:
@@ -413,16 +396,64 @@ def _build_dot_graph(
         id_to_layout_element,
         descendant_id_to_top_level_id,
         directed_pairs,
-        compartment_layout_element_to_included_layout_elements,
+        dot_cluster_name_to_compartment_layout_element,
     )
 
 
-def _reposition_from_dot(dot_graph, id_to_layout_element):
+def _apply_dot_cluster_bounding_boxes_to_compartments(
+    dot_graph, dot_cluster_name_to_compartment_layout_element
+):
+    """Copy each dot cluster's computed bounding box onto its compartment layout
+    element. dot lays clusters out already nested and non-overlapping; we use its
+    `bb` directly rather than refitting compartments around their members.
+
+    pydot exposes a cluster's `bb` only through a synthetic node named ``graph``
+    inside the subgraph (``subgraph.get("bb")`` returns ``None``). `bb` is
+    ``llx,lly,urx,ury`` in points -- the same coordinate space as the node
+    positions consumed elsewhere. An empty cluster has no `bb`; its compartment
+    keeps its built geometry."""
+    for dot_subgraph in dot_graph.get_subgraphs():
+        compartment_layout_element = (
+            dot_cluster_name_to_compartment_layout_element.get(
+                dot_subgraph.get_name().strip('"')
+            )
+        )
+        if compartment_layout_element is not None:
+            bounding_box = None
+            for dot_node in dot_subgraph.get_nodes():
+                if dot_node.get_name().strip('"') == "graph":
+                    bounding_box = dot_node.get("bb")
+            if bounding_box is not None:
+                lower_left_x, lower_left_y, upper_right_x, upper_right_y = [
+                    float(coordinate)
+                    for coordinate in bounding_box.strip('"').split(",")
+                ]
+                compartment_layout_element.position = momapy.geometry.Point(
+                    (lower_left_x + upper_right_x) / 2,
+                    (lower_left_y + upper_right_y) / 2,
+                )
+                compartment_layout_element.width = upper_right_x - lower_left_x
+                compartment_layout_element.height = upper_right_y - lower_left_y
+                compartment_layout_element.label.position = (
+                    compartment_layout_element.position
+                )
+        _apply_dot_cluster_bounding_boxes_to_compartments(
+            dot_subgraph, dot_cluster_name_to_compartment_layout_element
+        )
+
+
+def _reposition_from_dot(
+    dot_graph, id_to_layout_element, dot_cluster_name_to_compartment_layout_element
+):
     """Run graphviz `dot`, then translate every layout element to the position
-    dot computed for it. Returns id -> layout element builder (including nested
-    descendants) so the arc-geometry phase can resolve endpoints."""
+    dot computed for it, and size each compartment to its dot cluster bounding
+    box. Returns id -> layout element builder (including nested descendants) so
+    the arc-geometry phase can resolve endpoints."""
     dot = dot_graph.create_dot(prog="dot").decode("utf-8")
     dot_graph = pydot.graph_from_dot_data(dot)[0]
+    _apply_dot_cluster_bounding_boxes_to_compartments(
+        dot_graph, dot_cluster_name_to_compartment_layout_element
+    )
     id_to_new_layout_element_builder = {}
     dot_nodes = _get_flatten_dot_nodes(dot_graph)
     for dot_node in dot_nodes:
@@ -644,7 +675,7 @@ def auto_layout(
         id_to_layout_element,
         descendant_id_to_top_level_id,
         directed_pairs,
-        compartment_layout_element_to_included_layout_elements,
+        dot_cluster_name_to_compartment_layout_element,
     ) = _build_dot_graph(
         new_map_builder,
         new_layout_builder,
@@ -652,7 +683,9 @@ def auto_layout(
         reversed_arc_classes=reversed_arc_classes,
     )
     id_to_new_layout_element_builder = _reposition_from_dot(
-        dot_graph, id_to_layout_element
+        dot_graph,
+        id_to_layout_element,
+        dot_cluster_name_to_compartment_layout_element,
     )
     _arc_geometry(
         new_layout_builder,
@@ -661,14 +694,6 @@ def auto_layout(
         directed_pairs,
         operator_arc_resolver=operator_arc_resolver,
     )
-    for (
-        compartment_layout_element,
-        included_layout_elements,
-    ) in compartment_layout_element_to_included_layout_elements.items():
-        momapy.positioning.set_fit(
-            compartment_layout_element, included_layout_elements, xsep=10.0, ysep=10.0
-        )
-        compartment_layout_element.label.position = compartment_layout_element.position
     harmonize_root_layout(new_layout_builder)
     new_map = momapy.builder.object_from_builder(new_map_builder)
     return new_map
