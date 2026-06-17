@@ -653,7 +653,7 @@ def _arc_geometry(
             )
 
 
-def auto_layout(
+def make_auto_layout(
     cd_map,
     compartment_layout_classes=(
         momapy.celldesigner.RectangleCompartmentLayout,

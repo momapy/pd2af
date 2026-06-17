@@ -126,8 +126,8 @@ def make_synthetic_layout(species, index):
     content-distinct. Layout dataclasses have ``compare=False`` on
     ``id_``, so identical content collapses to one mapping key — and
     the layout-model mapping then drops every synthetic but the first.
-    The position itself is throwaway: ``auto_layout`` repositions every
-    node before render.
+    The position itself is throwaway: ``make_auto_layout`` repositions
+    every node before render.
     """
     layout_class = _SPECIES_CLASS_TO_LAYOUT_CLASS.get(type(species))
     if layout_class is None:
@@ -158,8 +158,8 @@ def make_modulation_arc(modulation, source_layout, target_layout):
 def make_synthetic_gate_layout(gate, index):
     """Build a placeholder gate node for ``gate`` (the ``auto`` mode, when the
     input gate has no curated layout). ``index`` seeds the position so two
-    content-equal synthetic gates stay content-distinct; ``auto_layout``
-    repositions every node before render."""
+    content-equal synthetic gates stay content-distinct;
+    ``make_auto_layout`` repositions every node before render."""
     layout_class = _GATE_CLASS_TO_LAYOUT_CLASS.get(type(gate))
     if layout_class is None:
         raise ValueError(

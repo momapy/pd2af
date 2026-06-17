@@ -18,9 +18,10 @@ Two layout modes:
   single arc between the closest pair). Activities/compartments whose input has
   no layout are skipped.
 * ``auto`` -- build every element at a placeholder position with the default
-  size, then hand the whole layout to ``pd2af.utils.auto_layout`` (graphviz) in
-  ``build.py`` for repositioning. Required by the merged ``normal`` /
-  ``normal-no-complex`` modes, where a merged activity has no single input layout.
+  size, then hand the whole layout to ``pd2af.utils.make_auto_layout``
+  (graphviz) in ``build.py`` for repositioning. Required by the merged
+  ``normal`` / ``normal-no-complex`` modes, where a merged activity has no
+  single input layout.
 
 ``overlay`` for SBGN-AF is unsupported (see ``pd2af.core``).
 """
@@ -234,8 +235,8 @@ def _make_and_add_operator_layout(context, operator, input_operator):
         operator_layout = _builder(
             operator_layout_class, position=_PLACEHOLDER_POSITION
         )
-        # auto_layout reverses the logic-arc dot edges, so graphviz ranks the
-        # inputs above the operator and the target below it; a vertical,
+        # make_auto_layout reverses the logic-arc dot edges, so graphviz ranks
+        # the inputs above the operator and the target below it; a vertical,
         # left-to-right operator then points its input connector up (toward the
         # inputs) and its output connector down (toward the target).
         operator_layout.direction = momapy.core.elements.Direction.VERTICAL
@@ -333,12 +334,13 @@ def _operator_connector_segment(operator_layout, other_layout, is_logic_arc):
 
 
 def resolve_operator_arc_segments(arc, source_builder, target_builder):
-    """Per-arc hook for :func:`pd2af.utils.auto_layout`'s arc-geometry step:
-    when ``arc`` is sourced by an operator glyph, return its connector-attached
-    segments recomputed from the graphviz-repositioned geometry; otherwise
-    return ``None`` so the caller keeps its normal border geometry. This reuses
-    the same connector helper as plain-mode arc creation, so the auto snap is
-    folded into the recompute that already iterates every arc."""
+    """Per-arc hook for :func:`pd2af.utils.make_auto_layout`'s arc-geometry
+    step: when ``arc`` is sourced by an operator glyph, return its
+    connector-attached segments recomputed from the graphviz-repositioned
+    geometry; otherwise return ``None`` so the caller keeps its normal border
+    geometry. This reuses the same connector helper as plain-mode arc creation,
+    so the auto snap is folded into the recompute that already iterates every
+    arc."""
     if not momapy.builder.isinstance_or_builder(
         source_builder, _OPERATOR_LAYOUT_CLASSES
     ):

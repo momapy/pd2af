@@ -126,17 +126,18 @@ def build_map(
     new_map = momapy.builder.object_from_builder(map_builder)
 
     # auto-layout (graphviz) repositions an already-built layout. The
-    # compartment-layout classes differ per language (see pd2af.utils.auto_layout).
+    # compartment-layout classes differ per language (see
+    # pd2af.utils.make_auto_layout).
     if layout_mode == "auto":
         if language == pd2af.languages.CELLDESIGNER:
-            new_map = pd2af.utils.auto_layout(new_map)
+            new_map = pd2af.utils.make_auto_layout(new_map)
         elif language == pd2af.languages.SBGN_PD:
             # SBGN-AF logical operators have input/output connectors: rank their
             # logic-arc inputs upstream (reversed_arc_classes) and re-attach the
             # operator arcs to the connector tips after graphviz repositions
             # (operator_arc_resolver). Both hooks are no-ops on operator-free
             # maps, so non-operator SBGN output is unchanged.
-            new_map = pd2af.utils.auto_layout(
+            new_map = pd2af.utils.make_auto_layout(
                 new_map,
                 compartment_layout_classes=(momapy.sbgn.af.CompartmentLayout,),
                 reversed_arc_classes=(momapy.sbgn.af.LogicArcLayout,),
