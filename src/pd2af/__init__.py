@@ -1,3 +1,3 @@
-from pd2af.core import transform
+from pd2af.core import transform, TransformerResult
 
-__all__ = ["transform"]
+__all__ = ["transform", "TransformerResult"]

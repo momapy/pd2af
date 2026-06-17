@@ -145,13 +145,14 @@ def _write_map_to_stdout(cd_map):
 def _run(args):
     reader_result = momapy.io.core.read(args.input_file)
     input_map = reader_result.obj
-    new_map = pd2af.transform(
+    transform_result = pd2af.transform(
         input_map,
         mode=args.transformation_mode,
         layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
         active_ids=args.active,
     )
+    new_map = transform_result.obj
     if args.output is None:
         _write_map_to_stdout(new_map)
     else:

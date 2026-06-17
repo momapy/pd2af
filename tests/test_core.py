@@ -34,14 +34,14 @@ def _assert_recursively_stripped(species_iterable):
 def out_keep_species(example_cd_map):
     return pd2af.transform(
         example_cd_map, mode="keep-species", layout_mode="plain"
-    )
+    ).obj
 
 
 @pytest.fixture(scope="module")
 def out_keep_species_no_complex(example_cd_map):
     return pd2af.transform(
         example_cd_map, mode="keep-species-no-complex", layout_mode="plain"
-    )
+    ).obj
 
 
 @pytest.fixture(scope="module")
@@ -50,14 +50,14 @@ def out_normal_no_complex(example_cd_map):
         pytest.skip("graphviz `dot` binary not on PATH")
     return pd2af.transform(
         example_cd_map, mode="normal-no-complex", layout_mode="auto"
-    )
+    ).obj
 
 
 @pytest.fixture(scope="module")
 def out_normal(example_cd_map):
     if not has_dot_binary():
         pytest.skip("graphviz `dot` binary not on PATH")
-    return pd2af.transform(example_cd_map, mode="normal", layout_mode="auto")
+    return pd2af.transform(example_cd_map, mode="normal", layout_mode="auto").obj
 
 
 class TestTransformExampleKeepSpeciesMode:
@@ -203,15 +203,17 @@ class TestMergedModeStripping:
         return read_cd_map(os.path.join(MAPS_DIR, "Apoptosis_pathway.xml"))
 
     def test_normal_strips_all_decorations(self, rich_map):
-        out = pd2af.transform(rich_map, mode="normal", layout_mode=None)
+        out = pd2af.transform(rich_map, mode="normal", layout_mode=None).obj
         _assert_recursively_stripped(out.model.species)
 
     def test_normal_no_complex_strips_all_decorations(self, rich_map):
-        out = pd2af.transform(rich_map, mode="normal-no-complex", layout_mode=None)
+        out = pd2af.transform(
+            rich_map, mode="normal-no-complex", layout_mode=None
+        ).obj
         _assert_recursively_stripped(out.model.species)
 
     def test_keep_species_retains_decorations(self, rich_map):
-        out = pd2af.transform(rich_map, mode="keep-species", layout_mode=None)
+        out = pd2af.transform(rich_map, mode="keep-species", layout_mode=None).obj
         decorated = [
             s
             for s in out.model.species
@@ -225,7 +227,7 @@ class TestTransformLayoutModes:
     def test_no_layout_mode_yields_map_without_layout(self, example_cd_map):
         out = pd2af.transform(
             example_cd_map, mode="keep-species", layout_mode=None
-        )
+        ).obj
         assert isinstance(out, momapy.celldesigner.CellDesignerMap)
         assert out.layout is None
         assert len(out.model.species) > 0
@@ -233,7 +235,7 @@ class TestTransformLayoutModes:
     def test_plain_mode_attaches_layout(self, example_cd_map):
         out = pd2af.transform(
             example_cd_map, mode="keep-species", layout_mode="plain"
-        )
+        ).obj
         assert out.layout is not None
         assert len(out.layout.layout_elements) > 0
 
@@ -243,7 +245,7 @@ class TestTransformLayoutModes:
     def test_auto_mode_runs_with_dot(self, example_cd_map):
         out = pd2af.transform(
             example_cd_map, mode="keep-species", layout_mode="auto"
-        )
+        ).obj
         assert out.layout is not None
         assert len(out.layout.layout_elements) > 0
 
@@ -257,14 +259,14 @@ class TestTransformActiveIds:
         # baseline keep-species activities.
         baseline = pd2af.transform(
             example_cd_map, mode="keep-species", layout_mode="plain"
-        )
+        ).obj
         assert "A" not in species_names(baseline.model)
         with_active = pd2af.transform(
             example_cd_map,
             mode="keep-species",
             layout_mode="plain",
             active_ids=["s1"],
-        )
+        ).obj
         assert "A" in species_names(with_active.model)
 
     def test_unknown_active_id_raises(self, example_cd_map):
@@ -301,7 +303,7 @@ class TestTransformErrors:
     ):
         out = pd2af.transform(
             example_cd_map, mode=mode, layout_mode=layout_mode
-        )
+        ).obj
         assert out.layout is not None
 
 
@@ -339,3 +341,30 @@ class TestTransformIsPure:
         }
         assert before_template_ids == after_template_ids
         assert before_template_residues == after_template_residues
+
+
+class TestProvenance:
+    """TransformerResult.provenance maps each input element to the output AF
+    elements derived from it; every value is a real element of the output
+    model and the inverse round-trips."""
+
+    def test_provenance_values_are_model_elements(self, example_cd_map):
+        result = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        )
+        model = result.obj.model
+        model_elements = set(model.species) | set(model.boolean_logic_gates)
+        assert result.provenance  # at least one input produced an activity
+        for output_elements in result.provenance.values():
+            assert output_elements <= model_elements
+
+    def test_inverse_round_trips(self, example_cd_map):
+        result = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        )
+        for input_element, output_elements in result.provenance.items():
+            for output_element in output_elements:
+                assert (
+                    input_element
+                    in result.provenance.inverse[id(output_element)]
+                )

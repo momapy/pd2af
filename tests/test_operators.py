@@ -251,14 +251,18 @@ class TestCelldesignerGatesShapeA:
         return read_cd_map(_CREB_MAP_PATH)
 
     def test_emits_one_and_gate_with_two_inputs(self, creb_map):
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None)
+        out = pd2af.transform(
+            creb_map, mode="keep-species", layout_mode=None
+        ).obj
         gates = list(out.model.boolean_logic_gates)
         assert len(gates) == 1
         assert isinstance(gates[0], momapy.celldesigner.AndGate)
         assert len(gates[0].inputs) == 2
 
     def test_gate_sources_exactly_one_modulation(self, creb_map):
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None)
+        out = pd2af.transform(
+            creb_map, mode="keep-species", layout_mode=None
+        ).obj
         gate_modulations = [
             modulation
             for modulation in out.model.modulations
@@ -272,7 +276,9 @@ class TestCelldesignerGatesShapeA:
         )
 
     def test_gate_inputs_are_activities_in_the_model(self, creb_map):
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None)
+        out = pd2af.transform(
+            creb_map, mode="keep-species", layout_mode=None
+        ).obj
         gate = next(iter(out.model.boolean_logic_gates))
         model_species = set(out.model.species)
         for gate_input in gate.inputs:
@@ -291,7 +297,7 @@ class TestCelldesignerGatesShapeA:
     def test_round_trips(self, creb_map, mode, layout_mode):
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(creb_map, mode=mode, layout_mode=layout_mode)
+        out = pd2af.transform(creb_map, mode=mode, layout_mode=layout_mode).obj
         assert len(out.model.boolean_logic_gates) == 1
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_gate.xml")
         momapy.io.core.write(out, path, writer="celldesigner")
@@ -307,12 +313,12 @@ class TestCelldesignerGatesAreAdditive:
 
     def test_srr_emits_no_surviving_gates(self):
         srr_map = read_cd_map(_SRR_MAP_PATH)
-        out = pd2af.transform(srr_map, mode="keep-species", layout_mode=None)
+        out = pd2af.transform(srr_map, mode="keep-species", layout_mode=None).obj
         assert len(out.model.boolean_logic_gates) == 0
 
     def test_casq_emits_no_gates(self):
         creb_map = read_cd_map(_CREB_MAP_PATH)
-        out = pd2af.transform(creb_map, mode="casq", layout_mode=None)
+        out = pd2af.transform(creb_map, mode="casq", layout_mode=None).obj
         assert len(out.model.boolean_logic_gates) == 0
 
 
@@ -321,7 +327,7 @@ def test_every_gate_map_round_trips(path):
     """Read-back invariant over every committed CellDesigner gate map: the
     gate count survives a write -> read cycle (plain layout, no graphviz)."""
     cd_map = read_cd_map(path)
-    out = pd2af.transform(cd_map, mode="keep-species", layout_mode="plain")
+    out = pd2af.transform(cd_map, mode="keep-species", layout_mode="plain").obj
     written = os.path.join(tempfile.gettempdir(), "pd2af_test_gate_map.xml")
     momapy.io.core.write(out, written, writer="celldesigner")
     back = momapy.io.core.read(written).obj
@@ -342,7 +348,7 @@ class TestSbgnOperatorsShapeB:
     def test_emits_one_and_operator_with_two_inputs(self, operator_map):
         out = pd2af.transform(
             operator_map, mode="keep-species", layout_mode=None
-        )
+        ).obj
         operators = list(out.model.logical_operators)
         assert len(operators) == 1
         assert isinstance(operators[0], momapy.sbgn.af.AndOperator)
@@ -351,7 +357,7 @@ class TestSbgnOperatorsShapeB:
     def test_operator_sources_one_influence(self, operator_map):
         out = pd2af.transform(
             operator_map, mode="keep-species", layout_mode=None
-        )
+        ).obj
         operator_influences = [
             influence
             for influence in out.model.influences
@@ -376,7 +382,7 @@ class TestSbgnOperatorsShapeB:
     def test_round_trips(self, operator_map, mode, layout_mode):
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(operator_map, mode=mode, layout_mode=layout_mode)
+        out = pd2af.transform(operator_map, mode=mode, layout_mode=layout_mode).obj
         assert len(out.model.logical_operators) == 1
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_operator.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
@@ -392,7 +398,7 @@ class TestSbgnOperatorsShapeB:
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
             operator_map, mode="keep-species", layout_mode=layout_mode
-        )
+        ).obj
         operator_layout = next(
             element
             for element in out.layout.layout_elements

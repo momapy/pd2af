@@ -110,13 +110,45 @@ def stateful_complex_map():
 
 class TestProteoformMerging:
     def test_keep_species_keeps_proteoforms_distinct(self, proteoform_map):
-        out = pd2af.transform(proteoform_map, mode="keep-species", layout_mode=None)
+        out = pd2af.transform(
+            proteoform_map, mode="keep-species", layout_mode=None
+        ).obj
         assert len(out.model.activities) == 2
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_merged_modes_collapse_proteoforms(self, proteoform_map, mode):
-        out = pd2af.transform(proteoform_map, mode=mode, layout_mode=None)
+        out = pd2af.transform(proteoform_map, mode=mode, layout_mode=None).obj
         assert _activity_labels(out.model) == ["AKT"]
+
+
+class TestProvenance:
+    """The TransformerResult.provenance maps each input element to the output
+    AF elements derived from it; `.inverse` recovers the input elements behind
+    a given output element, collapsing the many-to-one merge."""
+
+    def test_merged_proteoforms_trace_back_to_both_inputs(self, proteoform_map):
+        result = pd2af.transform(proteoform_map, mode="normal", layout_mode=None)
+        # normal mode merges the two proteoforms into a single AKT activity.
+        merged_activity = next(iter(result.obj.model.activities))
+        input_proteoforms = frozenset(proteoform_map.model.entity_pools)
+        # Forward: each input proteoform traces to the one merged activity.
+        for proteoform in input_proteoforms:
+            assert result.provenance[proteoform] == frozenset([merged_activity])
+        # Inverse (many-to-one): the merged activity traces back to both inputs.
+        assert (
+            result.provenance.inverse[id(merged_activity)] == input_proteoforms
+        )
+
+    def test_keep_species_keeps_provenance_one_to_one(self, proteoform_map):
+        result = pd2af.transform(
+            proteoform_map, mode="keep-species", layout_mode=None
+        )
+        # keep-species keeps the proteoforms distinct: each input maps to its
+        # own output activity, and every provenance value is in the model.
+        model_activities = set(result.obj.model.activities)
+        for output_elements in result.provenance.values():
+            assert len(output_elements) == 1
+            assert output_elements <= model_activities
 
 
 class TestComplexHandling:
@@ -125,7 +157,7 @@ class TestComplexHandling:
     ):
         out = pd2af.transform(
             active_subunit_complex_map, mode="normal", layout_mode=None
-        )
+        ).obj
         # The complex becomes a single ComplexUnitOfInformation activity. Its
         # active subunit is NOT promoted to its own activity -- it is a
         # structural component of the complex (carried in the composed label).
@@ -142,7 +174,7 @@ class TestComplexHandling:
     ):
         out = pd2af.transform(
             active_subunit_complex_map, mode="normal-no-complex", layout_mode=None
-        )
+        ).obj
         # The suppressed complex contributes no ComplexUnitOfInformation; only
         # the promoted subunit survives.
         assert not _has_complex_unit_of_information(out.model)
@@ -152,7 +184,9 @@ class TestComplexHandling:
     def test_merged_modes_strip_complex_and_subunit_state(
         self, stateful_complex_map, mode
     ):
-        out = pd2af.transform(stateful_complex_map, mode=mode, layout_mode=None)
+        out = pd2af.transform(
+            stateful_complex_map, mode=mode, layout_mode=None
+        ).obj
         labels = _activity_labels(out.model)
         # No state-variable bracket survives -- neither the complex's own
         # `tense` nor the subunit's `active`.
@@ -162,7 +196,7 @@ class TestComplexHandling:
     def test_keep_species_retains_complex_state(self, stateful_complex_map):
         out = pd2af.transform(
             stateful_complex_map, mode="keep-species", layout_mode=None
-        )
+        ).obj
         labels = _activity_labels(out.model)
         assert any("tense" in label for label in labels)
 
@@ -186,7 +220,7 @@ class TestRealMapIntegration:
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_merged_mode_emits_influences(self, sbgn_map, mode):
-        out = pd2af.transform(sbgn_map, mode=mode, layout_mode=None)
+        out = pd2af.transform(sbgn_map, mode=mode, layout_mode=None).obj
         # mapk_cascade and the others all carry modulation arcs, so a correct
         # carrier must yield at least one influence (was zero before the fix).
         assert len(out.model.influences) > 0
@@ -195,7 +229,7 @@ class TestRealMapIntegration:
     def test_merged_mode_auto_layout_round_trips(self, sbgn_map, mode):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(sbgn_map, mode=mode, layout_mode="auto")
+        out = pd2af.transform(sbgn_map, mode=mode, layout_mode="auto").obj
         assert out.layout is not None
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_sbgn.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
@@ -227,7 +261,9 @@ class TestCompartments:
         ("keep-species", "keep-species-no-complex", "normal", "normal-no-complex"),
     )
     def test_model_carries_compartments(self, map_with_compartments, mode):
-        out = pd2af.transform(map_with_compartments, mode=mode, layout_mode=None)
+        out = pd2af.transform(
+            map_with_compartments, mode=mode, layout_mode=None
+        ).obj
         assert len(out.model.compartments) == 1
         assert all(
             activity.compartment is not None for activity in out.model.activities
@@ -238,7 +274,7 @@ class TestCompartments:
         # None, so zero CompartmentLayouts were emitted.
         out = pd2af.transform(
             map_with_compartments, mode="keep-species", layout_mode="plain"
-        )
+        ).obj
         assert len(_compartment_layouts(out.layout)) == 1
 
     @pytest.mark.parametrize("mode", ("keep-species", "normal"))
@@ -247,7 +283,9 @@ class TestCompartments:
         # (a CellDesigner-only relation; SBGN has no outside compartment).
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(map_with_compartments, mode=mode, layout_mode="auto")
+        out = pd2af.transform(
+            map_with_compartments, mode=mode, layout_mode="auto"
+        ).obj
         assert len(_compartment_layouts(out.layout)) == 1
 
     @pytest.mark.parametrize(
@@ -261,7 +299,7 @@ class TestCompartments:
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
             map_with_compartments, mode=mode, layout_mode=layout_mode
-        )
+        ).obj
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_compartments.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
         back = momapy.io.core.read(path, reader="sbgnml").obj

@@ -1,8 +1,32 @@
+import dataclasses
 import typing
+
+import momapy.utils
 
 import pd2af.build
 import pd2af.languages
 import pd2af.solver
+
+
+@dataclasses.dataclass
+class TransformerResult:
+    """Result of :func:`transform`: the built AF map plus provenance.
+
+    Attributes:
+        obj: The transformed map (``CellDesignerMap`` or ``SBGNAFMap``).
+        provenance: Maps each input PD/CD model element to the
+            ``frozenset`` of output AF model elements derived from it.
+            Several input elements may map to one output element because
+            the merged modes content-dedup their results (many-to-one);
+            use ``.inverse`` (``id(output_element) -> frozenset`` of input
+            elements) for the result-to-source direction. Input elements
+            are valid keys because momapy's reader enforces the model-dedup
+            invariant, so no two content-equal-but-distinct elements coexist
+            in a single input map.
+    """
+
+    obj: typing.Any = None
+    provenance: momapy.utils.FrozenIdentityMultiDict | None = None
 
 
 _TRANSFORMATION_MODES = frozenset(

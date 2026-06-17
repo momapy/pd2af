@@ -20,6 +20,7 @@ import dataclasses
 import momapy.builder
 import momapy.celldesigner
 import momapy.sbgn.af
+import momapy.utils
 
 import pd2af.celldesigner.building_layout
 import pd2af.celldesigner.building_model
@@ -143,4 +144,56 @@ def build_map(
                     pd2af.sbgn.building_layout.resolve_operator_arc_segments
                 ),
             )
-    return new_map
+
+    # Imported here (not at module top) to break the core -> build import cycle.
+    from pd2af.core import TransformerResult
+
+    return TransformerResult(
+        obj=new_map,
+        provenance=make_provenance_from_context(context, language),
+    )
+
+
+def make_provenance_from_context(context, language):
+    """Build the input-element -> output-element provenance mapping.
+
+    Walks the ``key_to_*`` dicts the model pass populates for *every* activity
+    and operator atom (the ``*_emissions`` lists only record the first element
+    per identity and would miss the many-to-one dedup pairings). Each activity
+    key carries the input element's clingo id in ``key.species`` and each
+    operator key in ``key.gate``; both resolve back to the input model element
+    through ``context.clingo_id_to_model_element``.
+
+    Returns a :class:`momapy.utils.FrozenIdentityMultiDict` mapping each input
+    model element to the ``frozenset`` of output elements derived from it.
+    """
+    if language == pd2af.languages.SBGN_PD:
+        key_to_activity = context.key_to_activity
+        key_to_operator = context.key_to_operator
+    else:
+        key_to_activity = context.key_to_species
+        key_to_operator = context.key_to_gate
+
+    input_element_to_output_elements = {}
+
+    def record_provenance(clingo_id, output_element):
+        if output_element is None:
+            return
+        input_element = context.clingo_id_to_model_element[clingo_id]
+        input_element_to_output_elements.setdefault(input_element, set()).add(
+            output_element
+        )
+
+    for activity_key, output_element in key_to_activity.items():
+        record_provenance(activity_key.species, output_element)
+    for operator_key, output_element in key_to_operator.items():
+        record_provenance(operator_key.gate, output_element)
+
+    return momapy.utils.FrozenIdentityMultiDict(
+        {
+            input_element: frozenset(output_elements)
+            for input_element, output_elements in (
+                input_element_to_output_elements.items()
+            )
+        }
+    )
