@@ -10,6 +10,8 @@ background cloning for overlay -- do the per-element construction.
 the model pass.
 """
 
+import dataclasses
+
 import momapy.builder
 import momapy.celldesigner
 import momapy.core.layout
@@ -17,6 +19,7 @@ import momapy.core.mapping
 import momapy.geometry
 
 import pd2af.celldesigner.building_model
+import pd2af.languages
 import pd2af.utils
 
 
@@ -43,6 +46,32 @@ _SPECIES_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.Unknown: momapy.celldesigner.UnknownLayout,
     momapy.celldesigner.Complex: momapy.celldesigner.ComplexLayout,
 }
+
+# Species-glyph child sub-glyphs the merged proteoform modes strip: the PTM
+# decorations (ModificationLayout / StructuralStateLayout) and the active-border
+# sibling (a `*ActiveLayout` the reader appends to a species glyph's
+# `layout_elements` for an active species). Dropping all of them makes a stripped
+# species render plain, matching its decoration-free model. (The model carries no
+# active state; it is layout-only.)
+_STRIPPABLE_SPECIES_DECORATION_CLASSES = (
+    momapy.celldesigner.ModificationLayout,
+    momapy.celldesigner.StructuralStateLayout,
+    momapy.celldesigner.GenericProteinActiveLayout,
+    momapy.celldesigner.IonChannelActiveLayout,
+    momapy.celldesigner.ComplexActiveLayout,
+    momapy.celldesigner.SimpleMoleculeActiveLayout,
+    momapy.celldesigner.IonActiveLayout,
+    momapy.celldesigner.UnknownActiveLayout,
+    momapy.celldesigner.DegradedActiveLayout,
+    momapy.celldesigner.GeneActiveLayout,
+    momapy.celldesigner.PhenotypeActiveLayout,
+    momapy.celldesigner.RNAActiveLayout,
+    momapy.celldesigner.AntisenseRNAActiveLayout,
+    momapy.celldesigner.TruncatedProteinActiveLayout,
+    momapy.celldesigner.ReceptorActiveLayout,
+    momapy.celldesigner.DrugActiveLayout,
+)
+
 
 # Influence (modulation) model class -> its arc layout class. NegativeInfluence
 # and UnknownNegativeInfluence have no own ``*Layout``; they reuse the inhibition
@@ -116,6 +145,46 @@ def _prune_foreground_from_clone(
         )
         surviving_clones.append(subunit_clone)
     clone.layout_elements = surviving_clones
+
+
+def make_decoration_stripped_layout(input_layout, original_to_stripped):
+    """Return a frozen copy of ``input_layout`` stripped of every PTM-decoration
+    and active-border sub-glyph, at any depth, recording
+    ``id(original) -> stripped`` for every kept element.
+
+    The merged proteoform modes (normal/normal-no-complex) strip the model's
+    species of their decorations; this drops the matching layout glyphs
+    (``ModificationLayout`` / ``StructuralStateLayout`` and the ``*ActiveLayout``
+    active-border sibling -- see ``_STRIPPABLE_SPECIES_DECORATION_CLASSES``) so a
+    stripped species renders plain. Subunit glyphs of kept complexes are
+    preserved (and recursively stripped), so the real glyph size and subunit
+    structure -- which the auto layout deliberately keeps -- survive.
+
+    Frozen objects throughout (via :func:`dataclasses.replace`), never builders,
+    so the result pickles and round-trips like the reused input glyphs of the
+    non-stripping path; a subtree that needs no change is returned unchanged
+    (shared with the input). ``original_to_stripped`` lets the caller map the
+    surviving glyphs back to their model elements
+    (:func:`add_mappings_for_stripped_layout`)."""
+    children = getattr(input_layout, "layout_elements", ()) or ()
+    stripped_children = []
+    changed = False
+    for child in children:
+        if isinstance(child, _STRIPPABLE_SPECIES_DECORATION_CLASSES):
+            changed = True
+            continue
+        stripped_child = make_decoration_stripped_layout(child, original_to_stripped)
+        if stripped_child is not child:
+            changed = True
+        stripped_children.append(stripped_child)
+    if changed:
+        stripped = dataclasses.replace(
+            input_layout, layout_elements=tuple(stripped_children)
+        )
+    else:
+        stripped = input_layout
+    original_to_stripped[id(input_layout)] = stripped
+    return stripped
 
 
 def make_synthetic_layout(species, index):
@@ -203,6 +272,38 @@ def add_mappings_for_layout_and_descendants(
             mapping_builder.add_mapping(element, model_value)
 
 
+def add_mappings_for_stripped_layout(
+    input_layout_model_mapping,
+    input_layout,
+    original_to_stripped,
+    mapping_builder,
+    input_model_element_to_canonical_model_element=None,
+):
+    """Map a decoration-stripped glyph's surviving elements to their model
+    elements.
+
+    Counterpart of ``add_mappings_for_layout_and_descendants`` for the stripped
+    clones of ``make_decoration_stripped_layout``: a stripped sub-glyph may be a
+    fresh ``dataclasses.replace`` copy that is not a key in
+    ``input_layout_model_mapping`` (keyed by the input frozen objects), so we walk
+    the input originals and follow each to its stripped counterpart via
+    ``original_to_stripped``. Dropped decoration glyphs are absent from that map,
+    so they never get mapped -- and being absent from the layout, never render.
+    """
+    originals = [input_layout] + list(input_layout.descendants())
+    for original in originals:
+        stripped = original_to_stripped.get(id(original))
+        if stripped is None:
+            continue
+        if original in input_layout_model_mapping:
+            model_value = input_layout_model_mapping[original]
+            if input_model_element_to_canonical_model_element is not None:
+                model_value = input_model_element_to_canonical_model_element.get(
+                    id(model_value), model_value
+                )
+            mapping_builder.add_mapping(stripped, model_value)
+
+
 def add_modulation_mapping(
     mapping_builder, arc, source_layout, target_layout, modulation
 ):
@@ -276,6 +377,27 @@ def _make_and_add_compartment_layout(context, compartment):
         )
 
 
+def _add_decoration_stripped_species_layouts(context, species, input_layouts):
+    """Place decoration-pruned clones of ``input_layouts`` for ``species`` and
+    map their surviving glyphs to the model (the merged proteoform modes)."""
+    stripped_layouts = []
+    for input_layout in input_layouts:
+        original_to_stripped = {}
+        stripped = make_decoration_stripped_layout(input_layout, original_to_stripped)
+        add_mappings_for_stripped_layout(
+            context.input_map.layout_model_mapping,
+            input_layout,
+            original_to_stripped,
+            context.layout_model_mapping,
+            input_model_element_to_canonical_model_element=(
+                context.input_model_element_to_canonical_model_element
+            ),
+        )
+        stripped_layouts.append(stripped)
+    context.layout.layout_elements.extend(stripped_layouts)
+    context.model_element_to_layout_elements[id(species)] = tuple(stripped_layouts)
+
+
 def _make_and_add_species_layout(context, species, input_species):
     input_layouts = (
         context.input_map.layout_model_mapping.get_mapping(input_species)
@@ -291,17 +413,26 @@ def _make_and_add_species_layout(context, species, input_species):
             # subunit structure) and let graphviz place it. plain/overlay keep
             # every clone, where the curated positions are meaningful.
             input_layouts = input_layouts[:1]
-        context.layout.layout_elements.extend(input_layouts)
-        for input_layout in input_layouts:
-            add_mappings_for_layout_and_descendants(
-                context.input_map.layout_model_mapping,
-                input_layout,
-                context.layout_model_mapping,
-                input_model_element_to_canonical_model_element=(
-                    context.input_model_element_to_canonical_model_element
-                ),
+        if context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES:
+            # The merged modes strip the model species of their decorations; the
+            # reused input glyph still carries the matching ModificationLayout /
+            # StructuralStateLayout sub-glyphs, so prune them from a clone (the
+            # frozen input layout must not be mutated) before placing it.
+            _add_decoration_stripped_species_layouts(context, species, input_layouts)
+        else:
+            context.layout.layout_elements.extend(input_layouts)
+            for input_layout in input_layouts:
+                add_mappings_for_layout_and_descendants(
+                    context.input_map.layout_model_mapping,
+                    input_layout,
+                    context.layout_model_mapping,
+                    input_model_element_to_canonical_model_element=(
+                        context.input_model_element_to_canonical_model_element
+                    ),
+                )
+            context.model_element_to_layout_elements[id(species)] = tuple(
+                input_layouts
             )
-        context.model_element_to_layout_elements[id(species)] = tuple(input_layouts)
     elif context.layout_mode == "auto":
         synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
         context.synthetic_index += 1

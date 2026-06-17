@@ -222,6 +222,63 @@ class TestMergedModeStripping:
         ]
         assert decorated  # keep-species preserves PTM decorations
 
+    # A map with curated residue-modification, structural-state and active-border
+    # glyphs, so the auto-layout strip below has every kind of stripped PD layout
+    # decoration to remove.
+    @pytest.fixture(scope="class")
+    def decorated_layout_map(self):
+        return read_cd_map(os.path.join(MAPS_DIR, "FOXO3_activity.xml"))
+
+    _ACTIVE_LAYOUT_CLASSES = tuple(
+        getattr(momapy.celldesigner, name)
+        for name in dir(momapy.celldesigner)
+        if name.endswith("ActiveLayout")
+    )
+
+    @classmethod
+    def _walk_layout(cls, layout):
+        yield layout
+        for child in getattr(layout, "layout_elements", ()) or ():
+            yield from cls._walk_layout(child)
+
+    @classmethod
+    def _count_decoration_glyphs(cls, layout):
+        # PTM decorations + active-border siblings.
+        decoration_classes = (
+            momapy.celldesigner.ModificationLayout,
+            momapy.celldesigner.StructuralStateLayout,
+        ) + cls._ACTIVE_LAYOUT_CLASSES
+        return sum(
+            isinstance(node, decoration_classes) for node in cls._walk_layout(layout)
+        )
+
+    @pytest.mark.skipif(
+        not has_dot_binary(), reason="graphviz `dot` binary not on PATH"
+    )
+    def test_normal_auto_layout_strips_decoration_glyphs(self, decorated_layout_map):
+        # The model strip is not enough: the auto layout reuses the input species
+        # glyph, whose decoration / active-border sub-glyphs would otherwise
+        # render on a stripped species.
+        out = pd2af.transform(
+            decorated_layout_map, mode="normal", layout_mode="auto"
+        ).obj
+        assert self._count_decoration_glyphs(out.layout) == 0
+        # the real species glyphs (and subunit structure) must still be there
+        protein_glyphs = [
+            node
+            for node in out.layout.descendants()
+            if isinstance(node, momapy.celldesigner.GenericProteinLayout)
+        ]
+        assert protein_glyphs
+
+    def test_keep_species_layout_retains_decoration_glyphs(
+        self, decorated_layout_map
+    ):
+        out = pd2af.transform(
+            decorated_layout_map, mode="keep-species", layout_mode="plain"
+        ).obj
+        assert self._count_decoration_glyphs(out.layout) > 0
+
 
 class TestTransformLayoutModes:
     def test_no_layout_mode_yields_map_without_layout(self, example_cd_map):
