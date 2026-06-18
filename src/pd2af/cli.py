@@ -434,6 +434,10 @@ def _add_list_modes_parser(subparsers):
 
 
 def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    else:
+        argv = list(argv)
     parser = argparse.ArgumentParser(
         prog="pd2af",
         description=(
@@ -444,6 +448,13 @@ def main(argv=None):
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_transform_parser(subparsers)
     _add_list_modes_parser(subparsers)
+    # Default to the transform subcommand when the first token isn't a known
+    # subcommand or a help flag, so `pd2af map.xml` works like
+    # `pd2af transform map.xml`.
+    if not argv or (
+        argv[0] not in subparsers.choices and argv[0] not in ("-h", "--help")
+    ):
+        argv = ["transform", *argv]
     args = parser.parse_args(argv)
     args.func(args)
 
