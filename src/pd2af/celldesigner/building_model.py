@@ -134,8 +134,8 @@ def get_or_make_stripped_species(
 ):
     """Return a decoration-free canonical species for ``input_species`` (the
     merged modes ``normal``/``normal-no-complex``). Clears every post-translational
-    decoration -- ``homomultimer`` (-> 1), ``modifications``,
-    ``structural_states``, and, via a stripped template,
+    decoration -- ``active`` (-> False), ``homomultimer`` (-> 1),
+    ``modifications``, ``structural_states``, and, via a stripped template,
     ``modification_residues``/``regions`` -- sets the effective ``compartment``,
     and strips ``subunits`` recursively (a ``frozenset`` collapses subunits that
     strip to equal content). Built with ``dataclasses.replace`` so the concrete
@@ -146,6 +146,8 @@ def get_or_make_stripped_species(
     ``get_or_make_promoted_subunit_key_species``).
     """
     fields = {}
+    if hasattr(input_species, "active"):
+        fields["active"] = False
     if hasattr(input_species, "homomultimer"):
         fields["homomultimer"] = 1
     if hasattr(input_species, "modifications"):
