@@ -271,7 +271,7 @@ def _make_and_add_operator_layout(context, operator, input_operator):
     input_layouts = []
     for operator_input in operator.inputs:
         input_activity_layouts = context.model_element_to_layout_elements.get(
-            id(operator_input.element)
+            id(operator_input.referred_element)
         )
         if not input_activity_layouts:
             continue

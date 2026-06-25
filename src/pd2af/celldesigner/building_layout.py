@@ -476,7 +476,7 @@ def _make_and_add_gate_layout(context, gate, input_gate):
     for gate_layout in gate_layouts:
         for gate_input in gate.inputs:
             input_species_layouts = context.model_element_to_layout_elements.get(
-                id(gate_input.element)
+                id(gate_input.referred_element)
             )
             if not input_species_layouts:
                 continue

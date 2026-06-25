@@ -447,7 +447,7 @@ def get_or_make_gate(operator_type, input_keys, context):
         if species is None:
             continue
         gate_input = register_or_reuse(
-            momapy.celldesigner.BooleanLogicGateInput(element=species),
+            momapy.celldesigner.BooleanLogicGateInput(referred_element=species),
             context.cache,
         )
         gate_inputs.append(gate_input)

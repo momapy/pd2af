@@ -99,8 +99,8 @@ _ACTIVITY_BASE = RuleGroup(
                 text=dedent("""\
                     hasActivity(ELEMENT, isGateInput) :-
                         booleanLogicGateInput(INPUT),
-                        hasElement(INPUT, ELEMENT)."""),
-                docs="If a species feeds a boolean logic gate input, then it has activity, with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
+                        hasReferredElement(INPUT, ELEMENT)."""),
+                docs="If a species feeds a boolean logic gate input, then it has activity, with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasReferredElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
             ),
         ),
         "sbgn_pd": (
@@ -137,9 +137,9 @@ _ACTIVITY_BASE = RuleGroup(
                 text=dedent("""\
                     hasActivity(ELEMENT, isGateInput) :-
                         logicalOperatorInput(INPUT),
-                        hasElement(INPUT, ELEMENT),
+                        hasReferredElement(INPUT, ELEMENT),
                         entityPool(ELEMENT)."""),
-                docs="If an entity pool feeds a logical operator input, then it has activity, with reason `isGateInput` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
+                docs="If an entity pool feeds a logical operator input, then it has activity, with reason `isGateInput` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasReferredElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
             ),
         ),
     },
@@ -511,7 +511,7 @@ _PATHS_BASE_SBGN_PD = (
                 hasSource(MODULATION, SOURCE_ENTITY_POOL),
                 hasTarget(MODULATION, PROCESS),
                 hasProduct(PROCESS, PRODUCT),
-                hasElement(PRODUCT, TARGET_ENTITY_POOL)."""),
+                hasReferredElement(PRODUCT, TARGET_ENTITY_POOL)."""),
         docs="A modulation arc's entity-pool source influences each product of its target process, carrying the arc's kind.",
     ),
     Rule(
@@ -529,9 +529,9 @@ _PATHS_BASE_SBGN_PD = (
         text=dedent("""\
             isDirectlyTransformedTo(UPSTREAM_ENTITY_POOL, DOWNSTREAM_ENTITY_POOL) :-
                 hasReactant(PROCESS, REACTANT),
-                hasElement(REACTANT, UPSTREAM_ENTITY_POOL),
+                hasReferredElement(REACTANT, UPSTREAM_ENTITY_POOL),
                 hasProduct(PROCESS, PRODUCT),
-                hasElement(PRODUCT, DOWNSTREAM_ENTITY_POOL)."""),
+                hasReferredElement(PRODUCT, DOWNSTREAM_ENTITY_POOL)."""),
         docs="The single reactant->product hop in the production graph: the upstream entity pool is an element of a reactant and the downstream pool an element of a product of the same process. Passive voice (the process does the transforming, not the pool) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
     ),
     Rule(
@@ -541,9 +541,9 @@ _PATHS_BASE_SBGN_PD = (
                 propagatesInfluence(SOURCE_ENTITY_POOL, INTERMEDIATE_ENTITY_POOL, INCOMING_INFLUENCE_KIND),
                 composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
                 hasReactant(PROCESS, REACTANT),
-                hasElement(REACTANT, INTERMEDIATE_ENTITY_POOL),
+                hasReferredElement(REACTANT, INTERMEDIATE_ENTITY_POOL),
                 hasProduct(PROCESS, PRODUCT),
-                hasElement(PRODUCT, TARGET_ENTITY_POOL),
+                hasReferredElement(PRODUCT, TARGET_ENTITY_POOL),
                 not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)."""),
         docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences). Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
     ),
@@ -1116,7 +1116,7 @@ _GATES = RuleGroup(
                     new(logicalOperatorInput(logicalOperatorKey(OPERATOR), INPUT_KEY)) :-
                         booleanLogicGate(OPERATOR),
                         hasInput(OPERATOR, INPUT),
-                        hasElement(INPUT, INPUT_SPECIES),
+                        hasReferredElement(INPUT, INPUT_SPECIES),
                         hasActivityCarrier(INPUT_SPECIES, INPUT_CARRIER),
                         hasActivityKey(INPUT_CARRIER, INPUT_KEY)."""),
                 docs="Each gate input is resolved through its activity carrier and key (mirroring `influences_derivation:path`), so an input that is a subunit resolves to its top-level complex's key. The `booleanLogicGate` umbrella matches every gate type via the ontology's isa rules.",
@@ -1154,7 +1154,7 @@ _GATES = RuleGroup(
                     new(logicalOperatorInput(logicalOperatorKey(OPERATOR), INPUT_KEY)) :-
                         logicalOperator(OPERATOR),
                         hasInput(OPERATOR, INPUT),
-                        hasElement(INPUT, INPUT_ENTITY_POOL),
+                        hasReferredElement(INPUT, INPUT_ENTITY_POOL),
                         hasActivityCarrier(INPUT_ENTITY_POOL, INPUT_CARRIER),
                         hasActivityKey(INPUT_CARRIER, INPUT_KEY)."""),
                 docs="SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules).",

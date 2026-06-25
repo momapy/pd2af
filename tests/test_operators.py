@@ -282,7 +282,7 @@ class TestCelldesignerGatesShapeA:
         gate = next(iter(out.model.boolean_logic_gates))
         model_species = set(out.model.species)
         for gate_input in gate.inputs:
-            assert gate_input.element in model_species
+            assert gate_input.referred_element in model_species
 
     @pytest.mark.parametrize(
         "mode,layout_mode",

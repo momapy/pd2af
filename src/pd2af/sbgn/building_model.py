@@ -294,7 +294,8 @@ def get_or_make_operator(operator_type, input_keys, context):
         if activity is None:
             continue
         operator_input = register_or_reuse(
-            momapy.sbgn.af.LogicalOperatorInput(element=activity), context.cache
+            momapy.sbgn.af.LogicalOperatorInput(referred_element=activity),
+            context.cache,
         )
         operator_inputs.append(operator_input)
     operator = operator_class(inputs=frozenset(operator_inputs))
