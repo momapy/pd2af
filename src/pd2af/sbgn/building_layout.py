@@ -240,7 +240,7 @@ def _make_and_add_operator_layout(context, operator, input_operator):
         # the inputs above the operator and the target below it; a vertical,
         # left-to-right operator then points its input connector up (toward the
         # inputs) and its output connector down (toward the target).
-        operator_layout.direction = momapy.core.elements.Direction.VERTICAL
+        operator_layout.orientation = momapy.core.elements.Orientation.VERTICAL
         operator_layout.left_to_right = True
     else:
         input_glyph = _input_operator_glyph(context, input_operator)
@@ -252,8 +252,8 @@ def _make_and_add_operator_layout(context, operator, input_operator):
         # plain: inherit the curated input operator's connector geometry, so the
         # arcs meet the same connectors (e.g. a vertical operator with ports
         # up/down) the input map drew.
-        operator_layout.direction = getattr(
-            input_glyph, "direction", operator_layout.direction
+        operator_layout.orientation = getattr(
+            input_glyph, "orientation", operator_layout.orientation
         )
         operator_layout.left_to_right = getattr(
             input_glyph, "left_to_right", operator_layout.left_to_right
