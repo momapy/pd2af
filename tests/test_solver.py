@@ -138,10 +138,10 @@ def _reaction(reactant, product, modifiers=()):
     return momapy.celldesigner.Reaction(
         reversible=False,
         reactants=frozenset(
-            {momapy.celldesigner.Reactant(referred_species=reactant)}
+            {momapy.celldesigner.Reactant(referred_element=reactant)}
         ),
         products=frozenset(
-            {momapy.celldesigner.Product(referred_species=product)}
+            {momapy.celldesigner.Product(referred_element=product)}
         ),
         modifiers=frozenset(modifiers),
     )
@@ -164,7 +164,7 @@ class TestCycleAwareInfluences:
         species_a = _species("A")
         species_b = _species("B", active=True)
         species_c = _species("C", active=True)
-        catalyzer = momapy.celldesigner.Catalyzer(referred_species=species_a)
+        catalyzer = momapy.celldesigner.Catalyzer(referred_element=species_a)
         cyclic_map = _map_from(
             (species_a, species_b, species_c),
             (
@@ -189,7 +189,7 @@ class TestCycleAwareInfluences:
         species_b = _species("B", active=True)
         species_c = _species("C", active=True)
         species_d = _species("D", active=True)
-        catalyzer = momapy.celldesigner.Catalyzer(referred_species=species_a)
+        catalyzer = momapy.celldesigner.Catalyzer(referred_element=species_a)
         acyclic_map = _map_from(
             (species_a, species_b, species_c, species_d),
             (

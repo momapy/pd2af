@@ -731,6 +731,7 @@ dev = [
     { name = "mkdocs-material", specifier = ">=9.6.16" },
     { name = "mkdocs-pygments", specifier = ">=0.0.2" },
     { name = "mkdocstrings-python", specifier = ">=1.16.12" },
+    { name = "monkeytype", specifier = ">=23.3.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
