@@ -50,96 +50,104 @@ _CASQ_PROFILES = frozenset({"casq"})
 _ACTIVITY_BASE = RuleGroup(
     identifier="activity_base",
     profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Base rules deriving `hasActivity(SPECIES, REASON)`. Only the phenotype rule is shared; the active-marker and modulation-source rules are per-language variants (CellDesigner: active flag, active structural state, modulation arc, reaction modifier; SBGN-PD: active state variable, modulation arc).",
+    docs="Base rules deriving `hasActivity(SPECIES, REASON)`. Every signal first derives a `hasActivityCandidate(SPECIES, REASON)`; a single shared bridging rule promotes a candidate to `hasActivity` unless the element is `suppressActivity` (the `--inactive` veto). Only the phenotype rule is shared; the active-marker and modulation-source rules are per-language variants (CellDesigner: active flag, active structural state, modulation arc, reaction modifier; SBGN-PD: active state variable, modulation arc).",
     rules=(
         Rule(
             identifier="activity_base:from_phenotype",
-            text="hasActivity(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE).",
-            docs="If a species/process is a phenotype, then it has activity, with reason `isPhenotype`. Shared: both languages emit the `phenotype` functor.",
+            text="hasActivityCandidate(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE).",
+            docs="If a species/process is a phenotype, then it is an activity candidate, with reason `isPhenotype`. Shared: both languages emit the `phenotype` functor.",
+        ),
+        Rule(
+            identifier="activity_base:from_candidate",
+            text=dedent("""\
+                hasActivity(ELEMENT, REASON) :-
+                    hasActivityCandidate(ELEMENT, REASON),
+                    not suppressActivity(ELEMENT)."""),
+            docs="An activity candidate becomes an actual activity unless the element is marked `suppressActivity`. This is the single interception point for the `--inactive` veto (blanket suppression: it also blocks the `--active` `isInputParameter` candidate, which is injected as a candidate). All downstream body references key on `hasActivity`, so they automatically respect suppression.",
         ),
     ),
     variants={
         "celldesigner": (
             Rule(
                 identifier="activity_base:from_active_flag",
-                text="hasActivity(SPECIES, isActive) :- species(SPECIES), hasActive(SPECIES, 1).",
-                docs="If a species has its `hasActive` flag set to 1, then it has activity, with reason `isActive`.",
+                text="hasActivityCandidate(SPECIES, isActive) :- species(SPECIES), hasActive(SPECIES, 1).",
+                docs="If a species has its `hasActive` flag set to 1, then it is an activity candidate, with reason `isActive`.",
             ),
             Rule(
                 identifier="activity_base:from_active_structural_state",
                 text=dedent("""\
-                    hasActivity(SPECIES, hasActiveStructuralState) :-
+                    hasActivityCandidate(SPECIES, hasActiveStructuralState) :-
                         species(SPECIES),
                         hasStructuralState(SPECIES, STRUCTURAL_STATE),
                         hasValue(STRUCTURAL_STATE, "active")."""),
-                docs='If a species carries a structural state whose value is "active", then it has activity, with reason `hasActiveStructuralState`.',
+                docs='If a species carries a structural state whose value is "active", then it is an activity candidate, with reason `hasActiveStructuralState`.',
             ),
             Rule(
                 identifier="activity_base:from_modulation_source",
                 text=dedent("""\
-                    hasActivity(SOURCE, isModulationSource) :-
+                    hasActivityCandidate(SOURCE, isModulationSource) :-
                         species(SOURCE),
                         knownOrUnknownModulation(MODULATION),
                         hasSource(MODULATION, SOURCE),
                         hasTarget(MODULATION, _)."""),
-                docs="If a species is the source of a modulation arc (known *or* unknown) with some target, then it has activity, with reason `isModulationSource`. Keying on `knownOrUnknownModulation` rather than `modulation` is what lets the source of an unknown modulation become an activity node.",
+                docs="If a species is the source of a modulation arc (known *or* unknown) with some target, then it is an activity candidate, with reason `isModulationSource`. Keying on `knownOrUnknownModulation` rather than `modulation` is what lets the source of an unknown modulation become an activity node.",
             ),
             Rule(
                 identifier="activity_base:from_reaction_modulator",
                 text=dedent("""\
-                    hasActivity(SOURCE, isReactionModifier) :-
+                    hasActivityCandidate(SOURCE, isReactionModifier) :-
                         species(SOURCE),
                         knownOrUnknownModulator(MODULATOR),
                         hasReferredElement(MODULATOR, SOURCE),
                         hasModifier(_, MODULATOR)."""),
-                docs="If a species is referred to by a reaction modulator (known *or* unknown) that modifies some target reaction, then it has activity, with reason `isReactionModifier`. Keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
+                docs="If a species is referred to by a reaction modulator (known *or* unknown) that modifies some target reaction, then it is an activity candidate, with reason `isReactionModifier`. Keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
             ),
             Rule(
                 identifier="activity_base:from_gate_input",
                 text=dedent("""\
-                    hasActivity(ELEMENT, isGateInput) :-
+                    hasActivityCandidate(ELEMENT, isGateInput) :-
                         booleanLogicGateInput(INPUT),
                         hasReferredElement(INPUT, ELEMENT)."""),
-                docs="If a species feeds a boolean logic gate input, then it has activity, with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasReferredElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
+                docs="If a species feeds a boolean logic gate input, then it is an activity candidate, with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasReferredElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
             ),
         ),
         "sbgn_pd": (
             Rule(
                 identifier="activity_base:sbgn_pd:from_active_state_variable",
                 text=dedent("""\
-                    hasActivity(ENTITY_POOL, hasActiveStateVariable) :-
+                    hasActivityCandidate(ENTITY_POOL, hasActiveStateVariable) :-
                         entityPool(ENTITY_POOL),
                         hasStateVariable(ENTITY_POOL, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
-                docs='If an entity pool carries a state variable whose value is "active", then it has activity (the SBGN-PD parallel of CellDesigner\'s active structural state), with reason `hasActiveStateVariable`.',
+                docs='If an entity pool carries a state variable whose value is "active", then it is an activity candidate (the SBGN-PD parallel of CellDesigner\'s active structural state), with reason `hasActiveStateVariable`.',
             ),
             Rule(
                 identifier="activity_base:sbgn_pd:from_active_subunit_state_variable",
                 text=dedent("""\
-                    hasActivity(SUBUNIT, hasActiveStateVariable) :-
+                    hasActivityCandidate(SUBUNIT, hasActiveStateVariable) :-
                         isSubunit(SUBUNIT),
                         hasStateVariable(SUBUNIT, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
-                docs='If a subunit carries a state variable whose value is "active", then it has activity. Its complex therefore inherits activity (keep-species), and in the ``*-no-complex`` modes the subunit can be promoted. The parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
+                docs='If a subunit carries a state variable whose value is "active", then it is an activity candidate. Its complex therefore inherits activity (keep-species), and in the ``*-no-complex`` modes the subunit can be promoted. The parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
             ),
             Rule(
                 identifier="activity_base:sbgn_pd:from_modulation_source",
                 text=dedent("""\
-                    hasActivity(SOURCE, isModulationSource) :-
+                    hasActivityCandidate(SOURCE, isModulationSource) :-
                         entityPool(SOURCE),
                         modulation(MODULATION),
                         hasSource(MODULATION, SOURCE),
                         hasTarget(MODULATION, _)."""),
-                docs="If an entity pool is the source of a modulation arc (whose target is a process), then it has activity, with reason `isModulationSource`. This is the SBGN-PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
+                docs="If an entity pool is the source of a modulation arc (whose target is a process), then it is an activity candidate, with reason `isModulationSource`. This is the SBGN-PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
             ),
             Rule(
                 identifier="activity_base:sbgn_pd:from_operator_input",
                 text=dedent("""\
-                    hasActivity(ELEMENT, isGateInput) :-
+                    hasActivityCandidate(ELEMENT, isGateInput) :-
                         logicalOperatorInput(INPUT),
                         hasReferredElement(INPUT, ELEMENT),
                         entityPool(ELEMENT)."""),
-                docs="If an entity pool feeds a logical operator input, then it has activity, with reason `isGateInput` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasReferredElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
+                docs="If an entity pool feeds a logical operator input, then it is an activity candidate, with reason `isGateInput` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasReferredElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
             ),
         ),
     },

@@ -164,12 +164,12 @@ class TestGateRules:
         program = pd2af.rules.build_program(
             "keep_species", language="celldesigner"
         )
-        assert "hasActivity(ELEMENT, isGateInput)" in program
+        assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "booleanLogicGateInput(INPUT)" in program
 
     def test_sbgn_pd_operator_input_activation_is_entity_pool_guarded(self):
         program = pd2af.rules.build_program("keep_species", language="sbgn_pd")
-        assert "hasActivity(ELEMENT, isGateInput)" in program
+        assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "logicalOperatorInput(INPUT)" in program
         assert "entityPool(ELEMENT)" in program
 

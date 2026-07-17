@@ -176,6 +176,7 @@ def _run(args):
         layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
         active_ids=args.active,
+        inactive_ids=args.inactive,
     )
     new_map = transform_result.obj
     if args.output is None:
@@ -405,6 +406,21 @@ def _add_transform_parser(subparsers):
             "mark the element with this id_ (a species or entity pool) as "
             "active, emitting hasActivity(..., isInputParameter). Repeatable: "
             "-a sa1 -a sa2."
+        ),
+    )
+    parser.add_argument(
+        "-i",
+        "--inactive",
+        action="append",
+        default=None,
+        metavar="ID",
+        dest="inactive",
+        help=(
+            "mark the element with this id_ (a species or entity pool) as "
+            "NOT active, suppressing any hasActivity for it (overrides the "
+            "automatic activity discovery: active flag/state, modulation "
+            "source, reaction modifier, gate input, phenotype). Repeatable: "
+            "-i sa1 -i sa2. Erroring if an id is also passed to --active."
         ),
     )
     parser.add_argument(

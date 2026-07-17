@@ -336,6 +336,46 @@ class TestTransformActiveIds:
             )
 
 
+class TestTransformInactiveIds:
+    """`inactive_ids` suppresses activities by id_, dropping species that the
+    map would otherwise surface as active."""
+
+    def test_inactive_id_suppresses_default_active_species(
+        self, example_cd_map
+    ):
+        # Species B (id `s2`) is active by default in the keep-species output.
+        baseline = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode="plain"
+        ).obj
+        assert "B" in species_names(baseline.model)
+        with_inactive = pd2af.transform(
+            example_cd_map,
+            mode="keep-species",
+            layout_mode="plain",
+            inactive_ids=["s2"],
+        ).obj
+        assert "B" not in species_names(with_inactive.model)
+
+    def test_conflicting_active_and_inactive_id_raises(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map,
+                mode="keep-species",
+                layout_mode="plain",
+                active_ids=["s1"],
+                inactive_ids=["s1"],
+            )
+
+    def test_unknown_inactive_id_raises(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map,
+                mode="keep-species",
+                layout_mode="plain",
+                inactive_ids=["not-an-id"],
+            )
+
+
 class TestTransformErrors:
     def test_unknown_mode_raises_value_error(self, example_cd_map):
         with pytest.raises(ValueError):

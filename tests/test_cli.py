@@ -192,6 +192,41 @@ class TestActiveFlag:
         assert "A" in names
 
 
+class TestInactiveFlag:
+    def test_inactive_flag_defaults_to_none(self):
+        args = _parse_transform_args(["transform", "map.xml"])
+        assert args.inactive is None
+
+    def test_inactive_flag_is_repeatable_and_accumulates(self):
+        args = _parse_transform_args(
+            ["transform", "map.xml", "-i", "s1", "-i", "s3"]
+        )
+        assert args.inactive == ["s1", "s3"]
+
+    def test_inactive_flag_suppresses_species(
+        self, tmp_path, example_map_path
+    ):
+        out_path = tmp_path / "out.pickle"
+        pd2af.cli.main(
+            [
+                "transform",
+                example_map_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-i",
+                "s2",
+                "-o",
+                str(out_path),
+            ]
+        )
+        roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
+        names = sorted(s.name for s in roundtrip.model.species)
+        # Species B (id `s2`) is active by default; -i suppresses it.
+        assert "B" not in names
+
+
 class TestListModes:
     def test_text_output_lists_modes_and_layouts(self, capsys):
         pd2af.cli.main(["list-modes"])
