@@ -90,8 +90,10 @@ def transform(
     ] = "normal",
     layout_mode: typing.Literal["auto", "plain", "overlay"] | None = "auto",
     influence_pairing: typing.Literal["cross", "nearest"] = "cross",
-    active_ids: list[str] | None = None,
-    inactive_ids: list[str] | None = None,
+    set_active: list[str] | None = None,
+    set_inactive: list[str] | None = None,
+    set_all_active: bool = False,
+    set_all_inactive: bool = False,
 ):
     layout_mode = _normalize_layout_mode(layout_mode)
     _validate_layout_mode(layout_mode, mode)
@@ -104,7 +106,12 @@ def transform(
             f"got {influence_pairing!r}"
         )
     clingo_model, clingo_id_to_model_element = pd2af.solver.solve(
-        map_, mode, active_ids=active_ids, inactive_ids=inactive_ids
+        map_,
+        mode,
+        set_active=set_active,
+        set_inactive=set_inactive,
+        set_all_active=set_all_active,
+        set_all_inactive=set_all_inactive,
     )
     return pd2af.build.build_map(
         map_,

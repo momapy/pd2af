@@ -50,7 +50,7 @@ _CASQ_PROFILES = frozenset({"casq"})
 _ACTIVITY_BASE = RuleGroup(
     identifier="activity_base",
     profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Base rules deriving `hasActivity(SPECIES, REASON)`. Every signal first derives a `hasActivityCandidate(SPECIES, REASON)`; a single shared bridging rule promotes a candidate to `hasActivity` unless the element is `suppressActivity` (the `--inactive` veto). Only the phenotype rule is shared; the active-marker and modulation-source rules are per-language variants (CellDesigner: active flag, active structural state, modulation arc, reaction modifier; SBGN-PD: active state variable, modulation arc).",
+    docs="Base rules deriving `hasActivity(SPECIES, REASON)`. Every signal first derives a `hasActivityCandidate(SPECIES, REASON)`; a single shared bridging rule promotes a candidate to `hasActivity` unless the element is `suppressActivity` (the `--set-inactive` veto). Two global toggles sit alongside: `globalActivate` (`--set-all-active`) turns every top-level species/entity pool into a candidate, and `globalSuppress` (`--set-all-inactive`) suppresses every candidate except those the solver marked `forceActive` (the per-id `--set-active` override), realising the precedence per-id > global > rules. Only the phenotype rule and the two global toggles' bridges are shared; the active-marker, modulation-source, and global-activate rules are per-language variants (CellDesigner: active flag, active structural state, modulation arc, reaction modifier, top-level species; SBGN-PD: active state variable, modulation arc, entity pool).",
     rules=(
         Rule(
             identifier="activity_base:from_phenotype",
@@ -63,7 +63,16 @@ _ACTIVITY_BASE = RuleGroup(
                 hasActivity(ELEMENT, REASON) :-
                     hasActivityCandidate(ELEMENT, REASON),
                     not suppressActivity(ELEMENT)."""),
-            docs="An activity candidate becomes an actual activity unless the element is marked `suppressActivity`. This is the single interception point for the `--inactive` veto (blanket suppression: it also blocks the `--active` `isInputParameter` candidate, which is injected as a candidate). All downstream body references key on `hasActivity`, so they automatically respect suppression.",
+            docs="An activity candidate becomes an actual activity unless the element is marked `suppressActivity`. This is the single interception point for the `--set-inactive` veto (blanket suppression: it also blocks the `--set-active` `isInputParameter` candidate, which is injected as a candidate). All downstream body references key on `hasActivity`, so they automatically respect suppression.",
+        ),
+        Rule(
+            identifier="activity_base:from_global_suppress",
+            text=dedent("""\
+                suppressActivity(ELEMENT) :-
+                    hasActivityCandidate(ELEMENT, _),
+                    globalSuppress,
+                    not forceActive(ELEMENT)."""),
+            docs="Under `--set-all-inactive` (the `globalSuppress` fact) every activity candidate is suppressed, unless the solver marked it `forceActive` (the per-id `--set-active` override). This is how the precedence per-id > global > rules is realised for the inactive toggle: `globalSuppress` blankets everything, `forceActive` carves out the per-id exceptions. Shared across languages: it keys on `hasActivityCandidate`, so it also silences subunit-derived candidates (subunits are suppressed under `--set-all-inactive`).",
         ),
     ),
     variants={
@@ -110,6 +119,15 @@ _ACTIVITY_BASE = RuleGroup(
                         hasReferredElement(INPUT, ELEMENT)."""),
                 docs="If a species feeds a boolean logic gate input, then it is an activity candidate, with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasReferredElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
             ),
+            Rule(
+                identifier="activity_base:from_global_activate",
+                text=dedent("""\
+                    hasActivityCandidate(SPECIES, isGlobalActive) :-
+                        species(SPECIES),
+                        globalActivate,
+                        not hasSubunit(_, SPECIES)."""),
+                docs="Under `--set-all-active` (the `globalActivate` fact) every top-level species becomes an activity candidate, with reason `isGlobalActive`. The `not hasSubunit(_, SPECIES)` guard excludes subunits (in CellDesigner a subunit is a species): a subunit is a structural component of its complex, never a top-level activity, so the toggle activates the complex, not its parts. This is the subunit asymmetry -- subunits are *not* activated under `--set-all-active`, though they *are* suppressed under `--set-all-inactive`.",
+            ),
         ),
         "sbgn_pd": (
             Rule(
@@ -148,6 +166,14 @@ _ACTIVITY_BASE = RuleGroup(
                         hasReferredElement(INPUT, ELEMENT),
                         entityPool(ELEMENT)."""),
                 docs="If an entity pool feeds a logical operator input, then it is an activity candidate, with reason `isGateInput` (the SBGN-PD parallel of CellDesigner's gate-input activation). The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN-PD `hasReferredElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
+            ),
+            Rule(
+                identifier="activity_base:sbgn_pd:from_global_activate",
+                text=dedent("""\
+                    hasActivityCandidate(ENTITY_POOL, isGlobalActive) :-
+                        entityPool(ENTITY_POOL),
+                        globalActivate."""),
+                docs="Under `--set-all-active` (the `globalActivate` fact) every entity pool becomes an activity candidate, with reason `isGlobalActive` (the SBGN-PD parallel of CellDesigner's global-activate rule). No `not hasSubunit` guard is needed: in SBGN-PD a subunit is an `SBGNAuxiliaryUnit`, not an `entityPool`, so the `entityPool` guard already excludes subunits. This preserves the subunit asymmetry -- subunits are not activated under `--set-all-active`.",
             ),
         ),
     },

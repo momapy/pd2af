@@ -146,6 +146,18 @@ def harmonize_root_layout(layout_builder):
     children. Applied uniformly across all layout modes so the rendered
     canvas has consistent background and padding."""
     layout_builder.fill = momapy.coloring.white
+    if not layout_builder.layout_elements:
+        # An empty output map (e.g. every activity suppressed via
+        # `--set-all-inactive`) has nothing to fit around; `set_fit` raises
+        # on an empty element list. Give the root a minimal, valid canvas so
+        # the map still has numeric width/height/position for the writer.
+        side = 2 * _ROOT_LAYOUT_SEP
+        layout_builder.width = side
+        layout_builder.height = side
+        layout_builder.position = momapy.geometry.Point(
+            _ROOT_LAYOUT_SEP, _ROOT_LAYOUT_SEP
+        )
+        return
     momapy.positioning.set_fit(
         layout_builder,
         layout_builder.layout_elements,

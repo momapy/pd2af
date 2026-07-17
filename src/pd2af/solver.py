@@ -19,7 +19,14 @@ def _get_profile_from_mode(mode):
 
 
 def _make_control(
-    model, clingo_id_to_model_element, mode, language, active_ids, inactive_ids
+    model,
+    clingo_id_to_model_element,
+    mode,
+    language,
+    set_active,
+    set_inactive,
+    set_all_active,
+    set_all_inactive,
 ):
     profile = _get_profile_from_mode(mode)
     control = clorm.clingo.Control(
@@ -38,7 +45,12 @@ def _make_control(
     control.add("base", [], pd2af.rules.build_program(profile, language))
     control.add_facts(fact_base)
     _add_activity_override_facts(
-        control, clingo_id_to_model_element, active_ids, inactive_ids
+        control,
+        clingo_id_to_model_element,
+        set_active,
+        set_inactive,
+        set_all_active,
+        set_all_inactive,
     )
     return control
 
@@ -64,7 +76,7 @@ def _resolve_ids_to_generated_constants(
 ):
     """Validate `ids` name known species / entity pools and return their constants.
 
-    Raises `ValueError` (naming `option_name`, e.g. `--active`) if any id is
+    Raises `ValueError` (naming `option_name`, e.g. `--set-active`) if any id is
     unknown. Returns the list of generated ASP constants, ready to interpolate
     bare into a fact.
     """
@@ -82,46 +94,77 @@ def _resolve_ids_to_generated_constants(
 
 
 def _add_activity_override_facts(
-    control, clingo_id_to_model_element, active_ids, inactive_ids
+    control,
+    clingo_id_to_model_element,
+    set_active,
+    set_inactive,
+    set_all_active,
+    set_all_inactive,
 ):
-    """Inject the user's `--active` / `--inactive` activity overrides.
+    """Inject the user's activity overrides as ASP facts.
 
-    `--active` ids become `hasActivityCandidate(ELEMENT, isInputParameter)`
-    atoms (a candidate, so the `--inactive` veto can still suppress them).
-    `--inactive` ids become `suppressActivity(ELEMENT)` atoms, which the
-    bridging rule in `activity_base` reads to block *any* activity for that
-    element. An id passed to both options is contradictory and raises.
+    Four options, in strict precedence per-id > global > rules:
+
+    * `--set-active` ids become `hasActivityCandidate(ELEMENT,
+      isInputParameter)` *and* `forceActive(ELEMENT)`. The candidate makes
+      the element active on its own; `forceActive` shields it from a
+      concurrent `--set-all-inactive`.
+    * `--set-inactive` ids become `suppressActivity(ELEMENT)`, which the
+      bridging rule reads to block *any* activity for that element (it wins
+      over `--set-all-active`, whose candidate is still suppressed).
+    * `--set-all-active` emits the single fact `globalActivate.`, turning
+      every top-level species / entity pool into a candidate.
+    * `--set-all-inactive` emits the single fact `globalSuppress.`,
+      suppressing every candidate not shielded by `forceActive`.
+
+    An id passed to both `--set-active` and `--set-inactive` is
+    contradictory and raises, as is asking for both global toggles at once.
     """
-    active_ids = active_ids or []
-    inactive_ids = inactive_ids or []
-    conflicting_ids = set(active_ids) & set(inactive_ids)
+    set_active = set_active or []
+    set_inactive = set_inactive or []
+    if set_all_active and set_all_inactive:
+        raise ValueError(
+            "cannot pass both --set-all-active and --set-all-inactive"
+        )
+    conflicting_ids = set(set_active) & set(set_inactive)
     if conflicting_ids:
         raise ValueError(
-            f"ids passed to both --active and --inactive: "
+            f"ids passed to both --set-active and --set-inactive: "
             f"{sorted(conflicting_ids)}"
         )
-    if not active_ids and not inactive_ids:
-        return
-    id_to_generated_constant = _build_id_to_generated_constant(
-        clingo_id_to_model_element
-    )
     facts = []
-    if active_ids:
+    if set_all_active:
+        facts.append("globalActivate.")
+    if set_all_inactive:
+        facts.append("globalSuppress.")
+    if set_active or set_inactive:
+        id_to_generated_constant = _build_id_to_generated_constant(
+            clingo_id_to_model_element
+        )
         for generated_constant in _resolve_ids_to_generated_constants(
-            active_ids, id_to_generated_constant, "--active"
+            set_active, id_to_generated_constant, "--set-active"
         ):
             facts.append(
                 f"hasActivityCandidate({generated_constant}, isInputParameter)."
             )
-    if inactive_ids:
+            facts.append(f"forceActive({generated_constant}).")
         for generated_constant in _resolve_ids_to_generated_constants(
-            inactive_ids, id_to_generated_constant, "--inactive"
+            set_inactive, id_to_generated_constant, "--set-inactive"
         ):
             facts.append(f"suppressActivity({generated_constant}).")
+    if not facts:
+        return
     control.add("base", [], "\n".join(facts))
 
 
-def solve(map_, mode, active_ids=None, inactive_ids=None):
+def solve(
+    map_,
+    mode,
+    set_active=None,
+    set_inactive=None,
+    set_all_active=False,
+    set_all_inactive=False,
+):
     clingo_id_to_model_element = {}
     language = pd2af.languages.language_from_map(map_)
     control = _make_control(
@@ -129,8 +172,10 @@ def solve(map_, mode, active_ids=None, inactive_ids=None):
         clingo_id_to_model_element,
         mode=mode,
         language=language,
-        active_ids=active_ids,
-        inactive_ids=inactive_ids,
+        set_active=set_active,
+        set_inactive=set_inactive,
+        set_all_active=set_all_active,
+        set_all_inactive=set_all_inactive,
     )
     control.ground([("base", [])])
     clingo_models = []

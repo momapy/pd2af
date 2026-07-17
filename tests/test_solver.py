@@ -205,12 +205,12 @@ class TestCycleAwareInfluences:
         assert ("positivelyInfluences", "A", "D") in edges
 
 
-class TestActiveIds:
-    """User-declared active elements: `active_ids` injects
+class TestSetActive:
+    """User-declared active elements: `set_active` injects
     `hasActivity(..., isInputParameter)` for a species that carries no
     structural activity signal of its own."""
 
-    def test_active_id_adds_activity_for_non_active_species(
+    def test_set_active_adds_activity_for_non_active_species(
         self, example_cd_map, solved_keep_species
     ):
         # Species A (id `s1`) is a bare, non-active top-level species: it is
@@ -218,25 +218,25 @@ class TestActiveIds:
         baseline_model, _ = solved_keep_species
         baseline_count = len(_activity_atoms(baseline_model))
         clingo_model, id_to_model_element = pd2af.solver.solve(
-            example_cd_map, mode="keep-species", active_ids=["s1"]
+            example_cd_map, mode="keep-species", set_active=["s1"]
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
         assert "A" in names
         assert len(atoms) == baseline_count + 1
 
-    def test_unknown_active_id_raises(self, example_cd_map):
+    def test_unknown_set_active_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.solver.solve(
-                example_cd_map, mode="keep-species", active_ids=["not-an-id"]
+                example_cd_map, mode="keep-species", set_active=["not-an-id"]
             )
 
 
-class TestInactiveIds:
-    """User-declared inactive elements: `inactive_ids` suppresses *any*
+class TestSetInactive:
+    """User-declared inactive elements: `set_inactive` suppresses *any*
     `hasActivity` for a species that would otherwise be active by default."""
 
-    def test_inactive_id_suppresses_default_active_species(
+    def test_set_inactive_suppresses_default_active_species(
         self, example_cd_map, solved_keep_species
     ):
         # Species B (id `s2`) is active by default (it is one of the baseline
@@ -244,31 +244,92 @@ class TestInactiveIds:
         baseline_model, _ = solved_keep_species
         baseline_count = len(_activity_atoms(baseline_model))
         clingo_model, id_to_model_element = pd2af.solver.solve(
-            example_cd_map, mode="keep-species", inactive_ids=["s2"]
+            example_cd_map, mode="keep-species", set_inactive=["s2"]
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
         assert "B" not in names
         assert len(atoms) == baseline_count - 1
 
-    def test_inactive_id_overrides_active_id_conflict_raises(
+    def test_set_inactive_conflicting_with_set_active_raises(
         self, example_cd_map
     ):
         with pytest.raises(ValueError):
             pd2af.solver.solve(
                 example_cd_map,
                 mode="keep-species",
-                active_ids=["s1"],
-                inactive_ids=["s1"],
+                set_active=["s1"],
+                set_inactive=["s1"],
             )
 
-    def test_unknown_inactive_id_raises(self, example_cd_map):
+    def test_unknown_set_inactive_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.solver.solve(
                 example_cd_map,
                 mode="keep-species",
-                inactive_ids=["not-an-id"],
+                set_inactive=["not-an-id"],
             )
+
+
+class TestSetAllActive:
+    """`set_all_active` turns every top-level species into an activity, while
+    per-id `set_inactive` still carves out exceptions and both global toggles
+    are mutually exclusive."""
+
+    def test_set_all_active_activates_every_top_level_species(
+        self, example_cd_map
+    ):
+        clingo_model, id_to_model_element = pd2af.solver.solve(
+            example_cd_map, mode="keep-species", set_all_active=True
+        )
+        atoms = _activity_atoms(clingo_model)
+        names = {id_to_model_element[atom.key.species].name for atom in atoms}
+        # A is bare (never active by default); the toggle surfaces it.
+        assert "A" in names
+
+    def test_set_inactive_overrides_set_all_active(self, example_cd_map):
+        # Per-id > global: B is globally activated but explicitly suppressed.
+        clingo_model, id_to_model_element = pd2af.solver.solve(
+            example_cd_map,
+            mode="keep-species",
+            set_all_active=True,
+            set_inactive=["s2"],
+        )
+        atoms = _activity_atoms(clingo_model)
+        names = {id_to_model_element[atom.key.species].name for atom in atoms}
+        assert "B" not in names
+
+    def test_both_global_toggles_raises(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.solver.solve(
+                example_cd_map,
+                mode="keep-species",
+                set_all_active=True,
+                set_all_inactive=True,
+            )
+
+
+class TestSetAllInactive:
+    """`set_all_inactive` suppresses every activity, while per-id `set_active`
+    still forces the named ids back on."""
+
+    def test_set_all_inactive_suppresses_every_activity(self, example_cd_map):
+        clingo_model, _ = pd2af.solver.solve(
+            example_cd_map, mode="keep-species", set_all_inactive=True
+        )
+        assert not _activity_atoms(clingo_model)
+
+    def test_set_active_overrides_set_all_inactive(self, example_cd_map):
+        # Per-id > global: everything is suppressed except the forced id.
+        clingo_model, id_to_model_element = pd2af.solver.solve(
+            example_cd_map,
+            mode="keep-species",
+            set_all_inactive=True,
+            set_active=["s1"],
+        )
+        atoms = _activity_atoms(clingo_model)
+        names = {id_to_model_element[atom.key.species].name for atom in atoms}
+        assert names == {"A"}
 
 
 @pytest.fixture(scope="module")

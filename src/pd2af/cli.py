@@ -175,8 +175,10 @@ def _run(args):
         mode=args.transformation_mode,
         layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
-        active_ids=args.active,
-        inactive_ids=args.inactive,
+        set_active=args.set_active,
+        set_inactive=args.set_inactive,
+        set_all_active=args.set_all_active,
+        set_all_inactive=args.set_all_inactive,
     )
     new_map = transform_result.obj
     if args.output is None:
@@ -397,30 +399,54 @@ def _add_transform_parser(subparsers):
     )
     parser.add_argument(
         "-a",
-        "--active",
+        "--set-active",
         action="append",
         default=None,
         metavar="ID",
-        dest="active",
+        dest="set_active",
         help=(
             "mark the element with this id_ (a species or entity pool) as "
             "active, emitting hasActivity(..., isInputParameter). Repeatable: "
-            "-a sa1 -a sa2."
+            "-a sa1 -a sa2. Wins over --set-all-inactive for these ids."
         ),
     )
     parser.add_argument(
         "-i",
-        "--inactive",
+        "--set-inactive",
         action="append",
         default=None,
         metavar="ID",
-        dest="inactive",
+        dest="set_inactive",
         help=(
             "mark the element with this id_ (a species or entity pool) as "
             "NOT active, suppressing any hasActivity for it (overrides the "
             "automatic activity discovery: active flag/state, modulation "
             "source, reaction modifier, gate input, phenotype). Repeatable: "
-            "-i sa1 -i sa2. Erroring if an id is also passed to --active."
+            "-i sa1 -i sa2. Wins over --set-all-active for these ids. "
+            "Erroring if an id is also passed to --set-active."
+        ),
+    )
+    global_activity_group = parser.add_mutually_exclusive_group()
+    global_activity_group.add_argument(
+        "-A",
+        "--set-all-active",
+        action="store_true",
+        dest="set_all_active",
+        help=(
+            "mark every top-level species / entity pool as active "
+            "(subunits excluded). Per-id --set-inactive overrides this for "
+            "the named ids. Mutually exclusive with --set-all-inactive."
+        ),
+    )
+    global_activity_group.add_argument(
+        "-I",
+        "--set-all-inactive",
+        action="store_true",
+        dest="set_all_inactive",
+        help=(
+            "suppress activity for every element (including subunits). "
+            "Per-id --set-active overrides this for the named ids. "
+            "Mutually exclusive with --set-all-active."
         ),
     )
     parser.add_argument(

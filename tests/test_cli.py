@@ -162,13 +162,13 @@ class TestCliMainStdout:
 class TestActiveFlag:
     def test_active_flag_defaults_to_none(self):
         args = _parse_transform_args(["transform", "map.xml"])
-        assert args.active is None
+        assert args.set_active is None
 
     def test_active_flag_is_repeatable_and_accumulates(self):
         args = _parse_transform_args(
             ["transform", "map.xml", "-a", "s1", "-a", "s3"]
         )
-        assert args.active == ["s1", "s3"]
+        assert args.set_active == ["s1", "s3"]
 
     def test_active_flag_marks_species_active(self, tmp_path, example_map_path):
         out_path = tmp_path / "out.pickle"
@@ -195,13 +195,13 @@ class TestActiveFlag:
 class TestInactiveFlag:
     def test_inactive_flag_defaults_to_none(self):
         args = _parse_transform_args(["transform", "map.xml"])
-        assert args.inactive is None
+        assert args.set_inactive is None
 
     def test_inactive_flag_is_repeatable_and_accumulates(self):
         args = _parse_transform_args(
             ["transform", "map.xml", "-i", "s1", "-i", "s3"]
         )
-        assert args.inactive == ["s1", "s3"]
+        assert args.set_inactive == ["s1", "s3"]
 
     def test_inactive_flag_suppresses_species(
         self, tmp_path, example_map_path
@@ -225,6 +225,70 @@ class TestInactiveFlag:
         names = sorted(s.name for s in roundtrip.model.species)
         # Species B (id `s2`) is active by default; -i suppresses it.
         assert "B" not in names
+
+
+class TestGlobalActivityFlags:
+    def test_global_flags_default_to_false(self):
+        args = _parse_transform_args(["transform", "map.xml"])
+        assert args.set_all_active is False
+        assert args.set_all_inactive is False
+
+    def test_set_all_active_short_flag(self):
+        args = _parse_transform_args(["transform", "map.xml", "-A"])
+        assert args.set_all_active is True
+        assert args.set_all_inactive is False
+
+    def test_set_all_inactive_short_flag(self):
+        args = _parse_transform_args(["transform", "map.xml", "-I"])
+        assert args.set_all_inactive is True
+        assert args.set_all_active is False
+
+    def test_both_global_flags_is_a_parse_error(self):
+        with pytest.raises(SystemExit):
+            _parse_transform_args(["transform", "map.xml", "-A", "-I"])
+
+    def test_set_all_active_marks_every_species(
+        self, tmp_path, example_map_path
+    ):
+        out_path = tmp_path / "out.pickle"
+        pd2af.cli.main(
+            [
+                "transform",
+                example_map_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-A",
+                "-o",
+                str(out_path),
+            ]
+        )
+        roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
+        names = sorted(s.name for s in roundtrip.model.species)
+        # Species A (id `s1`) is not an activity by default; -A surfaces it.
+        assert "A" in names
+
+    def test_set_all_inactive_drops_every_species(
+        self, tmp_path, example_map_path
+    ):
+        out_path = tmp_path / "out.pickle"
+        pd2af.cli.main(
+            [
+                "transform",
+                example_map_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-I",
+                "-o",
+                str(out_path),
+            ]
+        )
+        roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
+        # Species B (id `s2`) is active by default; -I suppresses everything.
+        assert not roundtrip.model.species
 
 
 class TestListModes:

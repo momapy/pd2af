@@ -307,11 +307,11 @@ class TestTransformLayoutModes:
         assert len(out.layout.layout_elements) > 0
 
 
-class TestTransformActiveIds:
-    """`active_ids` marks elements active by id_, surfacing them as
+class TestTransformSetActive:
+    """`set_active` marks elements active by id_, surfacing them as
     activities even when the map gives them no structural activity signal."""
 
-    def test_active_id_surfaces_non_active_species(self, example_cd_map):
+    def test_set_active_surfaces_non_active_species(self, example_cd_map):
         # Species A (id `s1`) is a bare, non-active species: absent from the
         # baseline keep-species activities.
         baseline = pd2af.transform(
@@ -322,25 +322,25 @@ class TestTransformActiveIds:
             example_cd_map,
             mode="keep-species",
             layout_mode="plain",
-            active_ids=["s1"],
+            set_active=["s1"],
         ).obj
         assert "A" in species_names(with_active.model)
 
-    def test_unknown_active_id_raises(self, example_cd_map):
+    def test_unknown_set_active_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
                 mode="keep-species",
                 layout_mode="plain",
-                active_ids=["not-an-id"],
+                set_active=["not-an-id"],
             )
 
 
-class TestTransformInactiveIds:
-    """`inactive_ids` suppresses activities by id_, dropping species that the
+class TestTransformSetInactive:
+    """`set_inactive` suppresses activities by id_, dropping species that the
     map would otherwise surface as active."""
 
-    def test_inactive_id_suppresses_default_active_species(
+    def test_set_inactive_suppresses_default_active_species(
         self, example_cd_map
     ):
         # Species B (id `s2`) is active by default in the keep-species output.
@@ -352,28 +352,90 @@ class TestTransformInactiveIds:
             example_cd_map,
             mode="keep-species",
             layout_mode="plain",
-            inactive_ids=["s2"],
+            set_inactive=["s2"],
         ).obj
         assert "B" not in species_names(with_inactive.model)
 
-    def test_conflicting_active_and_inactive_id_raises(self, example_cd_map):
+    def test_conflicting_set_active_and_set_inactive_raises(
+        self, example_cd_map
+    ):
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
                 mode="keep-species",
                 layout_mode="plain",
-                active_ids=["s1"],
-                inactive_ids=["s1"],
+                set_active=["s1"],
+                set_inactive=["s1"],
             )
 
-    def test_unknown_inactive_id_raises(self, example_cd_map):
+    def test_unknown_set_inactive_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
                 mode="keep-species",
                 layout_mode="plain",
-                inactive_ids=["not-an-id"],
+                set_inactive=["not-an-id"],
             )
+
+
+class TestTransformSetAllActive:
+    """`set_all_active` turns every top-level species into an activity;
+    per-id `set_inactive` still overrides it and the two global toggles are
+    mutually exclusive."""
+
+    def test_set_all_active_surfaces_bare_species(self, example_cd_map):
+        with_all_active = pd2af.transform(
+            example_cd_map,
+            mode="keep-species",
+            layout_mode="plain",
+            set_all_active=True,
+        ).obj
+        # A is bare (never active by default); the toggle surfaces it.
+        assert "A" in species_names(with_all_active.model)
+
+    def test_set_inactive_overrides_set_all_active(self, example_cd_map):
+        with_override = pd2af.transform(
+            example_cd_map,
+            mode="keep-species",
+            layout_mode="plain",
+            set_all_active=True,
+            set_inactive=["s2"],
+        ).obj
+        assert "B" not in species_names(with_override.model)
+
+    def test_both_global_toggles_raises(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map,
+                mode="keep-species",
+                layout_mode="plain",
+                set_all_active=True,
+                set_all_inactive=True,
+            )
+
+
+class TestTransformSetAllInactive:
+    """`set_all_inactive` suppresses every activity; per-id `set_active` still
+    forces the named ids back on."""
+
+    def test_set_all_inactive_drops_every_species(self, example_cd_map):
+        with_all_inactive = pd2af.transform(
+            example_cd_map,
+            mode="keep-species",
+            layout_mode="plain",
+            set_all_inactive=True,
+        ).obj
+        assert not with_all_inactive.model.species
+
+    def test_set_active_overrides_set_all_inactive(self, example_cd_map):
+        with_override = pd2af.transform(
+            example_cd_map,
+            mode="keep-species",
+            layout_mode="plain",
+            set_all_inactive=True,
+            set_active=["s1"],
+        ).obj
+        assert species_names(with_override.model) == ["A"]
 
 
 class TestTransformErrors:
