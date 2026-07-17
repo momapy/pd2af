@@ -237,6 +237,35 @@ class TestRealMapIntegration:
         momapy.io.core.read(path, reader="sbgnml")
 
 
+class TestSbgnPhenotypeActivity:
+    """An SBGN-PD phenotype is a `Process`, not an `EntityPool`. It must still
+    surface as an activity in every mode: the `keep-species`/`normal` key comes
+    from `resolvesToTopLevel`, which needs a phenotype self-rule (the entity-pool
+    self-rule cannot key a process); the `*-no-complex` modes already key it via
+    `not isSubunit`/`not delete`."""
+
+    @pytest.fixture(scope="class")
+    def phenotype_map(self):
+        # insulin-like_growth_factor_signaling carries one phenotype,
+        # labelled "gene\ntranscription".
+        return read_sbgn_map(
+            os.path.join(
+                SBGN_MAPS_DIR, "insulin-like_growth_factor_signaling.sbgn"
+            )
+        )
+
+    @pytest.mark.parametrize(
+        "mode",
+        ("keep-species", "normal", "keep-species-no-complex", "normal-no-complex"),
+    )
+    def test_phenotype_is_an_activity(self, phenotype_map, mode):
+        out = pd2af.transform(phenotype_map, mode=mode, layout_mode=None).obj
+        assert any(
+            label and "transcription" in label
+            for label in _activity_labels(out.model)
+        )
+
+
 def _compartment_layouts(layout):
     return [
         element

@@ -219,6 +219,11 @@ _TOP_LEVEL = RuleGroup(
                         not hasSubunit(_, ENTITY_POOL)."""),
                 docs="SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity.",
             ),
+            Rule(
+                identifier="top_level:sbgn_pd:phenotype_self",
+                text="resolvesToTopLevel(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
+                docs="SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `keep-species`/`normal` output. The `*-no-complex` modes key via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule); casq is CellDesigner-only.",
+            ),
         ),
     },
 )
