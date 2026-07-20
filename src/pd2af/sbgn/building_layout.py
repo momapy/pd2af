@@ -1,4 +1,4 @@
-"""Build the SBGN-AF layout, in either ``plain`` or ``auto`` mode.
+"""Build the SBGN-AF layout, in either ``plain`` or ``dot`` mode.
 
 For each AF activity we build a fresh ``BiologicalActivityLayout`` /
 ``PhenotypeLayout`` with a typed unit-of-information sublayout and a label.
@@ -17,7 +17,7 @@ Two layout modes:
   ``--influence-pairing`` (``cross`` -- one arc per pair -- or ``nearest`` -- a
   single arc between the closest pair). Activities/compartments whose input has
   no layout are skipped.
-* ``auto`` -- build every element at a placeholder position with the default
+* ``dot`` -- build every element at a placeholder position with the default
   size, then hand the whole layout to ``pd2af.utils.make_auto_layout``
   (graphviz) in ``build.py`` for repositioning. Required by the merged
   ``normal`` / ``normal-no-complex`` modes, where a merged activity has no
@@ -69,7 +69,7 @@ _OPERATOR_LAYOUT_CLASSES = tuple(_OPERATOR_CLASS_TO_LAYOUT_CLASS.values())
 # exception is a compartment in `plain` mode, which reuses its input layout size
 # so it still encloses its members at their curated positions.
 #
-# auto-mode placeholder position; graphviz repositions everything afterwards.
+# dot-mode placeholder position; graphviz repositions everything afterwards.
 _PLACEHOLDER_POSITION = momapy.geometry.Point(0.0, 0.0)
 
 # How far right of an activity's north-west corner the unit of information sits.
@@ -81,9 +81,9 @@ def _builder(layout_class, **kwargs):
 
 
 def make_and_add_layout(context):
-    if context.layout_mode not in ("plain", "auto"):
+    if context.layout_mode not in ("plain", "dot"):
         raise NotImplementedError(
-            "SBGN-AF output supports the 'plain' and 'auto' layout modes "
+            "SBGN-AF output supports the 'plain' and 'dot' layout modes "
             f"(got {context.layout_mode!r}); 'overlay' is unsupported."
         )
     context.layout = _builder(momapy.sbgn.af.SBGNAFLayout)
@@ -114,7 +114,7 @@ def _get_input_layouts(context, input_element):
 
 
 def _make_and_add_compartment_layout(context, compartment):
-    if context.layout_mode == "auto":
+    if context.layout_mode == "dot":
         # Default size; graphviz fits the cluster around its members afterwards.
         compartment_layout = _builder(
             momapy.sbgn.af.CompartmentLayout, position=_PLACEHOLDER_POSITION
@@ -151,10 +151,10 @@ def _input_compartment_for(context, af_compartment):
 
 def _make_and_add_activity_layout(context, activity, input_element):
     # The activity uses momapy's default size; only its position(s) differ by
-    # mode. In auto a single placeholder graphviz repositions; in plain the
+    # mode. In dot a single placeholder graphviz repositions; in plain the
     # curated input layout positions -- one activity layout per input layout, so
     # a cloned entity pool keeps each of its placements.
-    if context.layout_mode == "auto":
+    if context.layout_mode == "dot":
         positions = (_PLACEHOLDER_POSITION,)
     else:
         input_layouts = _get_input_layouts(context, input_element)
@@ -222,7 +222,7 @@ def _make_and_add_operator_layout(context, operator, input_operator):
     """Build an operator glyph and its logic arcs.
 
     The glyph is built fresh (like every AF activity) at the input operator's
-    curated position (``plain``) or a placeholder (``auto``). One
+    curated position (``plain``) or a placeholder (``dot``). One
     ``LogicArcLayout`` runs from the operator to each input activity's layout
     (operator -> input, the SBGN convention). The operator maps to a frozenset
     of {glyph, logic arcs, input activity layouts} anchored on the glyph -- the
@@ -232,7 +232,7 @@ def _make_and_add_operator_layout(context, operator, input_operator):
     operator_layout_class = _OPERATOR_CLASS_TO_LAYOUT_CLASS.get(type(operator))
     if operator_layout_class is None:
         return
-    if context.layout_mode == "auto":
+    if context.layout_mode == "dot":
         operator_layout = _builder(
             operator_layout_class, position=_PLACEHOLDER_POSITION
         )

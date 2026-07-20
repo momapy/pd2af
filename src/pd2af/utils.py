@@ -108,7 +108,7 @@ def influence_layout_pairs(source_layouts, target_layouts, prefer_nearest):
     By default the full ``source x target`` cross product. ``prefer_nearest``
     (``-p nearest``) collapses the fan-out to the single closest pair, but only
     where there *is* fan-out (more than one layout on a side) and every layout
-    has a real ``position`` -- in ``auto`` mode positions are throwaway
+    has a real ``position`` -- in ``dot`` mode positions are throwaway
     placeholders that graphviz overwrites, so the cross product is kept.
     """
     use_nearest = (

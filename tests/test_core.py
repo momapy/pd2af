@@ -527,3 +527,45 @@ class TestProvenance:
                     input_element
                     in result.provenance.inverse[id(output_element)]
                 )
+
+
+class TestTransformModelInput:
+    """`transform` accepts a bare model (not a full map): it returns the
+    transformed model, forces `layout_mode` to None, and rejects any explicit
+    non-None layout mode."""
+
+    def test_returns_celldesigner_model(self, example_cd_map):
+        result = pd2af.transform(example_cd_map.model, mode="keep-species")
+        assert isinstance(result.obj, momapy.celldesigner.CellDesignerModel)
+
+    def test_model_output_matches_map_output(self, example_cd_map):
+        from_model = pd2af.transform(
+            example_cd_map.model, mode="keep-species"
+        ).obj
+        from_map = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        ).obj
+        assert species_names(from_model) == species_names(from_map.model)
+
+    def test_provenance_available_for_model_input(self, example_cd_map):
+        result = pd2af.transform(example_cd_map.model, mode="keep-species")
+        model_elements = set(result.obj.species) | set(
+            result.obj.boolean_logic_gates
+        )
+        assert result.provenance
+        for output_elements in result.provenance.values():
+            assert output_elements <= model_elements
+
+    @pytest.mark.parametrize("layout_mode", ["dot", "plain", "overlay"])
+    def test_rejects_explicit_layout_mode(self, example_cd_map, layout_mode):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map.model, mode="keep-species", layout_mode=layout_mode
+            )
+
+    @pytest.mark.parametrize("layout_mode", ["auto", None])
+    def test_accepts_auto_or_none_layout_mode(self, example_cd_map, layout_mode):
+        result = pd2af.transform(
+            example_cd_map.model, mode="keep-species", layout_mode=layout_mode
+        )
+        assert isinstance(result.obj, momapy.celldesigner.CellDesignerModel)

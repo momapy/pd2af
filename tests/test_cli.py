@@ -49,7 +49,7 @@ class TestModeAndLayoutChoices:
         }
 
     def test_layout_choices_includes_documented_modes(self):
-        assert set(pd2af.cli._LAYOUT_CHOICES) == {"plain", "overlay", "auto"}
+        assert set(pd2af.cli._LAYOUT_CHOICES) == {"plain", "overlay", "dot", "auto"}
 
 
 class TestCliMainOutputFile:
@@ -323,14 +323,14 @@ class TestListModes:
             mode["transformation_mode"]: mode
             for mode in json.loads(capsys.readouterr().out)["transformation_modes"]
         }
-        # Merged-proteoform modes only accept `auto`; the per-species/casq
-        # modes accept all three layout modes.
-        assert modes["normal"]["layout_modes"] == ["auto"]
-        assert modes["normal-no-complex"]["layout_modes"] == ["auto"]
+        # Merged-proteoform modes only accept `dot`; the per-species/casq
+        # modes accept all three concrete layout modes.
+        assert modes["normal"]["layout_modes"] == ["dot"]
+        assert modes["normal-no-complex"]["layout_modes"] == ["dot"]
         assert set(modes["keep-species"]["layout_modes"]) == {
             "plain",
             "overlay",
-            "auto",
+            "dot",
         }
 
     def test_json_matches_rendered_tables(self, capsys):

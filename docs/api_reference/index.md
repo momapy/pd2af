@@ -16,7 +16,7 @@ The pd2af public API is organized into the following modules.
 
 ## Layout
 
-- [Layouts](layouts.md) — build the AF map's layout (plain / overlay / auto)
+- [Layouts](layouts.md) — build the AF map's layout (plain / overlay / dot)
 
 ## Auxiliary
 

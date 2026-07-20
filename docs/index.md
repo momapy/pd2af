@@ -12,7 +12,7 @@ pd2af is a Python package (Python >=3.12). With [uv](https://docs.astral.sh/uv/)
 uv pip install pd2af
 ```
 
-The `auto` layout mode requires Graphviz's `dot` binary on your `PATH`.
+The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.
 
 ## Usage
 
@@ -23,9 +23,14 @@ import momapy.io.core
 import pd2af
 
 cd_map = momapy.io.core.read("my_map.xml").obj
-af_map = pd2af.transform(cd_map, mode="normal", layout_mode="auto")
+af_map = pd2af.transform(cd_map, mode="normal", layout_mode="auto").obj
 momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
 ```
+
+`transform` also accepts a bare model instead of a full map: pass
+`cd_map.model` and it returns the transformed model (an SBGN-AF model for
+SBGN-PD input, a CellDesigner model for CellDesigner input) via `.obj`. Model
+input has no geometry, so `layout_mode` is forced to `None`.
 
 ### Command-line interface
 
@@ -46,7 +51,7 @@ Selectable with `-m` / `mode=`. Four of the modes lie on two orthogonal axes —
 | **merge proteoforms** | `normal` *(default)*      | `normal-no-complex`                             |
 | **keep each species** | `keep-species`            | `keep-species-no-complex`                |
 
-- **merge proteoforms** modes (`normal`, `normal-no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout-mode auto`.
+- **merge proteoforms** modes (`normal`, `normal-no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout-mode dot` (or `auto`).
 - **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
 - **drop complexes** variants (`normal-no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
 - **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.
@@ -57,7 +62,8 @@ A fifth mode, **`casq`**, emits one activity per surviving PD species after appl
 
 Selectable with `-l` / `layout_mode=`:
 
-- **`auto`** (default) — Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
+- **`auto`** (default) — pick automatically from the input: a map gets `dot`, a bare model gets `None` (no layout).
+- **`dot`** — Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
 - **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
 - **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
 

@@ -125,10 +125,10 @@ def build_map(
     )
     new_map = momapy.builder.object_from_builder(map_builder)
 
-    # auto-layout (graphviz) repositions an already-built layout. The
+    # the "dot" mode (graphviz) repositions an already-built layout. The
     # compartment-layout classes differ per language (see
     # pd2af.utils.make_auto_layout).
-    if layout_mode == "auto":
+    if layout_mode == "dot":
         if language == pd2af.languages.CELLDESIGNER:
             new_map = pd2af.utils.make_auto_layout(new_map)
         elif language == pd2af.languages.SBGN_PD:

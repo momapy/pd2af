@@ -333,3 +333,26 @@ class TestCompartments:
         momapy.io.core.write(out, path, writer="sbgnml")
         back = momapy.io.core.read(path, reader="sbgnml").obj
         assert len(back.model.compartments) == len(out.model.compartments) == 1
+
+
+class TestTransformModelInput:
+    """A bare SBGN-PD model in `normal` mode returns a bare SBGN-AF model with
+    `layout_mode` forced to None -- so no graphviz `dot` is required."""
+
+    def test_returns_sbgn_af_model(self, proteoform_map):
+        result = pd2af.transform(proteoform_map.model, mode="normal")
+        assert isinstance(result.obj, momapy.sbgn.af.SBGNAFModel)
+
+    def test_model_output_matches_map_output(self, proteoform_map):
+        from_model = pd2af.transform(proteoform_map.model, mode="normal").obj
+        from_map = pd2af.transform(
+            proteoform_map, mode="normal", layout_mode=None
+        ).obj
+        assert _activity_labels(from_model) == _activity_labels(from_map.model)
+
+    @pytest.mark.parametrize("layout_mode", ["dot", "plain"])
+    def test_rejects_explicit_layout_mode(self, proteoform_map, layout_mode):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                proteoform_map.model, mode="normal", layout_mode=layout_mode
+            )

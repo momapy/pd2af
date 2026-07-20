@@ -20,7 +20,7 @@ _MODE_CHOICES = (
     "casq",
 )
 
-_LAYOUT_CHOICES = ("plain", "overlay", "auto")
+_LAYOUT_CHOICES = ("plain", "overlay", "dot", "auto")
 
 _INFLUENCE_PAIRING_CHOICES = ("cross", "nearest")
 
@@ -68,7 +68,8 @@ _TRANSFORMATION_MODE_INFO = {
 _LAYOUT_MODE_INFO = {
     "plain": "reuse original positions",
     "overlay": "reuse full original layout with unmapped layout elements dimmed",
-    "auto": "graphviz `dot` auto-layout (requires `dot` on PATH)",
+    "dot": "graphviz `dot` auto-layout (requires `dot` on PATH)",
+    "auto": "pick automatically from the input (graphviz `dot` for a map)",
 }
 
 # Human-facing display names for the input-language tokens (also the single
@@ -213,7 +214,7 @@ def _build_modes_data():
             "languages": _compatible_language_names_for_layout_mode(layout_mode),
             "description": _LAYOUT_MODE_INFO[layout_mode],
         }
-        for layout_mode in pd2af.core.LAYOUT_MODES
+        for layout_mode in _LAYOUT_CHOICES
     ]
     return {
         "transformation_modes": transformation_modes,
@@ -359,7 +360,7 @@ def _add_transform_parser(subparsers):
             "transformation mode (default: normal). 'normal' and "
             "'normal-no-complex' merge proteoforms of the same template and "
             "compartment into a single activity (true PD->AF transform) "
-            "and require `--layout-mode auto`. 'keep-species' and "
+            "and require `--layout-mode dot` (or `auto`). 'keep-species' and "
             "'keep-species-no-complex' keep each PD species as its own "
             "activity. The '*-no-complex' variants drop complexes that "
             "have an active subunit, routing influences through the "
@@ -377,11 +378,12 @@ def _add_transform_parser(subparsers):
         choices=_LAYOUT_CHOICES,
         default="auto",
         help=(
-            "layout strategy: auto (graphviz auto-layout, requires `dot`, "
-            "default), plain (reuse original positions, model elements "
-            "only), or overlay (reuse full original layout with non-model "
-            "elements greyed out). 'normal' and 'normal-no-complex' transformation "
-            "modes require `auto`."
+            "layout strategy: auto (pick automatically from the input, "
+            "default; a map gets `dot`), dot (graphviz auto-layout, requires "
+            "`dot`), plain (reuse original positions, model elements only), or "
+            "overlay (reuse full original layout with non-model elements greyed "
+            "out). 'normal' and 'normal-no-complex' transformation modes require "
+            "`dot` (or `auto`)."
         ),
     )
     parser.add_argument(
@@ -394,7 +396,7 @@ def _add_transform_parser(subparsers):
             "layout glyphs: cross (default, one arc per source/target pair) or "
             "nearest (a single arc between the closest pair). 'nearest' only "
             "takes effect with `--layout-mode plain` or `overlay`, where glyph "
-            "positions are real; in `auto` it is ignored."
+            "positions are real; in `dot` it is ignored."
         ),
     )
     parser.add_argument(

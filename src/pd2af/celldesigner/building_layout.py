@@ -158,7 +158,7 @@ def make_decoration_stripped_layout(input_layout, original_to_stripped):
     active-border sibling -- see ``_STRIPPABLE_SPECIES_DECORATION_CLASSES``) so a
     stripped species renders plain. Subunit glyphs of kept complexes are
     preserved (and recursively stripped), so the real glyph size and subunit
-    structure -- which the auto layout deliberately keeps -- survive.
+    structure -- which the dot layout deliberately keeps -- survive.
 
     Frozen objects throughout (via :func:`dataclasses.replace`), never builders,
     so the result pickles and round-trips like the reused input glyphs of the
@@ -225,7 +225,7 @@ def make_modulation_arc(modulation, source_layout, target_layout):
 
 
 def make_synthetic_gate_layout(gate, index):
-    """Build a placeholder gate node for ``gate`` (the ``auto`` mode, when the
+    """Build a placeholder gate node for ``gate`` (the ``dot`` mode, when the
     input gate has no curated layout). ``index`` seeds the position so two
     content-equal synthetic gates stay content-distinct;
     ``make_auto_layout`` repositions every node before render."""
@@ -406,7 +406,7 @@ def _make_and_add_species_layout(context, species, input_species):
     )
 
     if input_layouts:
-        if context.layout_mode == "auto" and len(input_layouts) > 1:
+        if context.layout_mode == "dot" and len(input_layouts) > 1:
             # Auto repositions every node, so a cloned species' extra glyphs
             # carry no spatial meaning -- and the cross-product pairing would
             # multiply each influence arc N*M. Keep one glyph (its real size and
@@ -433,7 +433,7 @@ def _make_and_add_species_layout(context, species, input_species):
             context.model_element_to_layout_elements[id(species)] = tuple(
                 input_layouts
             )
-    elif context.layout_mode == "auto":
+    elif context.layout_mode == "dot":
         synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
         context.synthetic_index += 1
         context.layout.layout_elements.append(synthetic_layout)
@@ -446,8 +446,8 @@ def _make_and_add_gate_layout(context, gate, input_gate):
     :func:`_make_and_add_species_layout`.
 
     The gate glyph is the curated input gate layout when one exists
-    (plain/overlay, and auto when the input had one), otherwise a synthetic
-    node (auto). It is mapped to the gate and registered in
+    (plain/overlay, and dot when the input had one), otherwise a synthetic
+    node (dot). It is mapped to the gate and registered in
     ``model_element_to_layout_elements`` so the modulation pass can resolve a
     gate-sourced modulation. One ``LogicArcLayout`` is drawn from each gate
     glyph to each input species' layout (gate -> input, the CellDesigner
@@ -458,13 +458,13 @@ def _make_and_add_gate_layout(context, gate, input_gate):
         else None
     )
     if input_layouts:
-        if context.layout_mode == "auto" and len(input_layouts) > 1:
+        if context.layout_mode == "dot" and len(input_layouts) > 1:
             input_layouts = input_layouts[:1]
         gate_layouts = list(input_layouts)
         context.layout.layout_elements.extend(gate_layouts)
         for gate_layout in gate_layouts:
             context.layout_model_mapping.add_mapping(gate_layout, gate)
-    elif context.layout_mode == "auto":
+    elif context.layout_mode == "dot":
         gate_layout = make_synthetic_gate_layout(gate, context.synthetic_index)
         context.synthetic_index += 1
         context.layout.layout_elements.append(gate_layout)
@@ -494,7 +494,7 @@ def _make_and_add_modulation_layout(context, modulation):
     if not source_layouts or not target_layouts:
         return
     # "nearest" collapses the N*M fan-out to the single closest pair, but only
-    # where positions are real (plain/overlay); in auto they are throwaway
+    # where positions are real (plain/overlay); in dot they are throwaway
     # placeholders that graphviz overwrites, so the cross product is kept.
     prefer_nearest = (
         context.influence_pairing == "nearest"

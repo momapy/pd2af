@@ -33,3 +33,15 @@ def language_from_map(map_):
         f"unsupported input map type {type(map_).__name__!r}; "
         f"expected SBGNPDMap or CellDesignerMap"
     )
+
+
+def language_from_model(model):
+    """Infer the input language token from a bare input model's type."""
+    if isinstance(model, momapy.sbgn.pd.SBGNPDModel):
+        return SBGN_PD
+    if isinstance(model, momapy.celldesigner.CellDesignerModel):
+        return CELLDESIGNER
+    raise ValueError(
+        f"unsupported input model type {type(model).__name__!r}; "
+        f"expected SBGNPDModel or CellDesignerModel"
+    )
