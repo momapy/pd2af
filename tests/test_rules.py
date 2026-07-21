@@ -174,12 +174,12 @@ class TestMergedProfilesSbgnPdVariant:
 
 
 def test_registry_validates():
-    registry = pd2af.rules._build_registry()
+    registry = pd2af.rules.build_registry()
     assert registry is not None
 
 
 def test_registry_registers_all_profiles():
-    registry = pd2af.rules._build_registry()
+    registry = pd2af.rules.build_registry()
     assert set(registry.profiles) == set(_PROFILES)
 
 

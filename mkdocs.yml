@@ -8,6 +8,7 @@ extra:
 nav:
   - Home: index.md
   - CLI reference: cli.md
+  - Rules reference: rules.md
   - API reference:
     - Overview: api_reference/index.md
     - Core: api_reference/core.md
@@ -31,6 +32,9 @@ theme:
 plugins:
   - search
   - autorefs
+  - gen-files:
+      scripts:
+        - docs/generate_rules_reference.py
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -55,6 +59,7 @@ plugins:
               - griffe_fieldz: {include_inherited: true}
               - griffe_inherited_docstrings
 markdown_extensions:
+  - attr_list
   - tables
   - toc:
       toc_depth: 3

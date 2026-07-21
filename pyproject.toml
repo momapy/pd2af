@@ -21,6 +21,7 @@ test = ["pytest>=7"]
 dev = [
   "pytest>=9.0.3",
   "mkdocs-material>=9.6.16",
+  "mkdocs-gen-files>=0.5.0",
   "mkdocstrings-python>=1.16.12",
   "griffe-fieldz>=0.1.2",
   "griffe-inherited-docstrings>=1.1.1",
