@@ -44,6 +44,12 @@ _NON_CASQ_PROFILES = frozenset(
 
 _CASQ_PROFILES = frozenset({"casq"})
 
+# Activity discovery drives the non-CASQ profiles: casq derives its activities
+# from its own pipeline (survival through the deletion rules + resolution to a
+# top-level complex, keyed on `hasActivityKey`) and reads none of the
+# `hasActivity`/`hasActivityCandidate` predicates these groups emit, so the whole
+# `activity:core`/`activity:*` layer is non-CASQ only.
+#
 # Activity discovery is parallel across languages: only the `phenotype` rule is
 # language-agnostic (both languages emit the `phenotype` functor); every other
 # signal is a per-language variant. CellDesigner and SBGN-PD share the same
@@ -74,7 +80,7 @@ def _activity_feature(name, *, base=(), cd=(), sbgn=(), docs=""):
         variants["sbgn_pd"] = sbgn
     return RuleGroup(
         identifier=f"activity:{name}",
-        profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
+        profiles=_NON_CASQ_PROFILES,
         depends_on=frozenset({"activity:core"}),
         rules=base,
         variants=variants,
@@ -84,7 +90,7 @@ def _activity_feature(name, *, base=(), cd=(), sbgn=(), docs=""):
 
 _ACTIVITY_CORE = RuleGroup(
     identifier="activity:core",
-    profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
+    profiles=_NON_CASQ_PROFILES,
     docs="Mandatory activity machinery: the candidate->activity bridge and the two global toggles. A single bridging rule promotes a `hasActivityCandidate(ELEMENT, REASON)` to `hasActivity` unless the element is `suppressActivity` (the `--set-inactive` veto). `globalSuppress` (`--set-all-inactive`) suppresses every candidate except those the solver marked `forceActive` (the per-id `--set-active` override), realising the precedence per-id > global > rules; `globalActivate` (`--set-all-active`) turns every top-level species/entity pool into a candidate. Every activity feature-group and every downstream group depends on this, so the dependency graph forbids excluding it -- the global toggles stay wired to their CLI flags. The structural-reason rules (phenotype, active marker, modulation source, gate input) live in the excludable `activity:*` feature-groups.",
     rules=(
         Rule(
