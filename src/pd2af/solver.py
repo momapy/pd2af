@@ -27,6 +27,8 @@ def _make_control(
     set_inactive,
     set_all_active,
     set_all_inactive,
+    exclude_groups=(),
+    exclude_rules=(),
 ):
     profile = _get_profile_from_mode(mode)
     control = clorm.clingo.Control(
@@ -42,7 +44,16 @@ def _make_control(
     with clingo.ast.ProgramBuilder(control) as control_builder:
         for ontology_rule in ontology_rules:
             clingo.ast.parse_string(ontology_rule, control_builder.add)
-    control.add("base", [], pd2af.rules.build_program(profile, language))
+    control.add(
+        "base",
+        [],
+        pd2af.rules.build_program(
+            profile,
+            language,
+            exclude_groups=exclude_groups,
+            exclude_rules=exclude_rules,
+        ),
+    )
     control.add_facts(fact_base)
     _add_activity_override_facts(
         control,
@@ -164,6 +175,8 @@ def solve(
     set_inactive=None,
     set_all_active=False,
     set_all_inactive=False,
+    exclude_groups=(),
+    exclude_rules=(),
 ):
     clingo_id_to_model_element = {}
     language = pd2af.languages.language_from_map(map_)
@@ -176,6 +189,8 @@ def solve(
         set_inactive=set_inactive,
         set_all_active=set_all_active,
         set_all_inactive=set_all_inactive,
+        exclude_groups=exclude_groups,
+        exclude_rules=exclude_rules,
     )
     control.ground([("base", [])])
     clingo_models = []

@@ -10,6 +10,7 @@ import momapy.io.core
 import pd2af
 import pd2af.core
 import pd2af.languages
+import pd2af.rules
 
 
 _MODE_CHOICES = (
@@ -180,6 +181,8 @@ def _run(args):
         set_inactive=args.set_inactive,
         set_all_active=args.set_all_active,
         set_all_inactive=args.set_all_inactive,
+        exclude_groups=tuple(args.exclude_groups or ()),
+        exclude_rules=tuple(args.exclude_rules or ()),
     )
     new_map = transform_result.obj
     if args.output is None:
@@ -332,6 +335,44 @@ def _list_modes(args):
         print(_format_modes_tables(data))
 
 
+def _build_groups_data():
+    """Per-mode excludable / mandatory rule groups, from the live registry.
+
+    Excludable groups are the dependency-graph leaves `--exclude-group` can
+    drop cleanly; mandatory groups are depended-on by another included group.
+    """
+    return {
+        mode: {
+            "excludable": sorted(excludable),
+            "mandatory": sorted(mandatory),
+        }
+        for mode in _MODE_CHOICES
+        for excludable, mandatory in (
+            pd2af.rules.get_excludable_groups(mode.replace("-", "_")),
+        )
+    }
+
+
+def _format_groups_tables(data):
+    sections = []
+    for mode, groups in data.items():
+        rows = [[group, "excludable"] for group in groups["excludable"]]
+        rows += [[group, "mandatory"] for group in groups["mandatory"]]
+        sections.append(
+            f"Mode `{mode}`:\n"
+            + _render_table(["group", "status"], rows)
+        )
+    return "\n\n".join(sections)
+
+
+def _list_groups(args):
+    data = _build_groups_data()
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print(_format_groups_tables(data))
+
+
 def _add_transform_parser(subparsers):
     parser = subparsers.add_parser(
         "transform",
@@ -452,6 +493,33 @@ def _add_transform_parser(subparsers):
         ),
     )
     parser.add_argument(
+        "--exclude-group",
+        action="append",
+        default=None,
+        metavar="GROUP",
+        dest="exclude_groups",
+        help=(
+            "drop a whole rule group (e.g. `activity:phenotype` to stop "
+            "treating phenotypes as activities, or `paths:chaining` to keep "
+            "only single-hop influences). Repeatable. Excluding a group that "
+            "another included group depends on is an error. Run "
+            "`pd2af list-groups` to see the excludable groups per mode."
+        ),
+    )
+    parser.add_argument(
+        "--disable-rule",
+        action="append",
+        default=None,
+        metavar="RULE",
+        dest="exclude_rules",
+        help=(
+            "drop a single rule by identifier (the fine scalpel for the "
+            "whole-with-scalpel table groups, e.g. "
+            "`modulation_kind:celldesigner:catalysis`). Repeatable. Prefer "
+            "`--exclude-group` for coherent behaviors."
+        ),
+    )
+    parser.add_argument(
         "-o",
         "--output",
         default=None,
@@ -477,6 +545,24 @@ def _add_list_modes_parser(subparsers):
     parser.set_defaults(func=_list_modes)
 
 
+def _add_list_groups_parser(subparsers):
+    parser = subparsers.add_parser(
+        "list-groups",
+        help="list, per mode, the excludable and mandatory rule groups",
+        description=(
+            "List the rule groups each transformation mode uses, marked "
+            "excludable (a dependency-graph leaf `--exclude-group` can drop) "
+            "or mandatory (depended-on by another group, so not excludable)."
+        ),
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the listing as JSON instead of human-readable tables",
+    )
+    parser.set_defaults(func=_list_groups)
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -492,6 +578,7 @@ def main(argv=None):
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_transform_parser(subparsers)
     _add_list_modes_parser(subparsers)
+    _add_list_groups_parser(subparsers)
     # Default to the transform subcommand when the first token isn't a known
     # subcommand or a help flag, so `pd2af map.xml` works like
     # `pd2af transform map.xml`.

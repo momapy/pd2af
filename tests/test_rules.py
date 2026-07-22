@@ -183,6 +183,81 @@ def test_registry_registers_all_profiles():
     assert set(registry.profiles) == set(_PROFILES)
 
 
+class TestExcludeGroups:
+    def test_exclude_phenotype_drops_only_that_rule(self):
+        full = pd2af.rules.build_program("keep_species", "celldesigner")
+        pruned = pd2af.rules.build_program(
+            "keep_species", "celldesigner", exclude_groups=("activity:phenotype",)
+        )
+        phenotype_rule = (
+            "hasActivityCandidate(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE)."
+        )
+        assert phenotype_rule in full
+        assert phenotype_rule not in pruned
+        assert set(pruned.splitlines()) == set(full.splitlines()) - {phenotype_rule}
+
+    def test_exclude_paths_chaining_keeps_single_hop_only(self):
+        pruned = pd2af.rules.build_program(
+            "normal", "celldesigner", exclude_groups=("paths:chaining",)
+        )
+        # the multi-hop rule is gone, but the cycle relation it consumed stays.
+        assert "not isCyclicallyTransformedTo" not in pruned
+        assert "isCyclicallyTransformedTo(UPSTREAM, DOWNSTREAM)" in pruned
+
+    def test_exclude_mandatory_group_raises_friendly_error(self):
+        with pytest.raises(ValueError) as excinfo:
+            pd2af.rules.build_program(
+                "keep_species", "celldesigner", exclude_groups=("activity:core",)
+            )
+        message = str(excinfo.value)
+        assert "cannot exclude 'activity:core'" in message
+        assert "required by" in message
+
+    def test_exclude_unregistered_group_raises(self):
+        with pytest.raises(ValueError):
+            pd2af.rules.build_program(
+                "keep_species", "celldesigner", exclude_groups=("does:not:exist",)
+            )
+
+    def test_disable_rule_drops_one_table_entry(self):
+        catalysis = (
+            "hasModulationKind(MODULATION, positivelyInfluences) :- "
+            "catalysis(MODULATION)."
+        )
+        full = pd2af.rules.build_program("keep_species", "celldesigner")
+        pruned = pd2af.rules.build_program(
+            "keep_species",
+            "celldesigner",
+            exclude_rules=("modulation_kind:celldesigner:catalysis",),
+        )
+        assert catalysis in full
+        assert catalysis not in pruned
+
+    def test_disable_unknown_rule_raises(self):
+        with pytest.raises(ValueError):
+            pd2af.rules.build_program(
+                "keep_species", "celldesigner", exclude_rules=("no:such:rule",)
+            )
+
+    @pytest.mark.parametrize("profile", _PROFILES)
+    def test_excludable_groups_are_dependency_leaves(self, profile):
+        registry = pd2af.rules.build_registry()
+        excludable, mandatory = pd2af.rules.get_excludable_groups(profile)
+        included = registry.profiles[profile]
+        assert excludable | mandatory == set(included)
+        assert not (excludable & mandatory)
+        for group_id in included:
+            dependents = {
+                other
+                for other in included
+                if group_id in registry.groups[other].depends_on
+            }
+            if dependents:
+                assert group_id in mandatory
+            else:
+                assert group_id in excludable
+
+
 class TestCasqProfile:
     def test_casq_includes_delete_and_bridged_product(self):
         program = pd2af.rules.build_program("casq")

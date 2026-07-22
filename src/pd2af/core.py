@@ -114,6 +114,8 @@ def transform(
     set_inactive: list[str] | None = None,
     set_all_active: bool = False,
     set_all_inactive: bool = False,
+    exclude_groups: tuple[str, ...] = (),
+    exclude_rules: tuple[str, ...] = (),
 ):
     layout_mode = _normalize_layout_mode(layout_mode)
     is_model_input = isinstance(map_or_model, momapy.core.model.Model)
@@ -147,6 +149,8 @@ def transform(
         set_inactive=set_inactive,
         set_all_active=set_all_active,
         set_all_inactive=set_all_inactive,
+        exclude_groups=exclude_groups,
+        exclude_rules=exclude_rules,
     )
     result = pd2af.build.build_map(
         map_,

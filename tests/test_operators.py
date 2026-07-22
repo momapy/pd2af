@@ -151,8 +151,8 @@ class TestGateRules:
     def test_gates_group_absent_in_casq(self):
         # The _GATES group (operator nodes, input edges, operator-sourced
         # influences) is not registered for casq, so no operator machinery
-        # appears. The gate-input *activation* clause lives in activity_base and
-        # is emitted for casq too, but is inert there -- every casq hasActivity
+        # appears. The gate-input *activation* clause lives in activity:gate_input
+        # and is emitted for casq too, but is inert there -- every casq hasActivity
         # reference is a rule head, never a body condition -- so casq emits 0
         # gates (asserted end-to-end in TestCelldesignerGatesAreAdditive).
         program = pd2af.rules.build_program("casq")

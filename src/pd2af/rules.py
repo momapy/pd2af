@@ -30,7 +30,13 @@ non-CASQ layers.
 
 from textwrap import dedent
 
-from aspcompose import CollectionPlan, Rule, RuleGroup, RuleRegistry
+from aspcompose import (
+    CollectionPlan,
+    PlanInvalidError,
+    Rule,
+    RuleGroup,
+    RuleRegistry,
+)
 
 _NON_CASQ_PROFILES = frozenset(
     {"normal", "normal_no_complex", "keep_species", "keep_species_no_complex"}
@@ -47,18 +53,42 @@ _CASQ_PROFILES = frozenset({"casq"})
 # modifier (CellDesigner-only) is, in SBGN-PD, just a modulation arc whose
 # target is a process (so it folds into the modulation-source rule). A bare
 # reactant/product is never an activity in either language.
-_ACTIVITY_BASE = RuleGroup(
-    identifier="activity_base",
+#
+# The mandatory `activity:core` group holds the candidate->activity bridge and
+# the two global toggles (`--set-all-active`/`--set-all-inactive`); everything
+# depends on it, so the dependency graph makes it non-excludable. Each
+# structural reason (phenotype, active marker, modulation source, gate input) is
+# its own excludable feature-group depending on `activity:core`, so
+# `--exclude-group activity:phenotype` drops exactly the phenotype-as-activity
+# behavior and leaves the rest of the program intact.
+
+
+def _activity_feature(name, *, base=(), cd=(), sbgn=(), docs=""):
+    """One activity feature-group: a structural reason that derives a
+    `hasActivityCandidate`, excludable independently, depending on
+    `activity:core` (its candidate is only meaningful through the bridge)."""
+    variants = {}
+    if cd:
+        variants["celldesigner"] = cd
+    if sbgn:
+        variants["sbgn_pd"] = sbgn
+    return RuleGroup(
+        identifier=f"activity:{name}",
+        profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
+        depends_on=frozenset({"activity:core"}),
+        rules=base,
+        variants=variants,
+        docs=docs,
+    )
+
+
+_ACTIVITY_CORE = RuleGroup(
+    identifier="activity:core",
     profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Decides which species or entity pools become activities, and for what reason. Every signal first derives a `hasActivityCandidate(SPECIES, REASON)`; a single shared bridging rule promotes a candidate to `hasActivity` unless the element is `suppressActivity` (the `--set-inactive` veto). Two global toggles sit alongside: `globalActivate` (`--set-all-active`) turns every top-level species/entity pool into a candidate, and `globalSuppress` (`--set-all-inactive`) suppresses every candidate except those the solver marked `forceActive` (the per-id `--set-active` override), realising the precedence per-id > global > rules. Only the phenotype rule and the two global toggles' bridges are shared; the active-marker, modulation-source, and global-activate rules are per-language variants (CellDesigner: active flag, active structural state, modulation arc, reaction modifier, top-level species; SBGN-PD: active state variable, modulation arc, entity pool).",
+    docs="Mandatory activity machinery: the candidate->activity bridge and the two global toggles. A single bridging rule promotes a `hasActivityCandidate(ELEMENT, REASON)` to `hasActivity` unless the element is `suppressActivity` (the `--set-inactive` veto). `globalSuppress` (`--set-all-inactive`) suppresses every candidate except those the solver marked `forceActive` (the per-id `--set-active` override), realising the precedence per-id > global > rules; `globalActivate` (`--set-all-active`) turns every top-level species/entity pool into a candidate. Every activity feature-group and every downstream group depends on this, so the dependency graph forbids excluding it -- the global toggles stay wired to their CLI flags. The structural-reason rules (phenotype, active marker, modulation source, gate input) live in the excludable `activity:*` feature-groups.",
     rules=(
         Rule(
-            identifier="activity_base:from_phenotype",
-            text="hasActivityCandidate(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE).",
-            docs="A phenotype is always an activity candidate. Both languages emit the `phenotype` signal, so this rule is shared; it fires with reason `isPhenotype`.",
-        ),
-        Rule(
-            identifier="activity_base:from_candidate",
+            identifier="activity:core:from_candidate",
             text=dedent("""\
                 hasActivity(ELEMENT, REASON) :-
                     hasActivityCandidate(ELEMENT, REASON),
@@ -66,7 +96,7 @@ _ACTIVITY_BASE = RuleGroup(
             docs="An activity candidate becomes an actual activity unless it has been vetoed. This is the single interception point for the `--set-inactive` veto (the `suppressActivity` marker; blanket suppression, so it also blocks the `--set-active` `isInputParameter` candidate, which is injected as a candidate). All downstream body references key on `hasActivity`, so they automatically respect suppression.",
         ),
         Rule(
-            identifier="activity_base:from_global_suppress",
+            identifier="activity:core:from_global_suppress",
             text=dedent("""\
                 suppressActivity(ELEMENT) :-
                     hasActivityCandidate(ELEMENT, _),
@@ -78,49 +108,7 @@ _ACTIVITY_BASE = RuleGroup(
     variants={
         "celldesigner": (
             Rule(
-                identifier="activity_base:celldesigner:from_active_flag",
-                text="hasActivityCandidate(SPECIES, isActive) :- species(SPECIES), hasActive(SPECIES, 1).",
-                docs="A species explicitly marked as active is an activity candidate. This fires when its `hasActive` flag is 1 (reason `isActive`).",
-            ),
-            Rule(
-                identifier="activity_base:celldesigner:from_active_structural_state",
-                text=dedent("""\
-                    hasActivityCandidate(SPECIES, hasActiveStructuralState) :-
-                        species(SPECIES),
-                        hasStructuralState(SPECIES, STRUCTURAL_STATE),
-                        hasValue(STRUCTURAL_STATE, "active")."""),
-                docs='A species in an active structural state is an activity candidate. This fires when it carries a structural state whose value is "active" (reason `hasActiveStructuralState`).',
-            ),
-            Rule(
-                identifier="activity_base:celldesigner:from_modulation_source",
-                text=dedent("""\
-                    hasActivityCandidate(SOURCE, isModulationSource) :-
-                        species(SOURCE),
-                        knownOrUnknownModulation(MODULATION),
-                        hasSource(MODULATION, SOURCE),
-                        hasTarget(MODULATION, _)."""),
-                docs="A species that is the source of a modulation arc is an activity candidate. This covers both known and unknown modulations that have some target (reason `isModulationSource`); keying on `knownOrUnknownModulation` rather than `modulation` is what lets the source of an unknown modulation become an activity node.",
-            ),
-            Rule(
-                identifier="activity_base:celldesigner:from_reaction_modulator",
-                text=dedent("""\
-                    hasActivityCandidate(SOURCE, isReactionModulator) :-
-                        species(SOURCE),
-                        knownOrUnknownModulator(MODULATOR),
-                        hasReferredElement(MODULATOR, SOURCE),
-                        hasModifier(_, MODULATOR)."""),
-                docs="A species that modulates a reaction is an activity candidate. This fires when the species is referred to by a reaction modulator, known or unknown, that modifies some target reaction (reason `isReactionModulator`); keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
-            ),
-            Rule(
-                identifier="activity_base:celldesigner:from_gate_input",
-                text=dedent("""\
-                    hasActivityCandidate(ELEMENT, isGateInput) :-
-                        booleanLogicGateInput(INPUT),
-                        hasReferredElement(INPUT, ELEMENT)."""),
-                docs="A species feeding a boolean logic gate is an activity candidate. It fires with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasReferredElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
-            ),
-            Rule(
-                identifier="activity_base:celldesigner:from_global_activate",
+                identifier="activity:core:celldesigner:from_global_activate",
                 text=dedent("""\
                     hasActivityCandidate(SPECIES, isGlobalActive) :-
                         species(SPECIES),
@@ -131,44 +119,7 @@ _ACTIVITY_BASE = RuleGroup(
         ),
         "sbgn_pd": (
             Rule(
-                identifier="activity_base:sbgn_pd:from_active_state_variable",
-                text=dedent("""\
-                    hasActivityCandidate(ENTITY_POOL, hasActiveStateVariable) :-
-                        entityPool(ENTITY_POOL),
-                        hasStateVariable(ENTITY_POOL, STATE_VARIABLE),
-                        hasValue(STATE_VARIABLE, "active")."""),
-                docs='An entity pool in an active state is an activity candidate. This fires when it carries a state variable whose value is "active" (reason `hasActiveStateVariable`) -- the SBGN PD parallel of CellDesigner\'s active structural state.',
-            ),
-            Rule(
-                identifier="activity_base:sbgn_pd:from_active_subunit_state_variable",
-                text=dedent("""\
-                    hasActivityCandidate(SUBUNIT, hasActiveStateVariable) :-
-                        isSubunit(SUBUNIT),
-                        hasStateVariable(SUBUNIT, STATE_VARIABLE),
-                        hasValue(STATE_VARIABLE, "active")."""),
-                docs='A subunit in an active state is an activity candidate. This fires when the subunit carries a state variable whose value is "active". Its complex therefore inherits activity (keep-species), and in the ``*-no-complex`` modes the subunit can be promoted. It is the parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
-            ),
-            Rule(
-                identifier="activity_base:sbgn_pd:from_modulation_source",
-                text=dedent("""\
-                    hasActivityCandidate(SOURCE, isModulationSource) :-
-                        entityPool(SOURCE),
-                        modulation(MODULATION),
-                        hasSource(MODULATION, SOURCE),
-                        hasTarget(MODULATION, _)."""),
-                docs="An entity pool that is the source of a modulation arc is an activity candidate. This fires when the arc's target is a process (reason `isModulationSource`) and is the SBGN PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
-            ),
-            Rule(
-                identifier="activity_base:sbgn_pd:from_operator_input",
-                text=dedent("""\
-                    hasActivityCandidate(ELEMENT, isGateInput) :-
-                        logicalOperatorInput(INPUT),
-                        hasReferredElement(INPUT, ELEMENT),
-                        entityPool(ELEMENT)."""),
-                docs="An entity pool feeding a logical operator is an activity candidate. It fires with reason `isGateInput` -- the SBGN PD parallel of CellDesigner's gate-input activation. The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN PD `hasReferredElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
-            ),
-            Rule(
-                identifier="activity_base:sbgn_pd:from_global_activate",
+                identifier="activity:core:sbgn_pd:from_global_activate",
                 text=dedent("""\
                     hasActivityCandidate(ENTITY_POOL, isGlobalActive) :-
                         entityPool(ENTITY_POOL),
@@ -179,10 +130,128 @@ _ACTIVITY_BASE = RuleGroup(
     },
 )
 
+_ACTIVITY_PHENOTYPE = _activity_feature(
+    "phenotype",
+    base=(
+        Rule(
+            identifier="activity:phenotype:from_phenotype",
+            text="hasActivityCandidate(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE).",
+            docs="A phenotype is always an activity candidate. Both languages emit the `phenotype` signal, so this rule is shared; it fires with reason `isPhenotype`.",
+        ),
+    ),
+    docs="Excludable: a phenotype is an activity candidate (reason `isPhenotype`). Exclude with `--exclude-group activity:phenotype` to stop treating phenotypes as activities.",
+)
+
+_ACTIVITY_ACTIVE_MARKER = _activity_feature(
+    "active_marker",
+    cd=(
+        Rule(
+            identifier="activity:active_marker:celldesigner:from_active_flag",
+            text="hasActivityCandidate(SPECIES, isActive) :- species(SPECIES), hasActive(SPECIES, 1).",
+            docs="A species explicitly marked as active is an activity candidate. This fires when its `hasActive` flag is 1 (reason `isActive`).",
+        ),
+        Rule(
+            identifier="activity:active_marker:celldesigner:from_active_structural_state",
+            text=dedent("""\
+                hasActivityCandidate(SPECIES, hasActiveStructuralState) :-
+                    species(SPECIES),
+                    hasStructuralState(SPECIES, STRUCTURAL_STATE),
+                    hasValue(STRUCTURAL_STATE, "active")."""),
+            docs='A species in an active structural state is an activity candidate. This fires when it carries a structural state whose value is "active" (reason `hasActiveStructuralState`).',
+        ),
+    ),
+    sbgn=(
+        Rule(
+            identifier="activity:active_marker:sbgn_pd:from_active_state_variable",
+            text=dedent("""\
+                hasActivityCandidate(ENTITY_POOL, hasActiveStateVariable) :-
+                    entityPool(ENTITY_POOL),
+                    hasStateVariable(ENTITY_POOL, STATE_VARIABLE),
+                    hasValue(STATE_VARIABLE, "active")."""),
+            docs='An entity pool in an active state is an activity candidate. This fires when it carries a state variable whose value is "active" (reason `hasActiveStateVariable`) -- the SBGN PD parallel of CellDesigner\'s active structural state.',
+        ),
+        Rule(
+            identifier="activity:active_marker:sbgn_pd:from_active_subunit_state_variable",
+            text=dedent("""\
+                hasActivityCandidate(SUBUNIT, hasActiveStateVariable) :-
+                    isSubunit(SUBUNIT),
+                    hasStateVariable(SUBUNIT, STATE_VARIABLE),
+                    hasValue(STATE_VARIABLE, "active")."""),
+            docs='A subunit in an active state is an activity candidate. This fires when the subunit carries a state variable whose value is "active". Its complex therefore inherits activity (keep-species), and in the ``*-no-complex`` modes the subunit can be promoted. It is the parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
+        ),
+    ),
+    docs="Excludable: an explicit active marker makes a species/entity pool an activity candidate (CellDesigner: `hasActive` flag or active structural state; SBGN-PD: active state variable, including on subunits). Exclude with `--exclude-group activity:active_marker`.",
+)
+
+_ACTIVITY_MODULATION_SOURCE = _activity_feature(
+    "modulation_source",
+    cd=(
+        Rule(
+            identifier="activity:modulation_source:celldesigner:from_modulation_source",
+            text=dedent("""\
+                hasActivityCandidate(SOURCE, isModulationSource) :-
+                    species(SOURCE),
+                    knownOrUnknownModulation(MODULATION),
+                    hasSource(MODULATION, SOURCE),
+                    hasTarget(MODULATION, _)."""),
+            docs="A species that is the source of a modulation arc is an activity candidate. This covers both known and unknown modulations that have some target (reason `isModulationSource`); keying on `knownOrUnknownModulation` rather than `modulation` is what lets the source of an unknown modulation become an activity node.",
+        ),
+        Rule(
+            identifier="activity:modulation_source:celldesigner:from_reaction_modulator",
+            text=dedent("""\
+                hasActivityCandidate(SOURCE, isReactionModulator) :-
+                    species(SOURCE),
+                    knownOrUnknownModulator(MODULATOR),
+                    hasReferredElement(MODULATOR, SOURCE),
+                    hasModifier(_, MODULATOR)."""),
+            docs="A species that modulates a reaction is an activity candidate. This fires when the species is referred to by a reaction modulator, known or unknown, that modifies some target reaction (reason `isReactionModulator`); keying on `knownOrUnknownModulator` rather than `modulator` is what lets an unknown catalyzer/inhibitor become an activity node.",
+        ),
+    ),
+    sbgn=(
+        Rule(
+            identifier="activity:modulation_source:sbgn_pd:from_modulation_source",
+            text=dedent("""\
+                hasActivityCandidate(SOURCE, isModulationSource) :-
+                    entityPool(SOURCE),
+                    modulation(MODULATION),
+                    hasSource(MODULATION, SOURCE),
+                    hasTarget(MODULATION, _)."""),
+            docs="An entity pool that is the source of a modulation arc is an activity candidate. This fires when the arc's target is a process (reason `isModulationSource`) and is the SBGN PD parallel of both the CellDesigner modulation-arc and reaction-modifier rules.",
+        ),
+    ),
+    docs="Excludable: the source of a modulation arc (CellDesigner: a modulation arc or a reaction modifier, which in SBGN-PD folds into the same arc-to-process case) is an activity candidate. Exclude with `--exclude-group activity:modulation_source`.",
+)
+
+_ACTIVITY_GATE_INPUT = _activity_feature(
+    "gate_input",
+    cd=(
+        Rule(
+            identifier="activity:gate_input:celldesigner:from_gate_input",
+            text=dedent("""\
+                hasActivityCandidate(ELEMENT, isGateInput) :-
+                    booleanLogicGateInput(INPUT),
+                    hasReferredElement(INPUT, ELEMENT)."""),
+            docs="A species feeding a boolean logic gate is an activity candidate. It fires with reason `isGateInput`. A gate is structurally always an influence/modulation source or reaction modifier, so each of its inputs is an active driver of the downstream target -- a semantic guarantee, not a fallback. The element is activated regardless of kind (species, complex, ion, ...); the carrier rules route each kind. `hasReferredElement` in CellDesigner only relates a gate input to its species, so no extra guard is needed.",
+        ),
+    ),
+    sbgn=(
+        Rule(
+            identifier="activity:gate_input:sbgn_pd:from_operator_input",
+            text=dedent("""\
+                hasActivityCandidate(ELEMENT, isGateInput) :-
+                    logicalOperatorInput(INPUT),
+                    hasReferredElement(INPUT, ELEMENT),
+                    entityPool(ELEMENT)."""),
+            docs="An entity pool feeding a logical operator is an activity candidate. It fires with reason `isGateInput` -- the SBGN PD parallel of CellDesigner's gate-input activation. The `entityPool` guard excludes the deferred nested-operator case: an operator feeding another operator has no activity carrier, so such an input simply dangles. In SBGN PD `hasReferredElement` relates many roles (reactant, product, modulation participant) to entities, so both the `logicalOperatorInput` and `entityPool` guards are needed.",
+        ),
+    ),
+    docs="Excludable: an input feeding a boolean logic gate / logical operator is an activity candidate (reason `isGateInput`). Exclude with `--exclude-group activity:gate_input`.",
+)
+
 _TOPOLOGY = RuleGroup(
     identifier="topology",
     profiles=_NON_CASQ_PROFILES,
-    depends_on=frozenset({"activity_base"}),
+    depends_on=frozenset({"activity:core"}),
     docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendantSubunit`.",
     rules=(
         Rule(
@@ -258,7 +327,7 @@ _TOP_LEVEL = RuleGroup(
 _PREPARATION_COMPLEX = RuleGroup(
     identifier="preparation:complex",
     profiles=frozenset({"normal", "keep_species"}),
-    depends_on=frozenset({"activity_base", "topology", "top_level"}),
+    depends_on=frozenset({"activity:core", "topology", "top_level"}),
     docs="The complex-keeping modes (`normal`, `keep-species`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.",
     rules=(
         Rule(
@@ -299,7 +368,7 @@ _PREPARATION_COMPLEX = RuleGroup(
 _PREPARATION_NO_COMPLEX = RuleGroup(
     identifier="preparation:no_complex",
     profiles=frozenset({"normal_no_complex", "keep_species_no_complex"}),
-    depends_on=frozenset({"activity_base", "topology"}),
+    depends_on=frozenset({"activity:core", "topology"}),
     docs="The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths_complex_traversal`). `normal-no-complex` and `keep-species-no-complex` share these keys and differ only at the build stage, where `normal-no-complex` strips PTM decorations and merges content-equal results while `keep-species-no-complex` keeps the decorations.",
     rules=(
         Rule(
@@ -379,7 +448,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
 _MODULATION_KIND = RuleGroup(
     identifier="modulation_kind",
     profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives. Every pipeline that emits a modulation-arc influence (`paths_base` for the non-casq modes, `casq:influences` for casq) reads this relation rather than re-encoding the mapping. The mapping is per-language: CellDesigner arcs carry the sign in the arc type (catalysis, inhibition, ...), while an SBGN-PD arc's kind comes from its stimulation/inhibition/necessary-stimulation classification.",
+    docs="Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives. Every pipeline that emits a modulation-arc influence (`paths:core` for the non-casq modes, `casq:influences` for casq) reads this relation rather than re-encoding the mapping. The mapping is per-language: CellDesigner arcs carry the sign in the arc type (catalysis, inhibition, ...), while an SBGN-PD arc's kind comes from its stimulation/inhibition/necessary-stimulation classification.",
     rules=(),
     variants={
         "celldesigner": (
@@ -506,13 +575,16 @@ _MODULATION_KIND = RuleGroup(
 # species), an SBGN-PD modulation arc's source is an entity pool and its target
 # is a *process*; the influence therefore propagates to the process's products
 # (or, when the target is a phenotype, to the phenotype itself). These live in
-# the `sbgn_pd` variant of `paths_base` because the CellDesigner modulation-arc
+# the `sbgn_pd` variant of `paths:core` because the CellDesigner modulation-arc
 # rules would misfire on PD facts (their `catalysis`/`inhibition`/`modulation`
 # functors match PD modulations, but PD targets are processes, yielding spurious
 # edges).
-_PATHS_BASE_SBGN_PD = (
+# The SBGN-PD `paths:core` variant rules: the single reactant->product hop and
+# the two modulation-arc emitters. The multi-hop `transitive_through_process`
+# rule is excludable and lives in the `paths:chaining` group's SBGN-PD variant.
+_PATHS_CORE_SBGN_PD = (
     Rule(
-        identifier="paths_base:sbgn_pd:modulation_to_product",
+        identifier="paths:core:sbgn_pd:modulation_to_product",
         text=dedent("""\
             propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, INFLUENCE_KIND) :-
                 hasModulationKind(MODULATION, INFLUENCE_KIND),
@@ -523,7 +595,7 @@ _PATHS_BASE_SBGN_PD = (
         docs="A modulation arc's entity-pool source influences each product of its target process, carrying the arc's kind.",
     ),
     Rule(
-        identifier="paths_base:sbgn_pd:modulation_to_phenotype",
+        identifier="paths:core:sbgn_pd:modulation_to_phenotype",
         text=dedent("""\
             propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, INFLUENCE_KIND) :-
                 hasModulationKind(MODULATION, INFLUENCE_KIND),
@@ -533,7 +605,7 @@ _PATHS_BASE_SBGN_PD = (
         docs="A modulation arc whose target is a phenotype influences the phenotype itself (a phenotype process has no products; it is the activity).",
     ),
     Rule(
-        identifier="paths_base:sbgn_pd:is_directly_transformed_to",
+        identifier="paths:core:sbgn_pd:is_directly_transformed_to",
         text=dedent("""\
             isDirectlyTransformedTo(UPSTREAM_ENTITY_POOL, DOWNSTREAM_ENTITY_POOL) :-
                 hasReactant(PROCESS, REACTANT),
@@ -542,30 +614,17 @@ _PATHS_BASE_SBGN_PD = (
                 hasReferredElement(PRODUCT, DOWNSTREAM_ENTITY_POOL)."""),
         docs="The single reactant->product hop in the production graph: the upstream entity pool is an element of a reactant and the downstream pool an element of a product of the same process. Passive voice (the process does the transforming, not the pool) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
     ),
-    Rule(
-        identifier="paths_base:sbgn_pd:transitive_through_process",
-        text=dedent("""\
-            propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, OUTGOING_INFLUENCE_KIND) :-
-                propagatesInfluence(SOURCE_ENTITY_POOL, INTERMEDIATE_ENTITY_POOL, INCOMING_INFLUENCE_KIND),
-                composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
-                hasReactant(PROCESS, REACTANT),
-                hasReferredElement(REACTANT, INTERMEDIATE_ENTITY_POOL),
-                hasProduct(PROCESS, PRODUCT),
-                hasReferredElement(PRODUCT, TARGET_ENTITY_POOL),
-                not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)."""),
-        docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences). Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
-    ),
 )
 
 
-_PATHS_BASE = RuleGroup(
-    identifier="paths_base",
+_PATHS_CORE = RuleGroup(
+    identifier="paths:core",
     profiles=_NON_CASQ_PROFILES,
     depends_on=frozenset({"modulation_kind"}),
-    docs="Builds the kinded `propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND)` relation from PD reactions and modulation arcs. INFLUENCE_KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Reactant-chained transitivity extends paths through reactions, degrading `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at each reaction hop via `composesTo`. Transitive extension is gated by the production-cycle relations: each variant defines the single reactant->product hop `isDirectlyTransformedTo/2`, the shared `isTransformedTo/2` is its transitive closure, and `isCyclicallyTransformedTo/2` marks the hops that lie inside a cycle so transitivity never propagates influence back around a production loop.",
+    docs="Builds the direct (single-hop) kinded `propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND)` relation from PD reactions and modulation arcs, plus the production-cycle relations that gate transitive extension. INFLUENCE_KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Each variant defines the single reactant->product hop `isDirectlyTransformedTo/2`, the shared `isTransformedTo/2` is its transitive closure, and `isCyclicallyTransformedTo/2` marks the hops that lie inside a cycle so transitivity never propagates influence back around a production loop. The multi-hop reactant-chained transitivity itself is the excludable `paths:chaining` group.",
     rules=(
         Rule(
-            identifier="paths_base:is_transformed_to",
+            identifier="paths:core:is_transformed_to",
             text=dedent("""\
                 isTransformedTo(UPSTREAM, DOWNSTREAM) :- isDirectlyTransformedTo(UPSTREAM, DOWNSTREAM).
                 isTransformedTo(UPSTREAM, DOWNSTREAM) :-
@@ -574,7 +633,7 @@ _PATHS_BASE = RuleGroup(
             docs="Transitive closure of the single-hop `isDirectlyTransformedTo/2`: `isTransformedTo(UPSTREAM, DOWNSTREAM)` holds when DOWNSTREAM is reachable from UPSTREAM through one or more reactant->product hops (the direct hop included, as the base case). Language-agnostic; `isDirectlyTransformedTo/2` is supplied per language variant. Depends only on `isDirectlyTransformedTo`, never on `propagatesInfluence`, so the negation that gates transitivity stays stratified.",
         ),
         Rule(
-            identifier="paths_base:is_cyclically_transformed_to",
+            identifier="paths:core:is_cyclically_transformed_to",
             text=dedent("""\
                 isCyclicallyTransformedTo(UPSTREAM, DOWNSTREAM) :-
                     isTransformedTo(UPSTREAM, DOWNSTREAM),
@@ -582,7 +641,7 @@ _PATHS_BASE = RuleGroup(
             docs="UPSTREAM and DOWNSTREAM are mutually reachable through the production graph -- both lie on a common cycle. At every transitivity guard site the hop in question is already a direct reactant->product edge, so requiring mutual reachability there is exactly equivalent to 'this hop is on a cycle'. The transitivity rules forbid extending a path across such a hop, blocking influence from leaking around production loops.",
         ),
         Rule(
-            identifier="paths_base:composes_to",
+            identifier="paths:core:composes_to",
             text=dedent("""\
                 composesTo(positivelyInfluences, positivelyInfluences).
                 composesTo(negativelyInfluences, negativelyInfluences).
@@ -596,10 +655,10 @@ _PATHS_BASE = RuleGroup(
         ),
     ),
     variants={
-        "sbgn_pd": _PATHS_BASE_SBGN_PD,
+        "sbgn_pd": _PATHS_CORE_SBGN_PD,
         "celldesigner": (
         Rule(
-            identifier="paths_base:celldesigner:catalyzer_to_product",
+            identifier="paths:core:celldesigner:catalyzer_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     reaction(REACTION),
@@ -611,7 +670,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by a catalyzer of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:physical_stimulator_to_product",
+            identifier="paths:core:celldesigner:physical_stimulator_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     reaction(REACTION),
@@ -623,7 +682,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:trigger_to_product",
+            identifier="paths:core:celldesigner:trigger_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, triggers) :-
                     reaction(REACTION),
@@ -635,7 +694,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by a trigger of a reaction and another species is referred to by a product of that reaction, then there is a triggering path from the first to the second (a trigger→product edge is direct, so it keeps the `triggering` kind).",
         ),
         Rule(
-            identifier="paths_base:celldesigner:modulation_arc_influence",
+            identifier="paths:core:celldesigner:modulation_arc_influence",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND) :-
                     hasModulationKind(MODULATION, INFLUENCE_KIND),
@@ -644,7 +703,7 @@ _PATHS_BASE = RuleGroup(
             docs="A modulation arc influences its target with the arc's kind (`hasModulationKind`, from the `modulation_kind` group). This covers every arc type -- catalysis/physical stimulation/positive influence give `positive`, triggering gives `triggering`, inhibition/negative influence give `negative`, a bare modulation gives `modulation`, and the `unknown*` twins give the `unknown_*` kinds. The reaction modifier->product rules and the transitive/cycle rules remain separate.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:inhibitor_to_product",
+            identifier="paths:core:celldesigner:inhibitor_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, negativelyInfluences) :-
                     reaction(REACTION),
@@ -656,7 +715,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by an inhibitor of a reaction and another species is referred to by a product of that reaction, then there is a negative path from the first to the second.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:modulator_to_product",
+            identifier="paths:core:celldesigner:modulator_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, modulates) :-
                     reaction(REACTION),
@@ -671,7 +730,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by a *bare* modulator of a reaction (a generic MODULATION modifier — not a physical stimulator, inhibitor or trigger; catalyzers are physical stimulators) and another species is referred to by a product of that reaction, then there is a modulation path from the first to the second.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:unknown_catalyzer_to_product",
+            identifier="paths:core:celldesigner:unknown_catalyzer_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownPositivelyInfluences) :-
                     reaction(REACTION),
@@ -683,7 +742,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by an unknown catalyzer of a reaction and another species is referred to by a product of that reaction, then there is an unknown-positive path from the first to the second.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:unknown_inhibitor_to_product",
+            identifier="paths:core:celldesigner:unknown_inhibitor_to_product",
             text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownNegativelyInfluences) :-
                     reaction(REACTION),
@@ -695,7 +754,7 @@ _PATHS_BASE = RuleGroup(
             docs="If a species is referred to by an unknown inhibitor of a reaction and another species is referred to by a product of that reaction, then there is an unknown-negative path from the first to the second.",
         ),
         Rule(
-            identifier="paths_base:celldesigner:is_directly_transformed_to",
+            identifier="paths:core:celldesigner:is_directly_transformed_to",
             text=dedent("""\
                 isDirectlyTransformedTo(UPSTREAM_SPECIES, DOWNSTREAM_SPECIES) :-
                     reaction(REACTION),
@@ -705,20 +764,51 @@ _PATHS_BASE = RuleGroup(
                     hasReferredElement(PRODUCT, DOWNSTREAM_SPECIES)."""),
             docs="The single reactant->product hop in the production graph: the upstream species is referred to by a reactant and the downstream species by a product of the same reaction. Passive voice (the reaction does the transforming, not the species) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
         ),
-        Rule(
-            identifier="paths_base:celldesigner:transitive_through_reaction",
-            text=dedent("""\
-                propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, OUTGOING_INFLUENCE_KIND) :-
-                    propagatesInfluence(SOURCE_SPECIES, INTERMEDIATE_SPECIES, INCOMING_INFLUENCE_KIND),
-                    composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
-                    reaction(REACTION),
-                    hasReactant(REACTION, REACTANT),
-                    hasReferredElement(REACTANT, INTERMEDIATE_SPECIES),
-                    hasProduct(REACTION, PRODUCT),
-                    hasReferredElement(PRODUCT, TARGET_SPECIES),
-                    not isCyclicallyTransformedTo(INTERMEDIATE_SPECIES, TARGET_SPECIES)."""),
-            docs="If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. The kind is carried through `composesTo`, which degrades `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at the reaction hop while leaving every other kind unchanged. Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
         ),
+    },
+)
+
+# Multi-hop path chaining: extends a `propagatesInfluence` path across one more
+# reactant->product hop. Excludable -- dropping it leaves only single-hop
+# influences. It consumes `composesTo` and `not isCyclicallyTransformedTo`, both
+# supplied by `paths:core`, so excluding it never breaks the core relations.
+_PATHS_CHAINING = RuleGroup(
+    identifier="paths:chaining",
+    profiles=_NON_CASQ_PROFILES,
+    depends_on=frozenset({"paths:core"}),
+    docs="Excludable multi-hop transitivity: extends a `propagatesInfluence` path through one more reactant->product hop (a reaction in CellDesigner, a process in SBGN-PD), carrying the kind via `composesTo` (triggering degrades to positivelyInfluences) and refusing to extend across a hop inside a production cycle (`not isCyclicallyTransformedTo`). Exclude with `--exclude-group paths:chaining` to keep only direct single-hop influences. Depends on `paths:core`, which supplies both `composesTo` and the cycle relations.",
+    rules=(),
+    variants={
+        "celldesigner": (
+            Rule(
+                identifier="paths:chaining:celldesigner:transitive_through_reaction",
+                text=dedent("""\
+                    propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, OUTGOING_INFLUENCE_KIND) :-
+                        propagatesInfluence(SOURCE_SPECIES, INTERMEDIATE_SPECIES, INCOMING_INFLUENCE_KIND),
+                        composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
+                        reaction(REACTION),
+                        hasReactant(REACTION, REACTANT),
+                        hasReferredElement(REACTANT, INTERMEDIATE_SPECIES),
+                        hasProduct(REACTION, PRODUCT),
+                        hasReferredElement(PRODUCT, TARGET_SPECIES),
+                        not isCyclicallyTransformedTo(INTERMEDIATE_SPECIES, TARGET_SPECIES)."""),
+                docs="If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. The kind is carried through `composesTo`, which degrades `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at the reaction hop while leaving every other kind unchanged. Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
+            ),
+        ),
+        "sbgn_pd": (
+            Rule(
+                identifier="paths:chaining:sbgn_pd:transitive_through_process",
+                text=dedent("""\
+                    propagatesInfluence(SOURCE_ENTITY_POOL, TARGET_ENTITY_POOL, OUTGOING_INFLUENCE_KIND) :-
+                        propagatesInfluence(SOURCE_ENTITY_POOL, INTERMEDIATE_ENTITY_POOL, INCOMING_INFLUENCE_KIND),
+                        composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND),
+                        hasReactant(PROCESS, REACTANT),
+                        hasReferredElement(REACTANT, INTERMEDIATE_ENTITY_POOL),
+                        hasProduct(PROCESS, PRODUCT),
+                        hasReferredElement(PRODUCT, TARGET_ENTITY_POOL),
+                        not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)."""),
+                docs="Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences). Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes.",
+            ),
         ),
     },
 )
@@ -726,7 +816,7 @@ _PATHS_BASE = RuleGroup(
 _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     identifier="paths_complex_traversal",
     profiles=frozenset({"normal_no_complex", "keep_species_no_complex"}),
-    depends_on=frozenset({"paths_base"}),
+    depends_on=frozenset({"paths:core"}),
     docs="Extends paths through complex containment for the ``*-no-complex`` profiles: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
     rules=(
         Rule(
@@ -753,7 +843,7 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
 _INFLUENCES_DERIVATION = RuleGroup(
     identifier="influences_derivation",
     profiles=_NON_CASQ_PROFILES,
-    depends_on=frozenset({"paths_base"}),
+    depends_on=frozenset({"paths:core"}),
     docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation from kinded paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant — in both cases only reactants that are themselves activities; the unknown modifiers contribute the unknown twins). The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
     rules=(
         Rule(
@@ -934,7 +1024,7 @@ _INFLUENCE_OUTPUT = RuleGroup(
 #   (b) input edges -- each gate input resolved through carrier/key (mirroring
 #       `influences_derivation:path`);
 #   (c) operator-sourced influence -- ONE rule that *reuses* `propagatesInfluence/3`: the
-#       `paths_base` rules already emit `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` (the source
+#       `paths:core` rules already emit `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` (the source
 #       binds to whatever the modifier refers to / the modulation source -- gate
 #       included), so `_GATES` only resolves the TARGET through carrier/key and
 #       writes `influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND)` directly,
@@ -953,7 +1043,7 @@ _INFLUENCE_OUTPUT = RuleGroup(
 _GATES = RuleGroup(
     identifier="gates",
     profiles=_NON_CASQ_PROFILES,
-    depends_on=frozenset({"activity_base", "paths_base"}),
+    depends_on=frozenset({"activity:core", "paths:core"}),
     docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic and registered for the non-casq profiles only.",
     rules=(),
     variants={
@@ -997,7 +1087,7 @@ _GATES = RuleGroup(
                         propagatesInfluence(OPERATOR, TARGET_SPECIES, INFLUENCE_KIND),
                         hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                         hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths_base` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key.",
+                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key.",
             ),
         ),
         "sbgn_pd": (
@@ -1035,7 +1125,7 @@ _GATES = RuleGroup(
                         propagatesInfluence(OPERATOR, TARGET_ENTITY_POOL, INFLUENCE_KIND),
                         hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
                         hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths_base`, resolving only the target through carrier/key.",
+                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths:core`, resolving only the target through carrier/key.",
             ),
         ),
     },
@@ -1455,13 +1545,18 @@ def build_registry() -> RuleRegistry:
     registry = RuleRegistry()
     registry.register(
         [
-            _ACTIVITY_BASE,
+            _ACTIVITY_CORE,
+            _ACTIVITY_PHENOTYPE,
+            _ACTIVITY_ACTIVE_MARKER,
+            _ACTIVITY_MODULATION_SOURCE,
+            _ACTIVITY_GATE_INPUT,
             _TOPOLOGY,
             _TOP_LEVEL,
             _PREPARATION_COMPLEX,
             _PREPARATION_NO_COMPLEX,
             _MODULATION_KIND,
-            _PATHS_BASE,
+            _PATHS_CORE,
+            _PATHS_CHAINING,
             _PATHS_COMPLEX_TRAVERSAL,
             _INFLUENCES_DERIVATION,
             _INFLUENCE_OUTPUT,
@@ -1482,7 +1577,54 @@ def build_registry() -> RuleRegistry:
     return registry
 
 
-def build_program(profile: str, language: str = "celldesigner") -> str:
+def get_excludable_groups(profile: str) -> tuple[frozenset[str], frozenset[str]]:
+    """Return ``(excludable, mandatory)`` group ids for a profile.
+
+    A group is *mandatory* when another included group depends on it (the
+    dependency graph forbids excluding it — ``resolve`` would raise
+    ``excluded_dependency``); every other included group is an *excludable*
+    leaf that ``--exclude-group`` can drop cleanly.
+    """
+    registry = build_registry()
+    included = registry.profiles.get(profile)
+    if included is None:
+        raise ValueError(f"unknown transformation mode profile {profile!r}")
+    depended_on: set[str] = set()
+    for group_id in included:
+        for dependency in registry.groups[group_id].depends_on:
+            if dependency in included:
+                depended_on.add(dependency)
+    mandatory = frozenset(depended_on)
+    excludable = frozenset(included) - mandatory
+    return excludable, mandatory
+
+
+def _friendly_exclusion_message(error: PlanInvalidError) -> str:
+    """Turn an ``excluded_dependency`` failure into an actionable message."""
+    required_by: dict[str, list[str]] = {}
+    other_issues: list[str] = []
+    for issue in error.issues:
+        if issue.kind == "excluded_dependency":
+            group_id, dependency = issue.groups
+            required_by.setdefault(dependency, []).append(group_id)
+        else:
+            other_issues.append(issue.message)
+    lines = []
+    for dependency, dependents in sorted(required_by.items()):
+        lines.append(
+            f"cannot exclude '{dependency}' — required by "
+            + ", ".join(sorted(dependents))
+        )
+    lines.extend(other_issues)
+    return "\n".join(lines) or str(error)
+
+
+def build_program(
+    profile: str,
+    language: str = "celldesigner",
+    exclude_groups: tuple[str, ...] = (),
+    exclude_rules: tuple[str, ...] = (),
+) -> str:
     """Return the composed ASP program text for the given profile and
     input ``language``.
 
@@ -1491,8 +1633,30 @@ def build_program(profile: str, language: str = "celldesigner") -> str:
     are emitted for every language; language-specific rules live in
     ``variants={"celldesigner": ..., "sbgn_pd": ...}`` and are selected
     here by ``resolve(variant=language)``.
+
+    ``exclude_groups`` drops whole rule groups (the primary toggle: each
+    excludable group is a coherent functional unit); excluding a group that
+    another included group depends on raises ``ValueError`` with a friendly
+    message. ``exclude_rules`` is a finer scalpel that drops individual rules
+    by identifier (used for the whole-with-scalpel table groups); an id that
+    does not name a resolved rule raises ``ValueError``.
     """
     registry = build_registry()
     plan = CollectionPlan(registry)
     plan.add_profile(profile)
-    return "\n".join(rule.text for rule in plan.resolve(variant=language))
+    for group_id in exclude_groups:
+        plan.exclude_group(group_id)
+    try:
+        resolved = plan.resolve(variant=language)
+    except PlanInvalidError as error:
+        raise ValueError(_friendly_exclusion_message(error)) from error
+    if exclude_rules:
+        resolved_ids = {rule.identifier for rule in resolved}
+        unknown = sorted(set(exclude_rules) - resolved_ids)
+        if unknown:
+            raise ValueError(
+                "unknown rule id(s) for --disable-rule: " + ", ".join(unknown)
+            )
+        excluded = set(exclude_rules)
+        resolved = [rule for rule in resolved if rule.identifier not in excluded]
+    return "\n".join(rule.text for rule in resolved)

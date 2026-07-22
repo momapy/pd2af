@@ -19,7 +19,7 @@ sentences are written as pure natural language in ``pd2af.rules``.
 import mkdocs_gen_files
 
 from pd2af.cli import _INPUT_LANGUAGE_DISPLAY_NAMES, _MODE_CHOICES
-from pd2af.rules import build_registry
+from pd2af.rules import build_registry, get_excludable_groups
 
 PAGE_PATH = "rules.md"
 
@@ -78,6 +78,31 @@ def mode_to_profile(mode):
     return mode.replace("-", "_")
 
 
+def concern_of(group_identifier):
+    """The coarse concern a group belongs to: its id prefix before the first
+    ``:`` (documentation-only clustering), or the whole id when there is none."""
+    return group_identifier.split(":", 1)[0]
+
+
+def registry_depended_on(registry):
+    """The set of group ids that some other registered group depends on.
+
+    A depended-on group is *mandatory* — the dependency graph forbids excluding
+    it; every other group is an *excludable* leaf.
+    """
+    depended_on = set()
+    for group in registry.groups.values():
+        for dependency in group.depends_on:
+            if dependency in registry.groups:
+                depended_on.add(dependency)
+    return depended_on
+
+
+def group_status(group_identifier, depended_on):
+    """``"mandatory"`` if some group depends on this one, else ``"excludable"``."""
+    return "mandatory" if group_identifier in depended_on else "excludable"
+
+
 def modes_for_group(group):
     """The modes a group is used in, as ``"all"`` or an enumerated cell."""
     modes = [
@@ -95,7 +120,11 @@ def write_intro(page):
         "[ASP](https://en.wikipedia.org/wiki/Answer_set_programming)). Every "
         "rule is language-agnostic (a *base* rule) or specific to an input "
         "language (a *variant* rule, for CellDesigner or SBGN PD). Rules are "
-        "organized in groups, each representing a coherent functional unit.\n\n"
+        "organized in groups, each representing a coherent functional unit — "
+        "the whole a `--exclude-group` can drop. A group is *excludable* (a "
+        "dependency-graph leaf) or *mandatory* (depended on by another group, "
+        "so not excludable). Groups sharing an id prefix (`activity:*`, "
+        "`paths:*`, `casq:*`) address one coarse concern.\n\n"
     )
     page.write(
         "This page is generated from the live registry in `pd2af.rules`. It "
@@ -110,11 +139,13 @@ def write_by_mode(page, registry):
     for mode in _MODE_CHOICES:
         profile = mode_to_profile(mode)
         group_identifiers = registry.profiles.get(profile, frozenset())
+        excludable, _mandatory = get_excludable_groups(profile)
         page.write(f"### `{mode}`\n\n")
         for group in registry.groups.values():
             if group.identifier not in group_identifiers:
                 continue
-            page.write(f"**`{group.identifier}`**\n\n")
+            status = "excludable" if group.identifier in excludable else "mandatory"
+            page.write(f"**`{group.identifier}`** ({status})\n\n")
             page.write(f"{make_first_sentence(group.docs)}\n\n")
             page.write("| Rule | Variant |\n")
             page.write("| --- | --- |\n")
@@ -127,8 +158,15 @@ def write_by_mode(page, registry):
 
 def write_canonical_reference(page, registry):
     page.write("## Rule groups {#rule-groups}\n\n")
+    depended_on = registry_depended_on(registry)
+    current_concern = None
     for group in registry.groups.values():
-        page.write(f"### `{group.identifier}`\n\n")
+        concern = concern_of(group.identifier)
+        if concern != current_concern:
+            page.write(f"### `{concern}` {{#concern-{concern}}}\n\n")
+            current_concern = concern
+        status = group_status(group.identifier, depended_on)
+        page.write(f"#### `{group.identifier}` ({status})\n\n")
         if group.docs:
             page.write(f"{group.docs}\n\n")
         page.write("| Rule | Variant | Documentation |\n")
