@@ -6,6 +6,7 @@ import momapy.core.model
 import momapy.sbgn.pd
 import momapy.utils
 
+import pd2af.annotations
 import pd2af.build
 import pd2af.languages
 import pd2af.solver
@@ -19,19 +20,28 @@ class TransformerResult:
         obj: The transformed map (``CellDesignerMap`` or ``SBGNAFMap``), or
             the transformed model (``CellDesignerModel`` or ``SBGNAFModel``)
             when the input was a bare model rather than a map.
-        provenance: Maps each input PD/CD model element to the
-            ``frozenset`` of output AF model elements derived from it.
-            Several input elements may map to one output element because
-            the merged modes content-dedup their results (many-to-one);
-            use ``.inverse`` (``id(output_element) -> frozenset`` of input
-            elements) for the result-to-source direction. Input elements
-            are valid keys because momapy's reader enforces the model-dedup
-            invariant, so no two content-equal-but-distinct elements coexist
-            in a single input map.
+        provenance: Maps each output AF model element to the ``frozenset`` of
+            input PD/CD model elements it derives from -- the "where did this
+            come from" direction. Several inputs map to one output because the
+            merged modes content-dedup their results (many-to-one); the origin
+            direction is thus the multi-valued one and is the forward index.
+            Use ``.inverse`` (``id(input_element) -> frozenset`` of output
+            elements) for the source-to-result direction. Output elements are
+            valid keys because they are interned by content, so no two
+            content-equal-but-distinct elements coexist.
+        element_to_annotations: Maps each output model element to the
+            ``frozenset`` of RDF annotations carried from its input source(s),
+            keyed the way momapy's writer expects (``None`` unless input
+            annotations were passed to :func:`transform`).
+        element_to_notes: Maps each output model element to the ``frozenset``
+            of notes carried from its input source(s) (``None`` unless input
+            notes were passed to :func:`transform`).
     """
 
     obj: typing.Any = None
     provenance: momapy.utils.FrozenIdentityMultiDict | None = None
+    element_to_annotations: dict | None = None
+    element_to_notes: dict | None = None
 
 
 _TRANSFORMATION_MODES = frozenset(
@@ -116,6 +126,8 @@ def transform(
     set_all_inactive: bool = False,
     exclude_groups: tuple[str, ...] = (),
     exclude_rules: tuple[str, ...] = (),
+    element_to_annotations=None,
+    element_to_notes=None,
 ):
     layout_mode = _normalize_layout_mode(layout_mode)
     is_model_input = isinstance(map_or_model, momapy.core.model.Model)
@@ -160,8 +172,23 @@ def transform(
         influence_pairing,
         mode=mode,
     )
+    (
+        output_element_to_annotations,
+        output_element_to_notes,
+    ) = pd2af.annotations.carry_annotations_through_provenance(
+        result.provenance,
+        element_to_annotations,
+        element_to_notes,
+        input_map=map_,
+        output_map=result.obj,
+    )
+    result.element_to_annotations = output_element_to_annotations
+    result.element_to_notes = output_element_to_notes
     if is_model_input:
         return TransformerResult(
-            obj=result.obj.model, provenance=result.provenance
+            obj=result.obj.model,
+            provenance=result.provenance,
+            element_to_annotations=output_element_to_annotations,
+            element_to_notes=output_element_to_notes,
         )
     return result

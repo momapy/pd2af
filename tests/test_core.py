@@ -3,6 +3,8 @@ import os
 import pytest
 
 import momapy.celldesigner
+import momapy.io.core
+from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
 
@@ -503,29 +505,33 @@ class TestTransformIsPure:
 
 
 class TestProvenance:
-    """TransformerResult.provenance maps each input element to the output AF
-    elements derived from it; every value is a real element of the output
-    model and the inverse round-trips."""
+    """TransformerResult.provenance maps each output AF element to the input
+    elements it derives from; every key is a real element of the output model
+    and the inverse round-trips."""
 
-    def test_provenance_values_are_model_elements(self, example_cd_map):
+    def test_provenance_keys_are_output_model_elements(self, example_cd_map):
         result = pd2af.transform(
             example_cd_map, mode="keep-species", layout_mode=None
         )
         model = result.obj.model
-        model_elements = set(model.species) | set(model.boolean_logic_gates)
-        assert result.provenance  # at least one input produced an activity
-        for output_elements in result.provenance.values():
-            assert output_elements <= model_elements
+        output_elements = (
+            set(model.species)
+            | set(model.boolean_logic_gates)
+            | set(model.compartments)
+        )
+        assert result.provenance  # at least one output has a traced source
+        for output_element in result.provenance:
+            assert output_element in output_elements
 
     def test_inverse_round_trips(self, example_cd_map):
         result = pd2af.transform(
             example_cd_map, mode="keep-species", layout_mode=None
         )
-        for input_element, output_elements in result.provenance.items():
-            for output_element in output_elements:
+        for output_element, input_elements in result.provenance.items():
+            for input_element in input_elements:
                 assert (
-                    input_element
-                    in result.provenance.inverse[id(output_element)]
+                    output_element
+                    in result.provenance.inverse[id(input_element)]
                 )
 
 
@@ -549,12 +555,14 @@ class TestTransformModelInput:
 
     def test_provenance_available_for_model_input(self, example_cd_map):
         result = pd2af.transform(example_cd_map.model, mode="keep-species")
-        model_elements = set(result.obj.species) | set(
-            result.obj.boolean_logic_gates
+        output_elements = (
+            set(result.obj.species)
+            | set(result.obj.boolean_logic_gates)
+            | set(result.obj.compartments)
         )
         assert result.provenance
-        for output_elements in result.provenance.values():
-            assert output_elements <= model_elements
+        for output_element in result.provenance:
+            assert output_element in output_elements
 
     @pytest.mark.parametrize("layout_mode", ["dot", "plain", "overlay"])
     def test_rejects_explicit_layout_mode(self, example_cd_map, layout_mode):
@@ -569,3 +577,99 @@ class TestTransformModelInput:
             example_cd_map.model, mode="keep-species", layout_mode=layout_mode
         )
         assert isinstance(result.obj, momapy.celldesigner.CellDesignerModel)
+
+
+class TestAnnotationCarry:
+    """Input RDF annotations and notes are carried onto the output elements
+    they derive from, through the transform's provenance, and survive a
+    round-trip write/read."""
+
+    @pytest.fixture(scope="class")
+    def annotated_reader_result(self):
+        # JNK_pathway carries RDF annotations and notes on top-level species.
+        return momapy.io.core.read(os.path.join(MAPS_DIR, "JNK_pathway.xml"))
+
+    def test_keep_species_carries_species_annotations(
+        self, annotated_reader_result
+    ):
+        reader_result = annotated_reader_result
+        result = pd2af.transform(
+            reader_result.obj,
+            mode="keep-species",
+            layout_mode=None,
+            element_to_annotations=reader_result.element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        assert result.element_to_annotations  # something was carried
+        # every carried bucket is exactly the union of its provenance sources'
+        for output_element, annotations in result.element_to_annotations.items():
+            expected = frozenset()
+            for source in result.provenance.get(output_element, ()):
+                expected |= reader_result.element_to_annotations.get(
+                    source, frozenset()
+                )
+            assert annotations == expected
+        # at least one carried element is a top-level species (not just the map)
+        species = set(result.obj.model.species)
+        assert any(
+            output_element in species
+            for output_element in result.element_to_annotations
+        )
+
+    def test_carries_compartment_annotation(self, annotated_reader_result):
+        reader_result = annotated_reader_result
+        input_compartments = list(reader_result.obj.model.compartments)
+        assert input_compartments
+        target_compartment = input_compartments[0]
+        annotation = RDFAnnotation(
+            qualifier=BQBiol.IS,
+            resources=frozenset(["urn:miriam:go:GO:0005737"]),
+        )
+        # Inject a compartment annotation the source map does not carry.
+        element_to_annotations = dict(reader_result.element_to_annotations or {})
+        element_to_annotations[target_compartment] = frozenset([annotation])
+        result = pd2af.transform(
+            reader_result.obj,
+            mode="keep-species",
+            layout_mode=None,
+            element_to_annotations=element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        # the output compartment (content-equal to the input) carries it
+        assert annotation in result.element_to_annotations.get(
+            target_compartment, frozenset()
+        )
+
+    def test_round_trip_preserves_a_species_annotation(
+        self, annotated_reader_result, tmp_path
+    ):
+        reader_result = annotated_reader_result
+        result = pd2af.transform(
+            reader_result.obj,
+            mode="keep-species",
+            layout_mode="plain",
+            element_to_annotations=reader_result.element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        species = set(result.obj.model.species)
+        carried_species = [
+            output_element
+            for output_element in result.element_to_annotations
+            if output_element in species
+            and result.element_to_annotations[output_element]
+        ]
+        assert carried_species
+        target_species = carried_species[0]
+        expected_annotations = result.element_to_annotations[target_species]
+        path = str(tmp_path / "out.xml")
+        momapy.io.core.write(
+            result.obj,
+            path,
+            writer="celldesigner",
+            element_to_annotations=result.element_to_annotations,
+            element_to_notes=result.element_to_notes,
+        )
+        reread = momapy.io.core.read(path)  # must not raise
+        assert (reread.element_to_annotations or {}).get(
+            target_species
+        ) == expected_annotations

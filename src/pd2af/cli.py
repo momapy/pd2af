@@ -183,13 +183,24 @@ def _run(args):
         set_all_inactive=args.set_all_inactive,
         exclude_groups=tuple(args.exclude_groups or ()),
         exclude_rules=tuple(args.exclude_rules or ()),
+        element_to_annotations=reader_result.element_to_annotations,
+        element_to_notes=reader_result.element_to_notes,
     )
     new_map = transform_result.obj
     if args.output is None:
+        # The stdout pickle serializes only the map object; annotations and
+        # notes live in side-tables that a bare-map pickle cannot carry, so
+        # they are dropped on this path (use -o file.xml / .sbgn to keep them).
         _write_map_to_stdout(new_map)
     else:
         writer = _writer_for_output(args.output)
-        momapy.io.core.write(new_map, args.output, writer=writer)
+        momapy.io.core.write(
+            new_map,
+            args.output,
+            writer=writer,
+            element_to_annotations=transform_result.element_to_annotations,
+            element_to_notes=transform_result.element_to_notes,
+        )
 
 
 def _build_modes_data():
@@ -523,7 +534,12 @@ def _add_transform_parser(subparsers):
         "-o",
         "--output",
         default=None,
-        help="write output to this file instead of stdout",
+        help=(
+            "write output to this file instead of stdout. Input RDF "
+            "annotations and notes are carried onto the corresponding output "
+            "elements only for file output (.xml/.sbml/.sbgn/.sbgnml); the "
+            "stdout pickle cannot carry them and drops them."
+        ),
     )
     parser.set_defaults(func=_run)
 

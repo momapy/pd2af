@@ -153,6 +153,10 @@ def _make_and_add_compartments(context):
         if input_compartment is None:
             continue
         af_compartment = _get_or_make_compartment(context, input_compartment)
+        # A PD compartment becomes a distinct AF compartment; record the pair
+        # for provenance so its annotations/notes carry (several PD compartments
+        # may dedup to one AF compartment by label -- the bucket union handles it).
+        context.compartment_emissions.append((input_compartment, af_compartment))
         add_model_element_if_new(
             context.model.compartments,
             af_compartment,

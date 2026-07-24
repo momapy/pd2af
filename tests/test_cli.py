@@ -8,9 +8,10 @@ import pytest
 
 import momapy.io.core
 
+import pd2af
 import pd2af.cli
 
-from tests._helpers import has_dot_binary
+from tests._helpers import MAPS_DIR, has_dot_binary
 
 
 def _parse_transform_args(argv):
@@ -344,3 +345,45 @@ class TestListModes:
             assert mode["transformation_mode"] in text
             for language in mode["languages"]:
                 assert language in text
+
+
+class TestAnnotationCarryCli:
+    """The CLI threads input annotations end-to-end: a MIRIAM resource carried
+    onto a top-level species appears in the written CellDesigner XML."""
+
+    def test_carries_annotations_to_xml_output(self, tmp_path):
+        jnk_path = os.path.join(MAPS_DIR, "JNK_pathway.xml")
+        reader_result = momapy.io.core.read(jnk_path)
+        # Compute a resource the carry places on a top-level output species.
+        result = pd2af.transform(
+            reader_result.obj,
+            mode="keep-species",
+            layout_mode="plain",
+            element_to_annotations=reader_result.element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        species = set(result.obj.model.species)
+        carried_resources = [
+            resource
+            for output_element, annotations in result.element_to_annotations.items()
+            if output_element in species
+            for annotation in annotations
+            for resource in annotation.resources
+        ]
+        assert carried_resources
+        expected_resource = carried_resources[0]
+
+        out_path = tmp_path / "out.xml"
+        pd2af.cli.main(
+            [
+                "transform",
+                jnk_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-o",
+                str(out_path),
+            ]
+        )
+        assert expected_resource in out_path.read_text()

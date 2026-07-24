@@ -50,6 +50,29 @@ entity, or the top-level complex a subunit resolves to via the shared
 level when its complex is dissolved). `MERGED_PROTEOFORM_MODES` in
 `pd2af.languages` is the single source of truth for which modes strip.
 
+## Annotations and notes
+
+momapy stores RDF/MIRIAM annotations and notes not on model elements but
+in side-tables on the `ReaderResult` (`element_to_annotations`,
+`element_to_notes`: `Mapping[model_element -> frozenset]`). The transform
+carries them: pass the reader's side-tables to `transform(...,
+element_to_annotations=..., element_to_notes=...)` and it returns
+output-keyed side-tables on the `TransformerResult`, ready to hand to the
+writer. The carrier is `TransformerResult.provenance`, re-keyed to the
+origin direction (`output_element -> frozenset(input_elements)`); the pure
+remap lives in `pd2af.annotations.carry_annotations_through_provenance`,
+which unions the metadata of every input that merged into a given output
+(so a merged activity gathers the annotations of all its proteoforms).
+
+Coverage is species/activities, logical operators, **compartments** (folded
+into `provenance` via `context.compartment_emissions`) and the **map**
+itself (both the CellDesigner and SBGN writers emit map-level
+annotations/notes). Deliberately dropped: modulation/influence and reaction
+annotations (AF influences are synthesized and fan-out/collapse, so there is
+no clean target without threading source provenance through the ASP layer);
+and the stdout-pickle path (a bare-map pickle cannot hold the side-tables, so
+carry needs `-o file.xml` / `.sbgn`).
+
 ## Model-element dedup invariant
 
 momapy's dataclass-based model elements use `compare=False` on `id_`,

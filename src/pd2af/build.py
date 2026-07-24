@@ -49,6 +49,9 @@ class BuilderContext:
     input_model_element_to_canonical_model_element: dict = dataclasses.field(
         default_factory=dict
     )
+    # (input_compartment, output_compartment) pairs, feeding the provenance
+    # mapping so compartment annotations/notes carry to their AF compartment.
+    compartment_emissions: list = dataclasses.field(default_factory=list)
 
     # --- Pass-1 scratch ---
     cache: dict = dataclasses.field(default_factory=dict)
@@ -156,17 +159,25 @@ def build_map(
 
 
 def make_provenance_from_context(context, language):
-    """Build the input-element -> output-element provenance mapping.
+    """Build the output-element -> input-elements provenance mapping.
+
+    Provenance answers "where did this output come from": it maps each output
+    AF element to the ``frozenset`` of input PD/CD elements it derives from. The
+    relation is many-to-one -- the merged modes content-dedup several input
+    proteoforms (or compartments) into one output -- so the origin direction is
+    the genuinely multi-valued one, keyed by output.
 
     Walks the ``key_to_*`` dicts the model pass populates for *every* activity
     and operator atom (the ``*_emissions`` lists only record the first element
     per identity and would miss the many-to-one dedup pairings). Each activity
     key carries the input element's clingo id in ``key.species`` and each
     operator key in ``key.gate``; both resolve back to the input model element
-    through ``context.clingo_id_to_model_element``.
+    through ``context.clingo_id_to_model_element``. Compartments are folded in
+    from ``context.compartment_emissions`` (already input/output element pairs).
 
-    Returns a :class:`momapy.utils.FrozenIdentityMultiDict` mapping each input
-    model element to the ``frozenset`` of output elements derived from it.
+    Returns a :class:`momapy.utils.FrozenIdentityMultiDict` whose forward maps
+    each output element to the ``frozenset`` of input elements it derives from,
+    and whose ``.inverse`` (keyed by ``id(input_element)``) recovers the output.
     """
     if language == pd2af.languages.SBGN_PD:
         key_to_activity = context.key_to_activity
@@ -175,26 +186,30 @@ def make_provenance_from_context(context, language):
         key_to_activity = context.key_to_species
         key_to_operator = context.key_to_gate
 
-    input_element_to_output_elements = {}
+    output_element_to_input_elements = {}
 
     def record_provenance(clingo_id, output_element):
         if output_element is None:
             return
         input_element = context.clingo_id_to_model_element[clingo_id]
-        input_element_to_output_elements.setdefault(input_element, set()).add(
-            output_element
+        output_element_to_input_elements.setdefault(output_element, set()).add(
+            input_element
         )
 
     for activity_key, output_element in key_to_activity.items():
         record_provenance(activity_key.species, output_element)
     for operator_key, output_element in key_to_operator.items():
         record_provenance(operator_key.gate, output_element)
+    for input_compartment, output_compartment in context.compartment_emissions:
+        output_element_to_input_elements.setdefault(
+            output_compartment, set()
+        ).add(input_compartment)
 
     return momapy.utils.FrozenIdentityMultiDict(
         {
-            input_element: frozenset(output_elements)
-            for input_element, output_elements in (
-                input_element_to_output_elements.items()
+            output_element: frozenset(input_elements)
+            for output_element, input_elements in (
+                output_element_to_input_elements.items()
             )
         }
     )

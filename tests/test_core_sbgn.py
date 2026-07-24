@@ -18,10 +18,12 @@ import pytest
 import momapy.io.core
 import momapy.sbgn.af
 import momapy.sbgn.pd
+from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
 
 from tests._helpers import (
+    SBGN_EXAMPLE_MAP_PATH,
     SBGN_MAPS_DIR,
     SBGN_WITH_COMPARTMENTS_MAP_PATH,
     has_dot_binary,
@@ -122,33 +124,102 @@ class TestProteoformMerging:
 
 
 class TestProvenance:
-    """The TransformerResult.provenance maps each input element to the output
-    AF elements derived from it; `.inverse` recovers the input elements behind
-    a given output element, collapsing the many-to-one merge."""
+    """The TransformerResult.provenance maps each output AF element to the
+    input elements it derives from, collapsing the many-to-one merge; its
+    `.inverse` recovers the output element behind a given input."""
 
     def test_merged_proteoforms_trace_back_to_both_inputs(self, proteoform_map):
         result = pd2af.transform(proteoform_map, mode="normal", layout_mode=None)
         # normal mode merges the two proteoforms into a single AKT activity.
         merged_activity = next(iter(result.obj.model.activities))
         input_proteoforms = frozenset(proteoform_map.model.entity_pools)
-        # Forward: each input proteoform traces to the one merged activity.
+        # Forward (many-to-one): the merged activity traces back to both inputs.
+        assert result.provenance[merged_activity] == input_proteoforms
+        # Inverse: each input proteoform recovers the one merged activity.
         for proteoform in input_proteoforms:
-            assert result.provenance[proteoform] == frozenset([merged_activity])
-        # Inverse (many-to-one): the merged activity traces back to both inputs.
-        assert (
-            result.provenance.inverse[id(merged_activity)] == input_proteoforms
-        )
+            assert result.provenance.inverse[id(proteoform)] == frozenset(
+                [merged_activity]
+            )
 
     def test_keep_species_keeps_provenance_one_to_one(self, proteoform_map):
         result = pd2af.transform(
             proteoform_map, mode="keep-species", layout_mode=None
         )
-        # keep-species keeps the proteoforms distinct: each input maps to its
-        # own output activity, and every provenance value is in the model.
+        # keep-species keeps the proteoforms distinct: each output activity has
+        # a single input source, and every provenance key is an output element.
         model_activities = set(result.obj.model.activities)
-        for output_elements in result.provenance.values():
-            assert len(output_elements) == 1
-            assert output_elements <= model_activities
+        activity_sources = [
+            input_elements
+            for output_element, input_elements in result.provenance.items()
+            if output_element in model_activities
+        ]
+        assert activity_sources
+        for input_elements in activity_sources:
+            assert len(input_elements) == 1
+
+
+class TestAnnotationCarry:
+    """The merged modes union the annotations of every collapsed proteoform
+    onto their single merged activity -- the case where content-match alone
+    fails (the merged output's content differs from every input)."""
+
+    def test_merged_mode_unions_proteoform_annotations(self, proteoform_map):
+        proteoforms = list(proteoform_map.model.entity_pools)
+        annotation_one = RDFAnnotation(
+            qualifier=BQBiol.IS, resources=frozenset(["urn:one"])
+        )
+        annotation_two = RDFAnnotation(
+            qualifier=BQBiol.IS, resources=frozenset(["urn:two"])
+        )
+        result = pd2af.transform(
+            proteoform_map,
+            mode="normal",
+            layout_mode=None,
+            element_to_annotations={
+                proteoforms[0]: frozenset([annotation_one]),
+                proteoforms[1]: frozenset([annotation_two]),
+            },
+            element_to_notes={},
+        )
+        merged_activity = next(iter(result.obj.model.activities))
+        assert result.element_to_annotations[merged_activity] == frozenset(
+            [annotation_one, annotation_two]
+        )
+
+    def test_map_level_annotation_survives_sbgnml_round_trip(self, tmp_path):
+        reader_result = momapy.io.core.read(
+            SBGN_EXAMPLE_MAP_PATH, reader="sbgnml"
+        )
+        map_annotation = RDFAnnotation(
+            qualifier=BQBiol.IS, resources=frozenset(["urn:map:level"])
+        )
+        element_to_annotations = dict(
+            reader_result.element_to_annotations or {}
+        )
+        element_to_annotations[reader_result.obj] = frozenset([map_annotation])
+        result = pd2af.transform(
+            reader_result.obj,
+            mode="keep-species",
+            layout_mode="plain",
+            element_to_annotations=element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        # re-keyed onto the OUTPUT map object
+        assert result.element_to_annotations.get(result.obj) == frozenset(
+            [map_annotation]
+        )
+        path = str(tmp_path / "out.sbgn")
+        momapy.io.core.write(
+            result.obj,
+            path,
+            writer="sbgnml",
+            element_to_annotations=result.element_to_annotations,
+            element_to_notes=result.element_to_notes,
+        )
+        reread = momapy.io.core.read(path, reader="sbgnml")  # must not raise
+        assert map_annotation in (reread.element_to_annotations or {}).get(
+            reread.obj, frozenset()
+        )
 
 
 class TestComplexHandling:

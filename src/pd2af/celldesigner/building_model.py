@@ -305,6 +305,9 @@ def _make_and_add_compartments(context):
         collect_ancestor_compartments(immediate_compartments)
     ):
         context.model.compartments.add(compartment)
+        # Compartments carry over by identity, so the output compartment is the
+        # input one; record it for provenance so its annotations/notes carry.
+        context.compartment_emissions.append((compartment, compartment))
 
 
 def _compartment_for_input_species(context, input_species):
