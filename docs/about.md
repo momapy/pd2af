@@ -8,7 +8,7 @@ The project is developed at the [University of Luxembourg](https://wwwen.uni.lu/
 
 ## Authors
 
-- **Adrien Rougny** — lead developer (<adrien.rougny@uni.lu>)
+- **Adrien Rougny**: lead developer (<adrien.rougny@uni.lu>)
 
 ## Contributing
 

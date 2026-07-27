@@ -65,10 +65,10 @@ Two further modes step off those axes and change where the influences come from:
 
 Selectable with `-l` / `layout_mode=`:
 
-- **`auto`** (default) — pick automatically from the input: a map gets `dot`, a bare model gets `None` (no layout).
-- **`dot`** — Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
-- **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`.
-- **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`.
+- **`auto`** (default): pick automatically from the input — a map gets `dot`, a bare model gets `None` (no layout).
+- **`dot`**: Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
+- **`plain`**: reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`.
+- **`overlay`**: reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`.
 
 ## Documentation
 
