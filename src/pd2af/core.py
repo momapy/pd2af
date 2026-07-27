@@ -45,7 +45,14 @@ class TransformerResult:
 
 
 _TRANSFORMATION_MODES = frozenset(
-    {"normal", "normal-no-complex", "keep-species", "keep-species-no-complex", "casq"}
+    {
+        "normal",
+        "normal-no-complex",
+        "keep-species",
+        "keep-species-no-complex",
+        "keep-reactions",
+        "casq",
+    }
 )
 _MERGED_PROTEOFORM_MODES = pd2af.languages.MERGED_PROTEOFORM_MODES
 # Accepted `layout_mode` input values: the concrete modes plus the `"auto"`
@@ -116,6 +123,7 @@ def transform(
         "normal-no-complex",
         "keep-species",
         "keep-species-no-complex",
+        "keep-reactions",
         "casq",
     ] = "normal",
     layout_mode: typing.Literal["auto", "dot", "plain", "overlay"] | None = "auto",

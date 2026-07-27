@@ -47,6 +47,13 @@ def out_keep_species_no_complex(example_cd_map):
 
 
 @pytest.fixture(scope="module")
+def out_keep_reactions(example_cd_map):
+    return pd2af.transform(
+        example_cd_map, mode="keep-reactions", layout_mode="plain"
+    ).obj
+
+
+@pytest.fixture(scope="module")
 def out_normal_no_complex(example_cd_map):
     if not has_dot_binary():
         pytest.skip("graphviz `dot` binary not on PATH")
@@ -113,6 +120,56 @@ class TestTransformExampleKeepSpeciesNoComplexMode:
             ("NegativeInfluence", "B", "E"),
             ("NegativeInfluence", "G", "B"),
         }
+
+
+class TestTransformExampleKeepReactionsMode:
+    """Golden test: example.xml under keep-reactions mode and plain layout."""
+
+    def test_every_species_becomes_an_activity(self, out_keep_reactions):
+        # All eight top-level species, unlike keep-species which keeps only the
+        # five that carry an activity signal. Subunits A and C stay folded into
+        # complex D. Two species are named E: the plain form s7 and its active
+        # form s7_active.
+        assert species_names(out_keep_reactions.model) == [
+            "A", "B", "C", "D", "E", "E", "F", "G",
+        ]
+
+    def test_expected_modulations(self, out_keep_reactions):
+        assert modulation_set(out_keep_reactions.model) == {
+            # every (reactant, product) pair of every reaction, as a positive
+            # influence -- re1 has the same species on both sides (a self
+            # influence), re2 is the heterodimer association, re3 is s7 ->
+            # s7_active
+            ("PositiveInfluence", "A", "A"),
+            ("PositiveInfluence", "A", "D"),
+            ("PositiveInfluence", "C", "D"),
+            ("PositiveInfluence", "E", "E"),
+            # the direct modulation influences: two reaction modifiers and the
+            # one modulation arc
+            ("PositiveInfluence", "B", "A"),
+            ("NegativeInfluence", "B", "E"),
+            ("PositiveInfluence", "D", "F"),
+        }
+
+    def test_reaction_without_products_contributes_nothing(self, out_keep_reactions):
+        # re6 (B -> external sink, stimulated by G) has no product, so it yields
+        # neither a triggering from B nor a modifier influence from G. G is its
+        # only participant that would otherwise become an influence source.
+        source_names = {
+            modulation.source.name for modulation in out_keep_reactions.model.modulations
+        }
+        assert "G" not in source_names
+
+    def test_omits_inferred_influences(self, out_keep_reactions):
+        modulations = modulation_set(out_keep_reactions.model)
+        # B -> D needs multi-hop chaining, G -> B needs consumption reasoning;
+        # keep-species derives both, keep-reactions derives neither.
+        assert ("PositiveInfluence", "B", "D") not in modulations
+        assert ("NegativeInfluence", "G", "B") not in modulations
+
+    def test_layout_present_with_plain_mode(self, out_keep_reactions):
+        assert out_keep_reactions.layout is not None
+        assert len(out_keep_reactions.layout.layout_elements) > 0
 
 
 class TestTransformExampleNoComplexMode:

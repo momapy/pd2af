@@ -18,6 +18,7 @@ _MODE_CHOICES = (
     "normal-no-complex",
     "keep-species",
     "keep-species-no-complex",
+    "keep-reactions",
     "casq",
 )
 
@@ -57,6 +58,14 @@ _TRANSFORMATION_MODE_INFO = {
             "any, promoting them to top-level activities"
         ),
         "celldesigner_only": False,
+    },
+    "keep-reactions": {
+        "summary": (
+            "create one activity per species, and turn every reaction into a "
+            "positive influence from each of its reactants to each of its "
+            "products"
+        ),
+        "celldesigner_only": True,
     },
     "casq": {
         "summary": (
@@ -416,7 +425,12 @@ def _add_transform_parser(subparsers):
             "'keep-species-no-complex' keep each PD species as its own "
             "activity. The '*-no-complex' variants drop complexes that "
             "have an active subunit, routing influences through the "
-            "subunits. 'casq' emits one activity per surviving PD "
+            "subunits. 'keep-reactions' keeps the PD topology itself: "
+            "every species is an activity and every reaction becomes a "
+            "positive influence from each of its reactants to each of "
+            "its products, alongside the modulation arcs and reaction "
+            "modifiers, with no multi-hop or consumption inference. "
+            "'casq' emits one activity per surviving PD "
             "species after applying CASQ-style deletion rules "
             "(heterodimer simplification, name-preserving step pruning, "
             "transport collapse) with single-hop rewiring across "

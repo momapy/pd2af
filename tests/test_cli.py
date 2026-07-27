@@ -46,6 +46,7 @@ class TestModeAndLayoutChoices:
             "normal-no-complex",
             "keep-species",
             "keep-species-no-complex",
+            "keep-reactions",
             "casq",
         }
 
@@ -125,7 +126,8 @@ class TestCliMainOutputFile:
             pd2af.cli.main(["transform", example_map_path, "-m", mode, "-l", "plain"])
 
     @pytest.mark.parametrize(
-        "mode", ["keep-species", "keep-species-no-complex", "casq"]
+        "mode",
+        ["keep-species", "keep-species-no-complex", "keep-reactions", "casq"],
     )
     def test_per_species_modes_accept_plain_layout(
         self, tmp_path, example_map_path, mode

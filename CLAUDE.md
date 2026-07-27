@@ -15,29 +15,42 @@ CellDesigner, an activity is represented by a **species** that stands
 in for the entity performing it. The species type carries the
 provenance of the activity.
 
-The transformation modes encode two orthogonal choices: whether to
-**strip post-translational decorations** (state variables in SBGN;
+The transformation modes encode three choices: whether to **strip
+post-translational decorations** (state variables in SBGN;
 `modifications`, `structural_states`, template `modification_residues`/
 `regions` and `homomultimer` in CellDesigner) and merge content-equal
-results, and whether to **keep or dissolve complexes**. In every mode a
-subunit is a *structural component*, never an independent activity: a
-subunit's activity and influences are attributed to its outermost
-top-level complex (subunit-level influences are a CellDesigner artifact,
-not standard AF). All of this is decided by the **mode at build time**,
-not encoded in the activity key.
+results, whether to **keep or dissolve complexes**, and **where the
+influences come from**. The first two are orthogonal and give the four
+`normal`/`keep-species` modes; the third is what sets `keep-reactions`
+and `casq` apart. In every mode a subunit is a *structural component*,
+never an independent activity: a subunit's activity and influences are
+attributed to its outermost top-level complex (subunit-level influences
+are a CellDesigner artifact, not standard AF). The first two choices are
+decided by the **mode at build time**, not encoded in the activity key;
+the third is decided in the ASP layer by which rule groups the mode's
+profile includes.
 
-| mode                       | PTM decorations    | complexes                                                  |
-| -------------------------- | ------------------ | ---------------------------------------------------------- |
-| `normal`                   | stripped & merged  | kept (opaque; subunits carried in the label/structure, influences routed to the complex) |
-| `normal-no-complex`               | stripped & merged  | dissolved: active subunits promoted to top-level activities |
-| `keep-species`             | kept               | kept (opaque; subunits routed to the complex)              |
-| `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities |
-| `casq`                     | kept               | kept (CASQ-specific deletion pruning)                      |
+| mode                       | PTM decorations    | complexes                                                  | influences                                            |
+| -------------------------- | ------------------ | ---------------------------------------------------------- | ----------------------------------------------------- |
+| `normal`                   | stripped & merged  | kept (opaque; subunits carried in the label/structure, influences routed to the complex) | inferred: modulations + multi-hop chaining + consumption |
+| `normal-no-complex`               | stripped & merged  | dissolved: active subunits promoted to top-level activities | inferred                                              |
+| `keep-species`             | kept               | kept (opaque; subunits routed to the complex)              | inferred                                              |
+| `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities | inferred                                              |
+| `keep-reactions`           | kept               | kept (opaque; subunits routed to the complex)              | stated only: reactant→product positive influences + direct modulations |
+| `casq`                     | kept               | kept (CASQ-specific deletion pruning)                      | CASQ-specific direct emission with bridged rewiring    |
 
 `normal` is the canonical AF mode and will be the default for the
-future SBGN-AF output. `keep-species*` and `casq` deliberately deviate:
-they preserve PD proteoform structure for users who want a CD-native
-lossy reduction rather than a true AF view.
+future SBGN-AF output. `keep-species*`, `keep-reactions` and `casq`
+deliberately deviate: they preserve PD proteoform structure for users
+who want a CD-native lossy reduction rather than a true AF view.
+
+`keep-reactions` also deviates on activity discovery: instead of
+requiring a structural signal, **every species is an activity**, and
+each reaction is rendered as one positive influence per (reactant,
+product) pair — the same direction `casq` takes for that relationship.
+It keeps the modulation arcs and reaction modifiers as single-hop
+influences, and takes none of the inference layers. It is
+CellDesigner-only for now.
 
 Stripping is a single recursive operation over the resolved entity
 (`pd2af.celldesigner.building_model.get_or_make_stripped_species`;

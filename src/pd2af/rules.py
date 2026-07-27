@@ -19,7 +19,15 @@ The non-CASQ rules are organised in layers:
 * **derivation** (shared across all non-CASQ profiles) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``hasActivityCarrier`` /
-  ``hasActivityKey``.
+  ``hasActivityKey``. The inference layers on top of it — multi-hop
+  ``paths:chaining`` and ``influences_consumption`` — are carried by the four
+  path-inference profiles only.
+
+The ``keep_reactions`` profile reuses that whole scaffolding and swaps
+discovery and inference for two rules: every species is an activity
+(``keep_reactions:activity``) and every (reactant, product) pair of a reaction
+is a positive influence (``keep_reactions:influences``). It keeps the single-hop
+modulation influences of ``paths:core`` and drops the inference layers.
 
 The ``casq`` profile keeps its own pipeline (deletion rules,
 bridged-product rewiring, direct reactant→product / modifier→product
@@ -38,17 +46,28 @@ from aspcompose import (
     RuleRegistry,
 )
 
-_NON_CASQ_PROFILES = frozenset(
+# The profiles that derive influences by inference over the production graph:
+# multi-hop chaining across reactant->product hops and consumption/sparing
+# reasoning. `keep_reactions` deliberately sits outside this set -- it turns each
+# reaction into direct triggerings instead, so the inference layers are redundant.
+_PATH_INFERENCE_PROFILES = frozenset(
     {"normal", "normal_no_complex", "keep_species", "keep_species_no_complex"}
 )
 
+_KEEP_REACTIONS_PROFILES = frozenset({"keep_reactions"})
+
+_NON_CASQ_PROFILES = _PATH_INFERENCE_PROFILES | _KEEP_REACTIONS_PROFILES
+
 _CASQ_PROFILES = frozenset({"casq"})
 
-# Activity discovery drives the non-CASQ profiles: casq derives its activities
-# from its own pipeline (survival through the deletion rules + resolution to a
-# top-level complex, keyed on `hasActivityKey`) and reads none of the
-# `hasActivity`/`hasActivityCandidate` predicates these groups emit, so the whole
-# `activity:core`/`activity:*` layer is non-CASQ only.
+# Activity discovery drives the path-inference profiles: casq derives its
+# activities from its own pipeline (survival through the deletion rules +
+# resolution to a top-level complex, keyed on `hasActivityKey`) and reads none of
+# the `hasActivity`/`hasActivityCandidate` predicates these groups emit, so it
+# takes none of this layer; `keep_reactions` keeps the mandatory `activity:core`
+# bridge but replaces the structural-reason feature-groups with a single rule
+# making every species a candidate (`keep_reactions:activity`), which renders
+# each feature-group inert.
 #
 # Activity discovery is parallel across languages: only the `phenotype` rule is
 # language-agnostic (both languages emit the `phenotype` functor); every other
@@ -80,7 +99,7 @@ def _activity_feature(name, *, base=(), cd=(), sbgn=(), docs=""):
         variants["sbgn_pd"] = sbgn
     return RuleGroup(
         identifier=f"activity:{name}",
-        profiles=_NON_CASQ_PROFILES,
+        profiles=_PATH_INFERENCE_PROFILES,
         depends_on=frozenset({"activity:core"}),
         rules=base,
         variants=variants,
@@ -288,9 +307,9 @@ _TOPOLOGY = RuleGroup(
 
 _TOP_LEVEL = RuleGroup(
     identifier="top_level",
-    profiles=frozenset({"keep_species", "normal"}),
+    profiles=frozenset({"keep_species", "normal", "keep_reactions"}),
     depends_on=frozenset({"topology"}),
-    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer). Mirrors the resolution `casq` performs in its own pipeline.",
+    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`, `keep-reactions`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer). Mirrors the resolution `casq` performs in its own pipeline.",
     rules=(
         Rule(
             identifier="top_level:recursive",
@@ -332,9 +351,9 @@ _TOP_LEVEL = RuleGroup(
 
 _PREPARATION_COMPLEX = RuleGroup(
     identifier="preparation:complex",
-    profiles=frozenset({"normal", "keep_species"}),
+    profiles=frozenset({"normal", "keep_species", "keep_reactions"}),
     depends_on=frozenset({"activity:core", "topology", "top_level"}),
-    docs="The complex-keeping modes (`normal`, `keep-species`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.",
+    docs="The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.",
     rules=(
         Rule(
             identifier="preparation:complex:key",
@@ -780,7 +799,7 @@ _PATHS_CORE = RuleGroup(
 # supplied by `paths:core`, so excluding it never breaks the core relations.
 _PATHS_CHAINING = RuleGroup(
     identifier="paths:chaining",
-    profiles=_NON_CASQ_PROFILES,
+    profiles=_PATH_INFERENCE_PROFILES,
     depends_on=frozenset({"paths:core"}),
     docs="Excludable multi-hop transitivity: extends a `propagatesInfluence` path through one more reactant->product hop (a reaction in CellDesigner, a process in SBGN-PD), carrying the kind via `composesTo` (triggering degrades to positivelyInfluences) and refusing to extend across a hop inside a production cycle (`not isCyclicallyTransformedTo`). Exclude with `--exclude-group paths:chaining` to keep only direct single-hop influences. Depends on `paths:core`, which supplies both `composesTo` and the cycle relations.",
     rules=(),
@@ -850,7 +869,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
     identifier="influences_derivation",
     profiles=_NON_CASQ_PROFILES,
     depends_on=frozenset({"paths:core"}),
-    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation from kinded paths and from consumption-based reasoning (catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant — in both cases only reactants that are themselves activities; the unknown modifiers contribute the unknown twins). The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
+    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key. Both rules are mode- and language-agnostic; the consumption/sparing reasoning lives in the separate `influences_consumption` group. The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
     rules=(
         Rule(
             identifier="influences_derivation:activity",
@@ -869,17 +888,23 @@ _INFLUENCES_DERIVATION = RuleGroup(
             docs="A propagated influence of any kind between two raw nodes yields an influence of that same kind between their activity-key images (via their carriers).",
         ),
     ),
-    # The consumption/sparing rules below are CellDesigner-only (they reason
-    # over reaction modifiers); SBGN-PD has no analog yet, so its variant is
-    # empty. This is a known gap to implement, not a deliberate design choice:
-    # the same biology in CellDesigner vs SBGN-PD currently yields different AF
-    # influences. The shared `activity` and `propagatesInfluence` rules above
-    # carry both languages.
+)
+
+# The consumption/sparing rules are CellDesigner-only (they reason over reaction
+# modifiers); SBGN-PD has no analog yet, so its variant is empty. This is a known
+# gap to implement, not a deliberate design choice: the same biology in
+# CellDesigner vs SBGN-PD currently yields different AF influences.
+_INFLUENCES_CONSUMPTION = RuleGroup(
+    identifier="influences_consumption",
+    profiles=_PATH_INFERENCE_PROFILES,
+    depends_on=frozenset({"activity:core"}),
+    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences_consumption` to keep only the influences the map states. The `keep-reactions` profile omits it, since that mode renders each reaction directly instead of reasoning about it.",
+    rules=(),
     variants={
         "sbgn_pd": (),
         "celldesigner": (
         Rule(
-            identifier="influences_derivation:celldesigner:catalyzer_consumes_reactant",
+            identifier="influences_consumption:celldesigner:catalyzer_consumes_reactant",
             text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
@@ -894,7 +919,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
             docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
         ),
         Rule(
-            identifier="influences_derivation:celldesigner:physical_stimulator_consumes_reactant",
+            identifier="influences_consumption:celldesigner:physical_stimulator_consumes_reactant",
             text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
@@ -909,7 +934,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
             docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption).",
         ),
         Rule(
-            identifier="influences_derivation:celldesigner:trigger_consumes_reactant",
+            identifier="influences_consumption:celldesigner:trigger_consumes_reactant",
             text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
@@ -924,7 +949,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
             docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship).",
         ),
         Rule(
-            identifier="influences_derivation:celldesigner:inhibitor_spares_reactant",
+            identifier="influences_consumption:celldesigner:inhibitor_spares_reactant",
             text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
@@ -939,7 +964,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
             docs="An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing).",
         ),
         Rule(
-            identifier="influences_derivation:celldesigner:unknown_catalyzer_consumes_reactant",
+            identifier="influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant",
             text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     reaction(REACTION),
@@ -954,7 +979,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
             docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain).",
         ),
         Rule(
-            identifier="influences_derivation:celldesigner:unknown_inhibitor_spares_reactant",
+            identifier="influences_consumption:celldesigner:unknown_inhibitor_spares_reactant",
             text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     reaction(REACTION),
@@ -1135,6 +1160,51 @@ _GATES = RuleGroup(
             ),
         ),
     },
+)
+
+
+# The `keep_reactions` profile: every species is an activity and every reaction
+# is rendered as reactant->product positive influences, so the map's own topology
+# *is* the influence network. It shares the whole non-CASQ scaffolding (activity
+# bridge, top-level resolution, `keptSpeciesKey` keying, the single-hop
+# modulation influences of `paths:core`, gates, `influence_output`) and adds only the two
+# rules below, while omitting the inference layers (`paths:chaining`,
+# `influences_consumption`) that the other non-CASQ profiles carry. Like the
+# `casq:*` groups these rules are CellDesigner-only for now, written as plain
+# `rules` rather than a `celldesigner` variant so an SBGN-PD program still
+# resolves (and, as with casq, simply derives nothing).
+_KEEP_REACTIONS_ACTIVITY = RuleGroup(
+    identifier="keep_reactions:activity",
+    profiles=_KEEP_REACTIONS_PROFILES,
+    depends_on=frozenset({"activity:core"}),
+    docs="The `keep-reactions` premise that every species is an activity, replacing the structural-reason `activity:*` feature-groups (each of which is inert once every species is a candidate, so the profile omits them). Unlike the `--set-all-active` toggle this rule carries no `not hasSubunit` guard: a subunit is a candidate too, which does not make it an activity of its own -- `preparation:complex:key` keys it by the `keptSpeciesKey` of its outermost complex -- but it does mean a reaction, modulation arc or gate input touching a subunit routes to the containing complex instead of being dropped for want of an activity key.",
+    rules=(
+        Rule(
+            identifier="keep_reactions:activity:from_species",
+            text="hasActivityCandidate(SPECIES, isSpecies) :- species(SPECIES).",
+            docs="Every species is an activity candidate, for the sole reason that it is a species (reason `isSpecies`). It still passes through the `activity:core` bridge, so `--set-inactive` and `--set-all-inactive` veto candidates in this mode exactly as in any other.",
+        ),
+    ),
+)
+
+_KEEP_REACTIONS_INFLUENCES = RuleGroup(
+    identifier="keep_reactions:influences",
+    profiles=_KEEP_REACTIONS_PROFILES,
+    depends_on=frozenset({"influences_derivation"}),
+    docs="The `keep-reactions` premise that every reaction is kept: each (reactant, product) pair of a reaction becomes one positive influence. `positivelyInfluences` rather than `triggers` -- consuming a reactant to make a product is a contribution to it, not the necessary-stimulation relationship `triggers` (CellDesigner `Triggering`, SBGN-AF `NecessaryStimulation`) asserts. The rule writes `propagatesInfluence/3` rather than `influences/3` so the shared `influences_derivation:path` bridge resolves both endpoints through their carrier and key, routing a subunit endpoint to its top-level complex. Reactant and product may resolve to the same activity (a reaction whose participants share a complex, or a state transition drawn on a single species), and the resulting self-influence is emitted like any other.",
+    rules=(
+        Rule(
+            identifier="keep_reactions:influences:reactant_to_product",
+            text=dedent("""\
+                propagatesInfluence(REACTANT_SPECIES, PRODUCT_SPECIES, positivelyInfluences) :-
+                    reaction(REACTION),
+                    hasReactant(REACTION, REACTANT),
+                    hasReferredElement(REACTANT, REACTANT_SPECIES),
+                    hasProduct(REACTION, PRODUCT),
+                    hasReferredElement(PRODUCT, PRODUCT_SPECIES)."""),
+            docs="Each reactant of a reaction positively influences each product of that reaction. This is the one rule that makes a reaction itself an influence: in the other non-CASQ profiles the reactant->product hop only feeds the cycle relations, and a bare reactant is never an influence source. It matches the direction `casq` takes for the same relationship.",
+        ),
+    ),
 )
 
 
@@ -1565,8 +1635,11 @@ def build_registry() -> RuleRegistry:
             _PATHS_CHAINING,
             _PATHS_COMPLEX_TRAVERSAL,
             _INFLUENCES_DERIVATION,
+            _INFLUENCES_CONSUMPTION,
             _INFLUENCE_OUTPUT,
             _GATES,
+            _KEEP_REACTIONS_ACTIVITY,
+            _KEEP_REACTIONS_INFLUENCES,
             _CASQ_PARTICIPATION,
             _CASQ_DELETE,
             _CASQ_BRIDGED_PRODUCT,

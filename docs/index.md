@@ -44,7 +44,7 @@ See [CLI reference](cli.md) for all options.
 
 ## Transformation modes
 
-Selectable with `-m` / `mode=`. Four of the modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
+Selectable with `-m` / `mode=`. Four of the six modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
@@ -56,7 +56,10 @@ Selectable with `-m` / `mode=`. Four of the modes lie on two orthogonal axes —
 - **drop complexes** variants (`normal-no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
 - **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.
 
-A fifth mode, **`casq`**, emits one activity per surviving PD species after applying CASQ-style deletion rules — heterodimer simplification, name-preserving step pruning, and transport collapse — with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only.
+Two further modes step off those axes and change where the influences come from:
+
+- **`keep-reactions`** keeps the PD topology itself. Every species is an activity — no structural signal required — and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds, and none of the inference the other modes do (multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant) is applied. Complexes and PTM decorations are kept, as in `keep-species`. CellDesigner-only.
+- **`casq`** emits one activity per surviving PD species after applying CASQ-style deletion rules — heterodimer simplification, name-preserving step pruning, and transport collapse — with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only.
 
 ## Layout modes
 
@@ -64,8 +67,8 @@ Selectable with `-l` / `layout_mode=`:
 
 - **`auto`** (default) — pick automatically from the input: a map gets `dot`, a bare model gets `None` (no layout).
 - **`dot`** — Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
-- **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
-- **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, and `casq`.
+- **`plain`** — reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`.
+- **`overlay`** — reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`.
 
 ## Documentation
 

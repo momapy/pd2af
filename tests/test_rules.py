@@ -8,6 +8,7 @@ _PROFILES = (
     "normal_no_complex",
     "keep_species",
     "keep_species_no_complex",
+    "keep_reactions",
     "casq",
 )
 
@@ -50,7 +51,7 @@ class TestBuildProgram:
         assert "influences(SOURCE, TARGET, positivelyInfluences)" in program
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
 
-    def test_non_casq_profiles_carry_kind_through_composes_to(self):
+    def test_path_inference_profiles_carry_kind_through_composes_to(self):
         for profile in ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex"):
             program = pd2af.rules.build_program(profile)
             assert "composesTo(triggers, positivelyInfluences)" in program
@@ -106,20 +107,27 @@ class TestBuildProgram:
 class TestCycleAwareTransitivity:
     """Transitive influence extension is gated by the production-cycle
     relations so a source feeding a production cycle does not leak influence
-    back around the loop. The relations exist in every non-casq profile (which
-    has `path`) and are absent from casq (which has none)."""
+    back around the loop. Only the path-inference profiles extend paths, so only
+    they carry the guard; casq has neither the relations nor the guard, and
+    `keep_reactions` defines the relations (they come with `paths:core`) but
+    never extends a path, so it has no guard either."""
 
-    _NON_CASQ = ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex")
+    _PATH_INFERENCE = (
+        "normal",
+        "normal_no_complex",
+        "keep_species",
+        "keep_species_no_complex",
+    )
 
-    @pytest.mark.parametrize("profile", _NON_CASQ)
+    @pytest.mark.parametrize("profile", _PATH_INFERENCE)
     @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
-    def test_non_casq_profiles_define_cycle_relations(self, profile, language):
+    def test_path_inference_profiles_define_cycle_relations(self, profile, language):
         program = pd2af.rules.build_program(profile, language=language)
         assert "isDirectlyTransformedTo" in program
         assert "isTransformedTo" in program
         assert "isCyclicallyTransformedTo" in program
 
-    @pytest.mark.parametrize("profile", _NON_CASQ)
+    @pytest.mark.parametrize("profile", _PATH_INFERENCE)
     def test_celldesigner_transitivity_guards_against_cycles(self, profile):
         program = pd2af.rules.build_program(profile, language="celldesigner")
         assert (
@@ -127,7 +135,7 @@ class TestCycleAwareTransitivity:
             in program
         )
 
-    @pytest.mark.parametrize("profile", _NON_CASQ)
+    @pytest.mark.parametrize("profile", _PATH_INFERENCE)
     def test_sbgn_pd_transitivity_guards_against_cycles(self, profile):
         program = pd2af.rules.build_program(profile, language="sbgn_pd")
         assert (
@@ -140,6 +148,92 @@ class TestCycleAwareTransitivity:
         assert "isDirectlyTransformedTo" not in program
         assert "isTransformedTo" not in program
         assert "isCyclicallyTransformedTo" not in program
+
+
+class TestKeepReactionsProfile:
+    """`keep_reactions` keeps the PD topology itself: every species is an
+    activity and every reaction is rendered as reactant->product positive
+    influences, so it carries the single-hop modulation influences but none of
+    the inference layers."""
+
+    def test_every_species_is_an_activity_candidate(self):
+        program = pd2af.rules.build_program("keep_reactions")
+        assert (
+            "hasActivityCandidate(SPECIES, isSpecies) :- species(SPECIES)." in program
+        )
+
+    def test_reactant_positively_influences_product(self):
+        program = pd2af.rules.build_program("keep_reactions")
+        assert (
+            "propagatesInfluence(REACTANT_SPECIES, PRODUCT_SPECIES, positivelyInfluences)"
+            in program
+        )
+
+    def test_keeps_direct_modulation_influences(self):
+        program = pd2af.rules.build_program("keep_reactions")
+        # the modulation-arc rule and its kind table, plus the modifier->product
+        # rules, all come from `paths:core`/`modulation_kind`.
+        assert "hasModulationKind(MODULATION, triggers) :- triggering(MODULATION)." in program
+        assert "hasSource(MODULATION, SOURCE_SPECIES)" in program
+        assert "catalyzer(MODIFIER)" in program
+
+    def test_omits_multi_hop_chaining(self):
+        program = pd2af.rules.build_program("keep_reactions")
+        assert "not isCyclicallyTransformedTo" not in program
+        assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" not in program
+
+    def test_omits_consumption_and_sparing(self):
+        program = pd2af.rules.build_program("keep_reactions")
+        # the consumption/sparing rules are the only ones that make a reaction's
+        # reactant the *target* of a modifier's influence.
+        assert "hasReferredElement(REACTANT, TARGET_SPECIES)" not in program
+        registry = pd2af.rules.build_registry()
+        assert "influences_consumption" not in registry.profiles["keep_reactions"]
+
+    def test_keys_by_top_level_and_keeps_complexes(self):
+        program = pd2af.rules.build_program("keep_reactions")
+        assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
+        assert "promotedSubunitKey" not in program
+
+    def test_omits_inert_activity_feature_groups(self):
+        registry = pd2af.rules.build_registry()
+        included = registry.profiles["keep_reactions"]
+        assert "activity:core" in included
+        for group_id in (
+            "activity:phenotype",
+            "activity:active_marker",
+            "activity:modulation_source",
+            "activity:gate_input",
+        ):
+            assert group_id not in included
+
+
+class TestInfluencesConsumptionGroup:
+    """The consumption/sparing reasoning is a group of its own, carried by the
+    path-inference profiles only and excludable on its own."""
+
+    @pytest.mark.parametrize(
+        "profile",
+        ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex"),
+    )
+    def test_path_inference_profiles_include_it(self, profile):
+        program = pd2af.rules.build_program(profile, "celldesigner")
+        assert "hasReferredElement(REACTANT, TARGET_SPECIES)" in program
+        registry = pd2af.rules.build_registry()
+        assert "influences_consumption" in registry.profiles[profile]
+
+    @pytest.mark.parametrize("profile", ("keep_reactions", "casq"))
+    def test_other_profiles_omit_it(self, profile):
+        registry = pd2af.rules.build_registry()
+        assert "influences_consumption" not in registry.profiles[profile]
+
+    def test_excluding_it_keeps_the_rest_of_the_derivation(self):
+        full = pd2af.rules.build_program("keep_species", "celldesigner")
+        pruned = pd2af.rules.build_program(
+            "keep_species", "celldesigner", exclude_groups=("influences_consumption",)
+        )
+        assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
+        assert len(pruned.splitlines()) < len(full.splitlines())
 
 
 class TestMergedProfilesSbgnPdVariant:

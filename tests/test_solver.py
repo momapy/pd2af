@@ -101,6 +101,7 @@ def test_supported_modes():
             "normal-no-complex",
             "keep-species",
             "keep-species-no-complex",
+            "keep-reactions",
             "casq",
         }
     )
