@@ -561,10 +561,20 @@ class TestTransformIsPure:
         assert before_template_residues == after_template_residues
 
 
+def _species_and_subunits(species_iterable):
+    """Every species of the iterable plus its subunits, recursively."""
+    elements = set()
+    for species in species_iterable:
+        elements.add(species)
+        elements |= _species_and_subunits(getattr(species, "subunits", ()) or ())
+    return elements
+
+
 class TestProvenance:
     """TransformerResult.provenance maps each output AF element to the input
     elements it derives from; every key is a real element of the output model
-    and the inverse round-trips."""
+    (a species, one of its subunits, a gate or a compartment) and the inverse
+    round-trips."""
 
     def test_provenance_keys_are_output_model_elements(self, example_cd_map):
         result = pd2af.transform(
@@ -572,7 +582,7 @@ class TestProvenance:
         )
         model = result.obj.model
         output_elements = (
-            set(model.species)
+            _species_and_subunits(model.species)
             | set(model.boolean_logic_gates)
             | set(model.compartments)
         )
@@ -613,7 +623,7 @@ class TestTransformModelInput:
     def test_provenance_available_for_model_input(self, example_cd_map):
         result = pd2af.transform(example_cd_map.model, mode="keep-species")
         output_elements = (
-            set(result.obj.species)
+            _species_and_subunits(result.obj.species)
             | set(result.obj.boolean_logic_gates)
             | set(result.obj.compartments)
         )

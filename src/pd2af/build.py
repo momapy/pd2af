@@ -158,6 +158,59 @@ def build_map(
     )
 
 
+def record_provenance_for_subunit_trees(
+    output_species,
+    input_species,
+    input_model_element_to_canonical_model_element,
+    record_pair,
+):
+    """Pair the subunits of an ``(output_species, input_species)`` pair and
+    record each pairing, recursing to arbitrary depth for nested complexes.
+
+    Subunits are never activity keys -- the ASP ``topLevel`` relation resolves a
+    subunit at any depth to its outermost complex -- so they reach provenance
+    only through this walk. Pairing cannot be positional (``subunits`` is a
+    ``frozenset``) nor by identity (the merged modes rebuild every subunit while
+    stripping, and the kept modes may keep a content-equal twin from another
+    complex). Each input subunit resolves to an output subunit through
+    ``input_model_element_to_canonical_model_element``, the
+    ``id(input) -> canonical`` map the model pass records while stripping and
+    promoting, and falls back to content-equality (momapy model elements are
+    frozen dataclasses excluding ``id_`` from ``__eq__``/``__hash__``, so a dict
+    keyed by subunit is a content index). The canonical is accepted only when it
+    is a subunit of the paired output complex, keeping every recorded key a
+    genuine part of that complex.
+
+    A no-op for elements without subunits: SBGN-AF activities, logical
+    operators, gates and compartments.
+    """
+    output_subunits = getattr(output_species, "subunits", None)
+    input_subunits = getattr(input_species, "subunits", None)
+    if not output_subunits or not input_subunits:
+        return
+    output_subunit_by_content = {
+        output_subunit: output_subunit for output_subunit in output_subunits
+    }
+    for input_subunit in input_subunits:
+        canonical_subunit = input_model_element_to_canonical_model_element.get(
+            id(input_subunit)
+        )
+        output_subunit = None
+        if canonical_subunit is not None:
+            output_subunit = output_subunit_by_content.get(canonical_subunit)
+        if output_subunit is None:
+            output_subunit = output_subunit_by_content.get(input_subunit)
+        if output_subunit is None:
+            continue
+        record_pair(output_subunit, input_subunit)
+        record_provenance_for_subunit_trees(
+            output_subunit,
+            input_subunit,
+            input_model_element_to_canonical_model_element,
+            record_pair,
+        )
+
+
 def make_provenance_from_context(context, language):
     """Build the output-element -> input-elements provenance mapping.
 
@@ -175,6 +228,13 @@ def make_provenance_from_context(context, language):
     through ``context.clingo_id_to_model_element``. Compartments are folded in
     from ``context.compartment_emissions`` (already input/output element pairs).
 
+    The subunits of a complex are provenance keys too, paired by
+    :func:`record_provenance_for_subunit_trees` from the species pairs above so
+    that annotations and notes carried on a subunit reach the output subunit
+    that stands for it. Provenance keys are therefore the output species (or
+    activities), their subunits at any depth, the gates (or operators) and the
+    compartments.
+
     Returns a :class:`momapy.utils.FrozenIdentityMultiDict` whose forward maps
     each output element to the ``frozenset`` of input elements it derives from,
     and whose ``.inverse`` (keyed by ``id(input_element)``) recovers the output.
@@ -188,12 +248,21 @@ def make_provenance_from_context(context, language):
 
     output_element_to_input_elements = {}
 
+    def record_pair(output_element, input_element):
+        output_element_to_input_elements.setdefault(output_element, set()).add(
+            input_element
+        )
+
     def record_provenance(clingo_id, output_element):
         if output_element is None:
             return
         input_element = context.clingo_id_to_model_element[clingo_id]
-        output_element_to_input_elements.setdefault(output_element, set()).add(
-            input_element
+        record_pair(output_element, input_element)
+        record_provenance_for_subunit_trees(
+            output_element,
+            input_element,
+            context.input_model_element_to_canonical_model_element,
+            record_pair,
         )
 
     for activity_key, output_element in key_to_activity.items():
@@ -201,9 +270,7 @@ def make_provenance_from_context(context, language):
     for operator_key, output_element in key_to_operator.items():
         record_provenance(operator_key.gate, output_element)
     for input_compartment, output_compartment in context.compartment_emissions:
-        output_element_to_input_elements.setdefault(
-            output_compartment, set()
-        ).add(input_compartment)
+        record_pair(output_compartment, input_compartment)
 
     return momapy.utils.FrozenIdentityMultiDict(
         {

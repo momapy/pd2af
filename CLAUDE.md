@@ -77,9 +77,12 @@ remap lives in `pd2af.annotations.carry_annotations_through_provenance`,
 which unions the metadata of every input that merged into a given output
 (so a merged activity gathers the annotations of all its proteoforms).
 
-Coverage is species/activities, logical operators, **compartments** (folded
-into `provenance` via `context.compartment_emissions`) and the **map**
-itself (both the CellDesigner and SBGN writers emit map-level
+Coverage is species/activities, **complex subunits** at any depth (paired from
+the species provenance by `pd2af.build.record_provenance_for_subunit_trees`,
+through the builder's `input_model_element_to_canonical_model_element` map in
+the merged modes and by content-equality in the kept modes), logical operators,
+**compartments** (folded into `provenance` via `context.compartment_emissions`)
+and the **map** itself (both the CellDesigner and SBGN writers emit map-level
 annotations/notes). Deliberately dropped: modulation/influence and reaction
 annotations (AF influences are synthesized and fan-out/collapse, so there is
 no clean target without threading source provenance through the ASP layer);

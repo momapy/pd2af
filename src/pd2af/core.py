@@ -22,7 +22,9 @@ class TransformerResult:
             when the input was a bare model rather than a map.
         provenance: Maps each output AF model element to the ``frozenset`` of
             input PD/CD model elements it derives from -- the "where did this
-            come from" direction. Several inputs map to one output because the
+            come from" direction. Keys are the output species (or activities),
+            their subunits at any depth, the gates (or logical operators) and
+            the compartments. Several inputs map to one output because the
             merged modes content-dedup their results (many-to-one); the origin
             direction is thus the multi-valued one and is the forward index.
             Use ``.inverse`` (``id(input_element) -> frozenset`` of output
