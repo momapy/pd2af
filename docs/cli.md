@@ -9,7 +9,7 @@ The output map is written to stdout as a [momapy](https://github.com/adrienrougn
 ## Synopsis
 
 ```bash
-pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,keep-reactions,casq}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [-a <id> ...] [-o <output_file>]
+pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [-a <id> ...] [-o <output_file>]
 pd2af list-modes [--json]
 ```
 
@@ -38,7 +38,7 @@ The CLI is organised into subcommands:
 
 ## Transformation modes (`-m`)
 
-Four of the six modes lie on two orthogonal axes — species treatment and complex treatment. The remaining two, `keep-reactions` and `casq`, change where the influences come from.
+Four of the five modes lie on two orthogonal axes — species treatment and complex treatment. The fifth, `keep-reactions`, changes where the influences come from.
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
@@ -52,7 +52,6 @@ Four of the six modes lie on two orthogonal axes — species treatment and compl
 | `keep-species` | Emit one activity per distinct PD species (template + state + compartment). Keep complexes; active subunits of an activity-bearing complex are subsumed into the complex. |
 | `keep-species-no-complex` | Like `keep-species`, but drop complexes with an active subunit. |
 | `keep-reactions` | Keep the PD topology itself: every species is an activity (no structural activity signal required), and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds; no multi-hop chaining and no consumption/sparing inference. Complexes and PTM decorations are kept, as in `keep-species`. CellDesigner-only. |
-| `casq` | Emit one activity per surviving PD species after applying CASQ-style deletion rules (heterodimer simplification, name-preserving step pruning, transport collapse), with single-hop rewiring across deleted intermediates. Influences come directly from reaction modifier/reactant → product and from modulation arcs. CellDesigner-only. |
 
 The merging modes (`normal`, `normal-no-complex`) require `--layout-mode dot` because positions from the original PD map cannot be reused for synthesized merged-proteoform activities.
 
@@ -62,8 +61,8 @@ The merging modes (`normal`, `normal-no-complex`) require `--layout-mode dot` be
 |------|-------------|
 | `auto` | Pick automatically from the input: a map gets `dot`, a bare model gets no layout. **Default**. |
 | `dot` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. Required for `normal` and `normal-no-complex`. |
-| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`. |
-| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex`, `keep-reactions`, and `casq`. |
+| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`. |
+| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`. |
 
 ## Output writers
 
@@ -124,12 +123,6 @@ pd2af transform my_map.xml -m keep-species -l plain -o my_map_af.xml
 
 ```bash
 pd2af transform my_map.xml -m keep-species-no-complex -l overlay -o my_map_af.xml
-```
-
-### Use the casq mode
-
-```bash
-pd2af transform my_map.xml -m casq -l plain -o my_map_af.xml
 ```
 
 ### Mark elements active by id (input parameters)

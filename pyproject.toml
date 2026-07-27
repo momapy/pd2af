@@ -26,7 +26,6 @@ dev = [
   "griffe-fieldz>=0.1.2",
   "griffe-inherited-docstrings>=1.1.1",
   "mkdocs-pygments>=0.0.2",
-  "casq>=1.4.4",
   "momapy",
 ]
 test = ["pytest>=7"]

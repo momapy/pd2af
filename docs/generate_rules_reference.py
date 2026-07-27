@@ -18,7 +18,8 @@ sentences are written as pure natural language in ``pd2af.rules``.
 
 import mkdocs_gen_files
 
-from pd2af.cli import _INPUT_LANGUAGE_DISPLAY_NAMES, _MODE_CHOICES
+from pd2af.cli import _INPUT_LANGUAGE_DISPLAY_NAMES
+from pd2af.modes import _BUILTIN_MODES
 from pd2af.rules import build_registry, get_excludable_groups
 
 PAGE_PATH = "rules.md"
@@ -73,11 +74,6 @@ def collect_group_rules(group):
     return rules_with_variant
 
 
-def mode_to_profile(mode):
-    """Map a hyphenated transform-mode name to its underscored ASP profile."""
-    return mode.replace("-", "_")
-
-
 def concern_of(group_identifier):
     """The coarse concern a group belongs to: its id prefix before the first
     ``:`` (documentation-only clustering), or the whole id when there is none."""
@@ -106,9 +102,11 @@ def group_status(group_identifier, depended_on):
 def modes_for_group(group):
     """The modes a group is used in, as ``"all"`` or an enumerated cell."""
     modes = [
-        mode for mode in _MODE_CHOICES if mode_to_profile(mode) in group.profiles
+        mode.name
+        for mode in _BUILTIN_MODES
+        if group.identifier in mode.group_ids
     ]
-    if len(modes) == len(_MODE_CHOICES):
+    if len(modes) == len(_BUILTIN_MODES):
         return "all"
     return ", ".join(f"`{mode}`" for mode in modes)
 
@@ -124,7 +122,7 @@ def write_intro(page):
         "the whole a `--exclude-group` can drop. A group is *excludable* (a "
         "dependency-graph leaf) or *mandatory* (depended on by another group, "
         "so not excludable). Groups sharing an id prefix (`activity:*`, "
-        "`paths:*`, `casq:*`) address one coarse concern.\n\n"
+        "`paths:*`) address one coarse concern.\n\n"
     )
     page.write(
         "This page is generated from the live registry in `pd2af.rules`. It "
@@ -136,11 +134,10 @@ def write_intro(page):
 
 def write_by_mode(page, registry):
     page.write("## By mode {#by-mode}\n\n")
-    for mode in _MODE_CHOICES:
-        profile = mode_to_profile(mode)
-        group_identifiers = registry.profiles.get(profile, frozenset())
-        excludable, _mandatory = get_excludable_groups(profile)
-        page.write(f"### `{mode}`\n\n")
+    for mode in _BUILTIN_MODES:
+        group_identifiers = frozenset(mode.group_ids)
+        excludable, _mandatory = get_excludable_groups(mode.name)
+        page.write(f"### `{mode.name}`\n\n")
         for group in registry.groups.values():
             if group.identifier not in group_identifiers:
                 continue
@@ -208,7 +205,9 @@ def write_rule_index(page, registry):
 
 
 def main():
-    registry = build_registry()
+    # Built-ins only: a contributed mode's groups must never reach the
+    # published reference.
+    registry = build_registry(modes=_BUILTIN_MODES)
     with mkdocs_gen_files.open(PAGE_PATH, "w") as page:
         write_intro(page)
         write_by_mode(page, registry)

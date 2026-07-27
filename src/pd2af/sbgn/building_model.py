@@ -26,7 +26,6 @@ import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
-import pd2af.languages
 import pd2af.predicates
 import pd2af.sbgn.labels
 from pd2af.utils import add_model_element_if_new, register_or_reuse
@@ -183,7 +182,7 @@ def _get_or_make_compartment(context, input_compartment):
 
 
 def _make_and_add_activities(context):
-    strip = context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES
+    strip = context.mode.merges_proteoforms
     seen_activity_identities = set()
     for atom in context.activity_atoms:
         if atom.key in context.key_to_activity:

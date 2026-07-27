@@ -10,6 +10,7 @@ import momapy.io.core
 
 import pd2af
 import pd2af.cli
+import pd2af.modes
 
 from tests._helpers import MAPS_DIR, has_dot_binary
 
@@ -41,13 +42,12 @@ class TestWriterForOutput:
 
 class TestModeAndLayoutChoices:
     def test_mode_choices_lists_supported_modes(self):
-        assert set(pd2af.cli._MODE_CHOICES) == {
+        assert {mode.name for mode in pd2af.modes._BUILTIN_MODES} == {
             "normal",
             "normal-no-complex",
             "keep-species",
             "keep-species-no-complex",
             "keep-reactions",
-            "casq",
         }
 
     def test_layout_choices_includes_documented_modes(self):
@@ -127,7 +127,7 @@ class TestCliMainOutputFile:
 
     @pytest.mark.parametrize(
         "mode",
-        ["keep-species", "keep-species-no-complex", "keep-reactions", "casq"],
+        ["keep-species", "keep-species-no-complex", "keep-reactions"],
     )
     def test_per_species_modes_accept_plain_layout(
         self, tmp_path, example_map_path, mode
@@ -298,8 +298,8 @@ class TestListModes:
     def test_text_output_lists_modes_and_layouts(self, capsys):
         pd2af.cli.main(["list-modes"])
         out = capsys.readouterr().out
-        for mode in pd2af.cli._MODE_CHOICES:
-            assert mode in out
+        for mode_name in pd2af.modes.get_transformation_modes():
+            assert mode_name in out
         for layout_mode in pd2af.cli._LAYOUT_CHOICES:
             assert layout_mode in out
 
@@ -309,7 +309,7 @@ class TestListModes:
         assert set(data) == {"transformation_modes", "layout_modes"}
         # One entry per table row, one key per column.
         names = {mode["transformation_mode"] for mode in data["transformation_modes"]}
-        assert names == set(pd2af.cli._MODE_CHOICES)
+        assert names == set(pd2af.modes.get_transformation_modes())
         for mode in data["transformation_modes"]:
             assert set(mode) == {
                 "transformation_mode",
@@ -326,8 +326,8 @@ class TestListModes:
             mode["transformation_mode"]: mode
             for mode in json.loads(capsys.readouterr().out)["transformation_modes"]
         }
-        # Merged-proteoform modes only accept `dot`; the per-species/casq
-        # modes accept all three concrete layout modes.
+        # Merged-proteoform modes only accept `dot`; the per-species modes
+        # accept all three concrete layout modes.
         assert modes["normal"]["layout_modes"] == ["dot"]
         assert modes["normal-no-complex"]["layout_modes"] == ["dot"]
         assert set(modes["keep-species"]["layout_modes"]) == {

@@ -19,7 +19,6 @@ import momapy.core.mapping
 import momapy.geometry
 
 import pd2af.celldesigner.building_model
-import pd2af.languages
 import pd2af.utils
 
 
@@ -413,7 +412,7 @@ def _make_and_add_species_layout(context, species, input_species):
             # subunit structure) and let graphviz place it. plain/overlay keep
             # every clone, where the curated positions are meaningful.
             input_layouts = input_layouts[:1]
-        if context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES:
+        if context.mode.merges_proteoforms:
             # The merged modes strip the model species of their decorations; the
             # reused input glyph still carries the matching ModificationLayout /
             # StructuralStateLayout sub-glyphs, so prune them from a clone (the

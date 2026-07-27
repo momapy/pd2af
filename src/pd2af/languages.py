@@ -15,12 +15,17 @@ CELLDESIGNER = "celldesigner"
 SBGN_PD = "sbgn_pd"
 
 
-# The "merged" (true-AF) transformation modes: proteoforms collapse and all
-# post-translational decorations are stripped. The build stage strips PTMs iff
-# ``context.mode`` is one of these; the complementary modes keep decorations.
-# (Tokens are the hyphenated transform-mode names, not the underscored ASP
-# profile names.)
-MERGED_PROTEOFORM_MODES = frozenset({"normal", "normal-no-complex"})
+# The concrete layout modes (excluding the `None` sentinel and the `"auto"`
+# meta value), in display order.
+LAYOUT_MODES = ("plain", "overlay", "dot")
+
+# The concrete layout modes each output language supports. SBGN-AF output
+# supports the curated-geometry `plain` mode and the graphviz `dot` mode; the
+# `overlay` dimming is CellDesigner-only.
+LAYOUT_MODES_BY_LANGUAGE = {
+    CELLDESIGNER: LAYOUT_MODES,
+    SBGN_PD: ("plain", "dot"),
+}
 
 
 def language_from_map(map_):

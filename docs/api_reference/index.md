@@ -6,12 +6,13 @@ The pd2af public API is organized into the following modules.
 
 - [Core](core.md): the public `transform()` entry point
 - [CLI](cli.md): command-line entry point
-- [Languages](languages.md): input-language tokens and inference from the input map type
+- [Languages](languages.md): input-language tokens, layout-mode vocabulary and inference from the input map type
+- [Modes](modes.md): the transformation modes and the entry point that contributes new ones
 
 ## Transformation pipeline
 
 - [Solver](solver.md): clingo solver wrapper, resolves the ASP program into activity/influence atoms
-- [Rules](rules.md): Python helpers that emit ASP rules from the input map (all modes, including `casq`)
+- [Rules](rules.md): the rule groups and the composition of a mode's ASP program
 - [Predicates](predicates.md): clorm predicate definitions used by the ASP program
 - [Ontology](ontology.md): domain ontology (species/reaction/modulation kinds)
 

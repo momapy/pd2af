@@ -14,10 +14,6 @@ import pd2af.predicates
 import pd2af.rules
 
 
-def _get_profile_from_mode(mode):
-    return mode.replace("-", "_")
-
-
 def _make_control(
     model,
     clingo_id_to_model_element,
@@ -30,7 +26,6 @@ def _make_control(
     exclude_groups=(),
     exclude_rules=(),
 ):
-    profile = _get_profile_from_mode(mode)
     control = clorm.clingo.Control(
         ["--warn=no-atom-undefined"],
         unifier=[pd2af.predicates.new],
@@ -48,7 +43,7 @@ def _make_control(
         "base",
         [],
         pd2af.rules.build_program(
-            profile,
+            mode,
             language,
             exclude_groups=exclude_groups,
             exclude_rules=exclude_rules,

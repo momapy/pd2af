@@ -22,13 +22,13 @@ post-translational decorations** (state variables in SBGN;
 results, whether to **keep or dissolve complexes**, and **where the
 influences come from**. The first two are orthogonal and give the four
 `normal`/`keep-species` modes; the third is what sets `keep-reactions`
-and `casq` apart. In every mode a subunit is a *structural component*,
+apart. In every mode a subunit is a *structural component*,
 never an independent activity: a subunit's activity and influences are
 attributed to its outermost top-level complex (subunit-level influences
 are a CellDesigner artifact, not standard AF). The first two choices are
 decided by the **mode at build time**, not encoded in the activity key;
-the third is decided in the ASP layer by which rule groups the mode's
-profile includes.
+the third is decided in the ASP layer by which rule groups the mode
+names.
 
 | mode                       | PTM decorations    | complexes                                                  | influences                                            |
 | -------------------------- | ------------------ | ---------------------------------------------------------- | ----------------------------------------------------- |
@@ -37,20 +37,18 @@ profile includes.
 | `keep-species`             | kept               | kept (opaque; subunits routed to the complex)              | inferred                                              |
 | `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities | inferred                                              |
 | `keep-reactions`           | kept               | kept (opaque; subunits routed to the complex)              | stated only: reactant→product positive influences + direct modulations |
-| `casq`                     | kept               | kept (CASQ-specific deletion pruning)                      | CASQ-specific direct emission with bridged rewiring    |
 
 `normal` is the canonical AF mode and will be the default for the
-future SBGN-AF output. `keep-species*`, `keep-reactions` and `casq`
+future SBGN-AF output. `keep-species*` and `keep-reactions`
 deliberately deviate: they preserve PD proteoform structure for users
 who want a CD-native lossy reduction rather than a true AF view.
 
 `keep-reactions` also deviates on activity discovery: instead of
 requiring a structural signal, **every species is an activity**, and
 each reaction is rendered as one positive influence per (reactant,
-product) pair — the same direction `casq` takes for that relationship.
-It keeps the modulation arcs and reaction modifiers as single-hop
-influences, and takes none of the inference layers. It is
-CellDesigner-only for now.
+product) pair. It keeps the modulation arcs and reaction modifiers as
+single-hop influences, and takes none of the inference layers. It is
+CellDesigner-only.
 
 Stripping is a single recursive operation over the resolved entity
 (`pd2af.celldesigner.building_model.get_or_make_stripped_species`;
@@ -60,8 +58,33 @@ non-templated entities included, not just templated proteoforms. The
 two structural-role activity keys are `kept_species` (a top-level
 entity, or the top-level complex a subunit resolves to via the shared
 `topLevel` ASP relation) and `promoted_subunit` (a subunit lifted to top
-level when its complex is dissolved). `MERGED_PROTEOFORM_MODES` in
-`pd2af.languages` is the single source of truth for which modes strip.
+level when its complex is dissolved). `TransformationMode.merges_proteoforms`
+(`pd2af.modes`) is the single source of truth for which modes strip; the
+builder reads it off `context.mode`.
+
+## Modes are objects, contributed through an entry point
+
+A mode is a `pd2af.modes.TransformationMode`: its name, its CLI summary, the
+rule groups its program is made of (`group_references` naming registered
+groups, `group_definitions` carrying groups the mode brings itself), the input
+languages it accepts, and `merges_proteoforms`. `pd2af.rules` owns the groups
+and composes the program; the mode owns the membership, so no rule group names
+a mode.
+
+`pd2af.modes.get_transformation_modes()` returns the built-ins in declaration
+order followed by every mode contributed through the `pd2af.modes` entry-point
+group. A contributed mode may not shadow an existing name, and any failure to
+load one — bad import, wrong type, name collision, a group that fails
+`registry.validate()` — takes down every pd2af entry point, deliberately.
+`docs/generate_rules_reference.py` passes `_BUILTIN_MODES` to `build_registry`
+so a contributed mode never reaches the published reference.
+
+Group lists are complete, not leaf-only. The `preparation` slot is what makes a
+hand-written list safe: `preparation:complex` and `preparation:no_complex` fill
+it, the three consumers of `hasActivityCarrier`/`hasActivityKey`
+(`influences_derivation`, `influences_consumption`, `gates`) depend on the slot,
+so a mode that omits its preparation group raises `unfilled_slot` instead of
+silently emitting an activity-less program.
 
 ## Annotations and notes
 

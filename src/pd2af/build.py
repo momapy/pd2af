@@ -25,6 +25,7 @@ import momapy.utils
 import pd2af.celldesigner.building_layout
 import pd2af.celldesigner.building_model
 import pd2af.languages
+import pd2af.modes
 import pd2af.sbgn.building_layout
 import pd2af.sbgn.building_model
 import pd2af.utils
@@ -37,7 +38,7 @@ class BuilderContext:
     layout_mode: str | None
     clingo_id_to_model_element: dict
     influence_pairing: str = "cross"
-    mode: str = "normal"
+    mode: pd2af.modes.TransformationMode | None = None
 
     # --- outputs being built ---
     model: object = None
@@ -96,7 +97,7 @@ def build_map(
     clingo_model,
     clingo_id_to_model_element,
     influence_pairing="cross",
-    mode="normal",
+    mode=None,
 ):
     context = BuilderContext(
         input_map=map_,

@@ -427,3 +427,15 @@ class TestTransformModelInput:
             pd2af.transform(
                 proteoform_map.model, mode="normal", layout_mode=layout_mode
             )
+
+
+class TestLanguageCompatibility:
+    """A mode declares the input languages it accepts, and `transform`
+    enforces it: `keep-reactions` is CellDesigner-only."""
+
+    def test_celldesigner_only_mode_rejects_sbgn_pd_input(self, sbgn_example_map):
+        with pytest.raises(ValueError) as excinfo:
+            pd2af.transform(sbgn_example_map, mode="keep-reactions", layout_mode=None)
+        message = str(excinfo.value)
+        assert "keep-reactions" in message
+        assert "sbgn_pd" in message

@@ -6,9 +6,9 @@ Coverage mirrors the plan's verification list:
 
 * predicate level -- each typed influence accepts a ``logicalOperatorKey``
   source; ``new`` wraps the operator node and input predicates;
-* rule level -- the ``_GATES`` group is present in every non-casq profile and
-  absent in casq, the gate-input activation clause is emitted per language, and
-  the NOT token dodges the reserved ``not`` keyword;
+* rule level -- the ``_GATES`` group is present in every path-inference mode,
+  the gate-input activation clause is emitted per language, and the NOT token
+  dodges the reserved ``not`` keyword;
 * builder/layout level -- the operator-type and operator-class maps are total
   over the gate/operator classes they dispatch on;
 * integration -- CREB (Shape A: gate as reaction modifier), the SBGN-PD
@@ -46,11 +46,11 @@ from tests._helpers import (
 )
 
 
-_NON_CASQ_PROFILES = (
+_PATH_INFERENCE_MODES = (
     "normal",
-    "normal_no_complex",
-    "keep_species",
-    "keep_species_no_complex",
+    "normal-no-complex",
+    "keep-species",
+    "keep-species-no-complex",
 )
 
 _TYPED_INFLUENCE_NAMES = (
@@ -140,34 +140,23 @@ class TestOperatorPredicates:
 
 
 class TestGateRules:
-    @pytest.mark.parametrize("profile", _NON_CASQ_PROFILES)
+    @pytest.mark.parametrize("mode", _PATH_INFERENCE_MODES)
     @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
-    def test_gates_group_present_in_non_casq(self, profile, language):
-        program = pd2af.rules.build_program(profile, language=language)
+    def test_gates_group_present_in_path_inference_modes(self, mode, language):
+        program = pd2af.rules.build_program(mode, language=language)
         assert "new(logicalOperator(logicalOperatorKey(OPERATOR)," in program
         assert "new(logicalOperatorInput(logicalOperatorKey(OPERATOR)," in program
         assert "influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND)" in program
 
-    def test_gates_group_absent_in_casq(self):
-        # The _GATES group (operator nodes, input edges, operator-sourced
-        # influences) is not registered for casq, so no operator machinery
-        # appears. The gate-input activation clause lives in activity:gate_input,
-        # which is a non-casq group, so casq emits 0 gates (asserted end-to-end in
-        # TestCelldesignerGatesAreAdditive).
-        program = pd2af.rules.build_program("casq")
-        assert "logicalOperatorKey" not in program
-        assert "logicalOperator" not in program
-        assert "new(logicalOperator" not in program
-
     def test_celldesigner_activates_gate_inputs(self):
         program = pd2af.rules.build_program(
-            "keep_species", language="celldesigner"
+            "keep-species", language="celldesigner"
         )
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "booleanLogicGateInput(INPUT)" in program
 
     def test_sbgn_pd_operator_input_activation_is_entity_pool_guarded(self):
-        program = pd2af.rules.build_program("keep_species", language="sbgn_pd")
+        program = pd2af.rules.build_program("keep-species", language="sbgn_pd")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "logicalOperatorInput(INPUT)" in program
         assert "entityPool(ELEMENT)" in program
@@ -175,7 +164,7 @@ class TestGateRules:
     def test_not_token_dodges_reserved_keyword(self):
         # bare `not` is a reserved clingo keyword, so the NOT token is `not_`.
         program = pd2af.rules.build_program(
-            "keep_species", language="celldesigner"
+            "keep-species", language="celldesigner"
         )
         assert "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR)." in program
 
@@ -183,11 +172,11 @@ class TestGateRules:
         # Without the booleanLogicGate/logicalOperator umbrella guard, every
         # path/3 source (species included) would be read as an operator key.
         cd_program = pd2af.rules.build_program(
-            "keep_species", language="celldesigner"
+            "keep-species", language="celldesigner"
         )
         assert "booleanLogicGate(OPERATOR)" in cd_program
         sbgn_program = pd2af.rules.build_program(
-            "keep_species", language="sbgn_pd"
+            "keep-species", language="sbgn_pd"
         )
         assert "logicalOperator(OPERATOR)" in sbgn_program
 
@@ -313,11 +302,6 @@ class TestCelldesignerGatesAreAdditive:
     def test_srr_emits_no_surviving_gates(self):
         srr_map = read_cd_map(_SRR_MAP_PATH)
         out = pd2af.transform(srr_map, mode="keep-species", layout_mode=None).obj
-        assert len(out.model.boolean_logic_gates) == 0
-
-    def test_casq_emits_no_gates(self):
-        creb_map = read_cd_map(_CREB_MAP_PATH)
-        out = pd2af.transform(creb_map, mode="casq", layout_mode=None).obj
         assert len(out.model.boolean_logic_gates) == 0
 
 

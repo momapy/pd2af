@@ -1,14 +1,18 @@
 """ASP rule composition for the pd2af transformation modes.
 
-The non-CASQ rules are organised in layers:
+Which groups a mode is made of is declared by the mode itself
+(:mod:`pd2af.modes`); this module owns the groups and composes the program
+text for a named mode. The rules are organised in layers:
 
-* **topology** (shared across all non-CASQ profiles) — structural
-  helpers: ``isSubunit``, ``hasActiveDescendantSubunit``.
+* **topology** (shared) — structural helpers: ``isSubunit``,
+  ``hasActiveDescendantSubunit``.
 * **top_level** (the complex-keeping modes ``keep-species`` and
   ``normal``) — ``resolvesToTopLevel(SPECIES, TOPLEVEL)`` resolves every species to its
   outermost top-level entity, so a subunit is keyed by (and its
   influences routed to) its top-level complex rather than itself.
-* **preparation** (one rule group per non-CASQ mode) — emits
+* **preparation** (a ``slot``: exactly one filler group per mode, and
+  every consumer of the activity-key predicates depends on the slot
+  rather than on a particular filler) — emits
   ``hasActivityCarrier(RAW_SPECIES, ACTIVITY_BEARER)`` and
   ``hasActivityKey(ACTIVITY_BEARER, KEY)`` where ``KEY`` is one of two
   per-species wrappers: ``keptSpeciesKey/1`` (top-level species, and the
@@ -16,24 +20,18 @@ The non-CASQ rules are organised in layers:
   subunit promoted to top level when its complex is dissolved in the
   ``*-no-complex`` modes). Proteoform/PTM stripping for the merged modes
   (``normal``/``normal-no-complex``) happens at the build stage, not in the key.
-* **derivation** (shared across all non-CASQ profiles) — emits
+* **derivation** (shared) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``hasActivityCarrier`` /
   ``hasActivityKey``. The inference layers on top of it — multi-hop
   ``paths:chaining`` and ``influences_consumption`` — are carried by the four
-  path-inference profiles only.
+  path-inference modes only.
 
-The ``keep_reactions`` profile reuses that whole scaffolding and swaps
+The ``keep-reactions`` mode reuses that whole scaffolding and swaps
 discovery and inference for two rules: every species is an activity
 (``keep_reactions:activity``) and every (reactant, product) pair of a reaction
 is a positive influence (``keep_reactions:influences``). It keeps the single-hop
 modulation influences of ``paths:core`` and drops the inference layers.
-
-The ``casq`` profile keeps its own pipeline (deletion rules,
-bridged-product rewiring, direct reactant→product / modifier→product
-influence emission). It uses ``keptSpeciesKey/1`` for every surviving
-species's activity key, sharing only the predicate type with the
-non-CASQ layers.
 """
 
 from textwrap import dedent
@@ -46,28 +44,12 @@ from aspcompose import (
     RuleRegistry,
 )
 
-# The profiles that derive influences by inference over the production graph:
-# multi-hop chaining across reactant->product hops and consumption/sparing
-# reasoning. `keep_reactions` deliberately sits outside this set -- it turns each
-# reaction into direct triggerings instead, so the inference layers are redundant.
-_PATH_INFERENCE_PROFILES = frozenset(
-    {"normal", "normal_no_complex", "keep_species", "keep_species_no_complex"}
-)
+import pd2af.modes
 
-_KEEP_REACTIONS_PROFILES = frozenset({"keep_reactions"})
-
-_NON_CASQ_PROFILES = _PATH_INFERENCE_PROFILES | _KEEP_REACTIONS_PROFILES
-
-_CASQ_PROFILES = frozenset({"casq"})
-
-# Activity discovery drives the path-inference profiles: casq derives its
-# activities from its own pipeline (survival through the deletion rules +
-# resolution to a top-level complex, keyed on `hasActivityKey`) and reads none of
-# the `hasActivity`/`hasActivityCandidate` predicates these groups emit, so it
-# takes none of this layer; `keep_reactions` keeps the mandatory `activity:core`
-# bridge but replaces the structural-reason feature-groups with a single rule
-# making every species a candidate (`keep_reactions:activity`), which renders
-# each feature-group inert.
+# Activity discovery drives the path-inference modes: `keep-reactions` keeps the
+# mandatory `activity:core` bridge but replaces the structural-reason
+# feature-groups with a single rule making every species a candidate
+# (`keep_reactions:activity`), which renders each feature-group inert.
 #
 # Activity discovery is parallel across languages: only the `phenotype` rule is
 # language-agnostic (both languages emit the `phenotype` functor); every other
@@ -99,7 +81,6 @@ def _activity_feature(name, *, base=(), cd=(), sbgn=(), docs=""):
         variants["sbgn_pd"] = sbgn
     return RuleGroup(
         identifier=f"activity:{name}",
-        profiles=_PATH_INFERENCE_PROFILES,
         depends_on=frozenset({"activity:core"}),
         rules=base,
         variants=variants,
@@ -109,7 +90,6 @@ def _activity_feature(name, *, base=(), cd=(), sbgn=(), docs=""):
 
 _ACTIVITY_CORE = RuleGroup(
     identifier="activity:core",
-    profiles=_NON_CASQ_PROFILES,
     docs="Mandatory activity machinery: the candidate->activity bridge and the two global toggles. A single bridging rule promotes a `hasActivityCandidate(ELEMENT, REASON)` to `hasActivity` unless the element is `suppressActivity` (the `--set-inactive` veto). `globalSuppress` (`--set-all-inactive`) suppresses every candidate except those the solver marked `forceActive` (the per-id `--set-active` override), realising the precedence per-id > global > rules; `globalActivate` (`--set-all-active`) turns every top-level species/entity pool into a candidate. Every activity feature-group and every downstream group depends on this, so the dependency graph forbids excluding it -- the global toggles stay wired to their CLI flags. The structural-reason rules (phenotype, active marker, modulation source, gate input) live in the excludable `activity:*` feature-groups.",
     rules=(
         Rule(
@@ -275,9 +255,8 @@ _ACTIVITY_GATE_INPUT = _activity_feature(
 
 _TOPOLOGY = RuleGroup(
     identifier="topology",
-    profiles=_NON_CASQ_PROFILES,
     depends_on=frozenset({"activity:core"}),
-    docs="Mode-agnostic structural helpers shared by all non-CASQ profiles: `isSubunit`, `hasActiveDescendantSubunit`.",
+    docs="Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.",
     rules=(
         Rule(
             identifier="topology:is_subunit",
@@ -307,9 +286,8 @@ _TOPOLOGY = RuleGroup(
 
 _TOP_LEVEL = RuleGroup(
     identifier="top_level",
-    profiles=frozenset({"keep_species", "normal", "keep_reactions"}),
     depends_on=frozenset({"topology"}),
-    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`, `keep-reactions`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer). Mirrors the resolution `casq` performs in its own pipeline.",
+    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`, `keep-reactions`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer).",
     rules=(
         Rule(
             identifier="top_level:recursive",
@@ -343,7 +321,7 @@ _TOP_LEVEL = RuleGroup(
             Rule(
                 identifier="top_level:sbgn_pd:phenotype_self",
                 text="resolvesToTopLevel(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
-                docs="SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `keep-species`/`normal` output. The `*-no-complex` modes key via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule); casq is CellDesigner-only.",
+                docs="SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `keep-species`/`normal` output. The `*-no-complex` modes key via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule).",
             ),
         ),
     },
@@ -351,7 +329,7 @@ _TOP_LEVEL = RuleGroup(
 
 _PREPARATION_COMPLEX = RuleGroup(
     identifier="preparation:complex",
-    profiles=frozenset({"normal", "keep_species", "keep_reactions"}),
+    slot="preparation",
     depends_on=frozenset({"activity:core", "topology", "top_level"}),
     docs="The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.",
     rules=(
@@ -392,7 +370,7 @@ _PREPARATION_COMPLEX = RuleGroup(
 
 _PREPARATION_NO_COMPLEX = RuleGroup(
     identifier="preparation:no_complex",
-    profiles=frozenset({"normal_no_complex", "keep_species_no_complex"}),
+    slot="preparation",
     depends_on=frozenset({"activity:core", "topology"}),
     docs="The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths_complex_traversal`). `normal-no-complex` and `keep-species-no-complex` share these keys and differ only at the build stage, where `normal-no-complex` strips PTM decorations and merges content-equal results while `keep-species-no-complex` keeps the decorations.",
     rules=(
@@ -472,8 +450,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
 
 _MODULATION_KIND = RuleGroup(
     identifier="modulation_kind",
-    profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives. Every pipeline that emits a modulation-arc influence (`paths:core` for the non-casq modes, `casq:influences` for casq) reads this relation rather than re-encoding the mapping. The mapping is per-language: CellDesigner arcs carry the sign in the arc type (catalysis, inhibition, ...), while an SBGN-PD arc's kind comes from its stimulation/inhibition/necessary-stimulation classification.",
+    docs="Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives. Every group that emits a modulation-arc influence reads this relation rather than re-encoding the mapping. The mapping is per-language: CellDesigner arcs carry the sign in the arc type (catalysis, inhibition, ...), while an SBGN-PD arc's kind comes from its stimulation/inhibition/necessary-stimulation classification.",
     rules=(),
     variants={
         "celldesigner": (
@@ -644,7 +621,6 @@ _PATHS_CORE_SBGN_PD = (
 
 _PATHS_CORE = RuleGroup(
     identifier="paths:core",
-    profiles=_NON_CASQ_PROFILES,
     depends_on=frozenset({"modulation_kind"}),
     docs="Builds the direct (single-hop) kinded `propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND)` relation from PD reactions and modulation arcs, plus the production-cycle relations that gate transitive extension. INFLUENCE_KIND is one of `positive`, `negative`, `triggering`, `modulation` and their `unknown_*` twins. Reaction modifiers and the matching species→species modulation arcs map to the *same* kind (e.g. a trigger modifier and a triggering arc both give `triggering`; catalysis and physical stimulation both give `positive`; inhibition gives `negative`). Each variant defines the single reactant->product hop `isDirectlyTransformedTo/2`, the shared `isTransformedTo/2` is its transitive closure, and `isCyclicallyTransformedTo/2` marks the hops that lie inside a cycle so transitivity never propagates influence back around a production loop. The multi-hop reactant-chained transitivity itself is the excludable `paths:chaining` group.",
     rules=(
@@ -799,7 +775,6 @@ _PATHS_CORE = RuleGroup(
 # supplied by `paths:core`, so excluding it never breaks the core relations.
 _PATHS_CHAINING = RuleGroup(
     identifier="paths:chaining",
-    profiles=_PATH_INFERENCE_PROFILES,
     depends_on=frozenset({"paths:core"}),
     docs="Excludable multi-hop transitivity: extends a `propagatesInfluence` path through one more reactant->product hop (a reaction in CellDesigner, a process in SBGN-PD), carrying the kind via `composesTo` (triggering degrades to positivelyInfluences) and refusing to extend across a hop inside a production cycle (`not isCyclicallyTransformedTo`). Exclude with `--exclude-group paths:chaining` to keep only direct single-hop influences. Depends on `paths:core`, which supplies both `composesTo` and the cycle relations.",
     rules=(),
@@ -840,7 +815,6 @@ _PATHS_CHAINING = RuleGroup(
 
 _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     identifier="paths_complex_traversal",
-    profiles=frozenset({"normal_no_complex", "keep_species_no_complex"}),
     depends_on=frozenset({"paths:core"}),
     docs="Extends paths through complex containment for the ``*-no-complex`` profiles: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
     rules=(
@@ -867,9 +841,8 @@ _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
 
 _INFLUENCES_DERIVATION = RuleGroup(
     identifier="influences_derivation",
-    profiles=_NON_CASQ_PROFILES,
-    depends_on=frozenset({"paths:core"}),
-    docs="Non-casq derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key. Both rules are mode- and language-agnostic; the consumption/sparing reasoning lives in the separate `influences_consumption` group. The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
+    depends_on=frozenset({"paths:core", "preparation"}),
+    docs="Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key. Both rules are mode- and language-agnostic; the consumption/sparing reasoning lives in the separate `influences_consumption` group. The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.",
     rules=(
         Rule(
             identifier="influences_derivation:activity",
@@ -896,8 +869,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
 # CellDesigner vs SBGN-PD currently yields different AF influences.
 _INFLUENCES_CONSUMPTION = RuleGroup(
     identifier="influences_consumption",
-    profiles=_PATH_INFERENCE_PROFILES,
-    depends_on=frozenset({"activity:core"}),
+    depends_on=frozenset({"activity:core", "preparation"}),
     docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences_consumption` to keep only the influences the map states. The `keep-reactions` profile omits it, since that mode renders each reaction directly instead of reasoning about it.",
     rules=(),
     variants={
@@ -999,8 +971,7 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
 
 _INFLUENCE_OUTPUT = RuleGroup(
     identifier="influence_output",
-    profiles=_NON_CASQ_PROFILES | _CASQ_PROFILES,
-    docs="Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind. All pipelines (non-casq and casq) converge on `influences/3`; this group is the single place that turns a kind into its output predicate.",
+    docs="Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind. Every pipeline converges on `influences/3`; this group is the single place that turns a kind into its output predicate.",
     rules=(
         Rule(
             identifier="influence_output:positive",
@@ -1069,13 +1040,11 @@ _INFLUENCE_OUTPUT = RuleGroup(
 # isa rules, and without it (c) would treat every `propagatesInfluence/3` source (species
 # included) as an operator key. Provenance-agnostic: a future derived-operator
 # layer emits the same predicates and reuses this group's builder/layout/output
-# path unchanged. Not registered for casq (which keeps its own pipeline and
-# never reads `hasActivity`/`propagatesInfluence`).
+# path unchanged.
 _GATES = RuleGroup(
     identifier="gates",
-    profiles=_NON_CASQ_PROFILES,
-    depends_on=frozenset({"activity:core", "paths:core"}),
-    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic and registered for the non-casq profiles only.",
+    depends_on=frozenset({"activity:core", "paths:core", "preparation"}),
+    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic.",
     rules=(),
     variants={
         "celldesigner": (
@@ -1165,17 +1134,15 @@ _GATES = RuleGroup(
 
 # The `keep_reactions` profile: every species is an activity and every reaction
 # is rendered as reactant->product positive influences, so the map's own topology
-# *is* the influence network. It shares the whole non-CASQ scaffolding (activity
+# *is* the influence network. It shares the whole scaffolding (activity
 # bridge, top-level resolution, `keptSpeciesKey` keying, the single-hop
 # modulation influences of `paths:core`, gates, `influence_output`) and adds only the two
 # rules below, while omitting the inference layers (`paths:chaining`,
-# `influences_consumption`) that the other non-CASQ profiles carry. Like the
-# `casq:*` groups these rules are CellDesigner-only for now, written as plain
-# `rules` rather than a `celldesigner` variant so an SBGN-PD program still
-# resolves (and, as with casq, simply derives nothing).
+# `influences_consumption`) that the other modes carry. These rules are
+# CellDesigner-only: the mode declares `celldesigner` as its sole compatible
+# language.
 _KEEP_REACTIONS_ACTIVITY = RuleGroup(
     identifier="keep_reactions:activity",
-    profiles=_KEEP_REACTIONS_PROFILES,
     depends_on=frozenset({"activity:core"}),
     docs="The `keep-reactions` premise that every species is an activity, replacing the structural-reason `activity:*` feature-groups (each of which is inert once every species is a candidate, so the profile omits them). Unlike the `--set-all-active` toggle this rule carries no `not hasSubunit` guard: a subunit is a candidate too, which does not make it an activity of its own -- `preparation:complex:key` keys it by the `keptSpeciesKey` of its outermost complex -- but it does mean a reaction, modulation arc or gate input touching a subunit routes to the containing complex instead of being dropped for want of an activity key.",
     rules=(
@@ -1189,7 +1156,6 @@ _KEEP_REACTIONS_ACTIVITY = RuleGroup(
 
 _KEEP_REACTIONS_INFLUENCES = RuleGroup(
     identifier="keep_reactions:influences",
-    profiles=_KEEP_REACTIONS_PROFILES,
     depends_on=frozenset({"influences_derivation"}),
     docs="The `keep-reactions` premise that every reaction is kept: each (reactant, product) pair of a reaction becomes one positive influence. `positivelyInfluences` rather than `triggers` -- consuming a reactant to make a product is a contribution to it, not the necessary-stimulation relationship `triggers` (CellDesigner `Triggering`, SBGN-AF `NecessaryStimulation`) asserts. The rule writes `propagatesInfluence/3` rather than `influences/3` so the shared `influences_derivation:path` bridge resolves both endpoints through their carrier and key, routing a subunit endpoint to its top-level complex. Reactant and product may resolve to the same activity (a reaction whose participants share a complex, or a state transition drawn on a single species), and the resulting self-influence is emitted like any other.",
     rules=(
@@ -1202,451 +1168,61 @@ _KEEP_REACTIONS_INFLUENCES = RuleGroup(
                     hasReferredElement(REACTANT, REACTANT_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, PRODUCT_SPECIES)."""),
-            docs="Each reactant of a reaction positively influences each product of that reaction. This is the one rule that makes a reaction itself an influence: in the other non-CASQ profiles the reactant->product hop only feeds the cycle relations, and a bare reactant is never an influence source. It matches the direction `casq` takes for the same relationship.",
+            docs="Each reactant of a reaction positively influences each product of that reaction. This is the one rule that makes a reaction itself an influence: in the other modes the reactant->product hop only feeds the cycle relations, and a bare reactant is never an influence source.",
         ),
     ),
 )
 
 
-_CASQ_PARTICIPATION = RuleGroup(
-    identifier="casq:participation",
-    profiles=_CASQ_PROFILES,
-    docs="CASQ helper relations describing how species participate in reactions (`activeParticipates` for reactant/modifier roles, `participates` adding products, `isProducedSpecies`, `isModifierSpecies` and `isModulationTarget`), used as conditions of the CASQ deletion rules.",
-    rules=(
-        Rule(
-            identifier="casq:participation:active_from_reactant",
-            text=dedent("""\
-                activeParticipates(SPECIES, REACTION) :-
-                    reaction(REACTION),
-                    hasReactant(REACTION, REACTANT),
-                    hasReferredElement(REACTANT, SPECIES)."""),
-            docs="A species actively participates in a reaction if it is referred to by a reactant of that reaction.",
-        ),
-        Rule(
-            identifier="casq:participation:active_from_modifier",
-            text=dedent("""\
-                activeParticipates(SPECIES, REACTION) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER),
-                    hasReferredElement(MODIFIER, SPECIES)."""),
-            docs="A species actively participates in a reaction if it is referred to by a modifier of that reaction.",
-        ),
-        Rule(
-            identifier="casq:participation:inherits_active",
-            text="participates(SPECIES, REACTION) :- activeParticipates(SPECIES, REACTION).",
-            docs="Active participation implies participation.",
-        ),
-        Rule(
-            identifier="casq:participation:from_product",
-            text=dedent("""\
-                participates(SPECIES, REACTION) :-
-                    reaction(REACTION),
-                    hasProduct(REACTION, PRODUCT),
-                    hasReferredElement(PRODUCT, SPECIES)."""),
-            docs="A species participates in a reaction if it is referred to by a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:participation:is_produced",
-            text=dedent("""\
-                isProducedSpecies(SPECIES) :-
-                    reaction(REACTION),
-                    hasProduct(REACTION, PRODUCT),
-                    hasReferredElement(PRODUCT, SPECIES)."""),
-            docs="A species is produced if some reaction has a product referring to it.",
-        ),
-        Rule(
-            identifier="casq:participation:is_modifier",
-            text=dedent("""\
-                isModifierSpecies(SPECIES) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER),
-                    hasReferredElement(MODIFIER, SPECIES)."""),
-            docs="A species is a modifier if some reaction has a modifier referring to it.",
-        ),
-        Rule(
-            identifier="casq:participation:is_modulation_target",
-            text=dedent("""\
-                isModulationTarget(SPECIES) :-
-                    modulation(MODULATION),
-                    hasTarget(MODULATION, SPECIES)."""),
-            docs="A species is a modulation target if some direct influence/modulation arc (`modulation/1` -- the umbrella over every typed arc: catalysis, inhibition, positiveInfluence, ...) points at it. Unlike a reaction-product influence into a deleted species (rewired via `bridgesToProduct` or blocked by the participation/`isProducedSpecies` guards), a modulation arc has no rewiring, so deleting its target would silently drop the influence. The deletion rules use `not isModulationTarget(...)` to refuse such deletions -- mirroring casq, whose deletions guard on the species having no incoming transitions (a CellDesigner influence arc is a reaction whose product is its target, so it counts as a transition).",
-        ),
-    ),
-)
-
-_CASQ_DELETE = RuleGroup(
-    identifier="casq:delete",
-    profiles=_CASQ_PROFILES,
-    depends_on=frozenset({"casq:participation"}),
-    docs="CASQ-style species pruning: rules 1-4 mark species for deletion based on heterodimer associations, name-preserving single-product reactions, and transports, mirroring the CASQ tool's removal heuristics.",
-    rules=(
-        Rule(
-            identifier="casq:delete:rule_1",
-            text=dedent("""\
-                delete(RECEPTOR, rule_1) :-
-                    heterodimerAssociation(REACTION),
-                    hasReactant(REACTION, RECEPTOR_REACTANT),
-                    hasReferredElement(RECEPTOR_REACTANT, RECEPTOR),
-                    receptor(RECEPTOR),
-                    not isModulationTarget(RECEPTOR),
-                    hasReactant(REACTION, PARTNER_REACTANT),
-                    hasReferredElement(PARTNER_REACTANT, PARTNER),
-                    RECEPTOR != PARTNER,
-                    #count{ REACTANT_SPECIES : hasReactant(REACTION, REACTANT), hasReferredElement(REACTANT, REACTANT_SPECIES) } = 2,
-                    #count{ RECEPTOR_REACTION : participates(RECEPTOR, RECEPTOR_REACTION) } = 1,
-                    #count{ PARTNER_REACTION : participates(PARTNER, PARTNER_REACTION) } = 1."""),
-            docs="A receptor in a 2-reactant heterodimer association where receptor and partner each participate in only this reaction is deleted (rule_1), unless the receptor is the target of a modulation arc -- deleting it would silently drop that influence (which, unlike a reaction-product influence, is never rewired), so `not isModulationTarget(RECEPTOR)` blocks the deletion, mirroring casq's no-incoming-transitions guard.",
-        ),
-        Rule(
-            identifier="casq:delete:rule_2",
-            text=dedent("""\
-                delete(SPECIES_1, rule_2) :-
-                    heterodimerAssociation(REACTION),
-                    hasReactant(REACTION, FIRST_REACTANT), hasReferredElement(FIRST_REACTANT, SPECIES_1),
-                    hasReactant(REACTION, SECOND_REACTANT), hasReferredElement(SECOND_REACTANT, SPECIES_2),
-                    SPECIES_1 != SPECIES_2,
-                    not receptor(SPECIES_1),
-                    not receptor(SPECIES_2),
-                    not isModulationTarget(SPECIES_1),
-                    not isModulationTarget(SPECIES_2),
-                    #count{ REACTANT_SPECIES : hasReactant(REACTION, REACTANT), hasReferredElement(REACTANT, REACTANT_SPECIES) } = 2,
-                    #count{ FIRST_SPECIES_REACTION : activeParticipates(SPECIES_1, FIRST_SPECIES_REACTION) } = 1,
-                    #count{ SECOND_SPECIES_REACTION : activeParticipates(SPECIES_2, SECOND_SPECIES_REACTION) } = 1."""),
-            docs="In a 2-reactant heterodimer association where neither reactant is a receptor and each actively participates only in this reaction, both reactant species are deleted (rule_2). The rule fires symmetrically for each side. The deletion is blocked if *either* reactant is the target of a modulation arc (`not isModulationTarget(SPECIES_1)`, `not isModulationTarget(SPECIES_2)`): such an influence is never rewired, so dropping either reactant would silently lose it -- and casq likewise refuses to delete the pair when either has incoming transitions.",
-        ),
-        Rule(
-            identifier="casq:delete:rule_3",
-            text=dedent("""\
-                delete(REACTANT_SPECIES, rule_3) :-
-                    reaction(REACTION),
-                    hasReactant(REACTION, REACTANT), hasReferredElement(REACTANT, REACTANT_SPECIES),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, PRODUCT_SPECIES),
-                    REACTANT_SPECIES != PRODUCT_SPECIES,
-                    hasName(REACTANT_SPECIES, NAME), hasName(PRODUCT_SPECIES, NAME),
-                    not isProducedSpecies(REACTANT_SPECIES),
-                    not isModifierSpecies(REACTANT_SPECIES),
-                    not isModulationTarget(REACTANT_SPECIES),
-                    #count{ COUNTED_PRODUCT_SPECIES : hasProduct(REACTION, COUNTED_PRODUCT), hasReferredElement(COUNTED_PRODUCT, COUNTED_PRODUCT_SPECIES) } = 1,
-                    #count{ CONSUMING_REACTION : hasReactant(CONSUMING_REACTION, CONSUMING_REACTANT), hasReferredElement(CONSUMING_REACTANT, REACTANT_SPECIES) } = 1."""),
-            docs="In a single-product reaction where reactant and product share a name, the reactant is deleted (rule_3) if it is not produced anywhere else, never appears as a modifier, is not the target of a modulation arc (`not isModulationTarget` -- such an influence is never rewired and would be silently lost), and is consumed only by this reaction.",
-        ),
-        Rule(
-            identifier="casq:delete:rule_4",
-            text=dedent("""\
-                delete(REACTANT_SPECIES, rule_4) :-
-                    transport(REACTION),
-                    hasReactant(REACTION, REACTANT), hasReferredElement(REACTANT, REACTANT_SPECIES),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, PRODUCT_SPECIES),
-                    REACTANT_SPECIES != PRODUCT_SPECIES,
-                    hasName(REACTANT_SPECIES, NAME), hasName(PRODUCT_SPECIES, NAME),
-                    not isModulationTarget(REACTANT_SPECIES),
-                    #count{ PARTICIPATED_REACTION : activeParticipates(REACTANT_SPECIES, PARTICIPATED_REACTION) } = 1,
-                    #count{ COUNTED_PRODUCT_SPECIES : hasProduct(REACTION, COUNTED_PRODUCT), hasReferredElement(COUNTED_PRODUCT, COUNTED_PRODUCT_SPECIES) } = 1."""),
-            docs="In a single-product transport where reactant and product share a name and the reactant actively participates only in this reaction, the reactant is deleted (rule_4), unless it is the target of a modulation arc (`not isModulationTarget` -- that influence has no rewiring and would be silently dropped).",
-        ),
-    ),
-)
-
-_CASQ_BRIDGED_PRODUCT = RuleGroup(
-    identifier="casq:bridged_product",
-    profiles=_CASQ_PROFILES,
-    depends_on=frozenset({"casq:delete"}),
-    docs="One-hop rewiring across species deleted by `rule_2` or `rule_4`: if reaction R1 produces a deleted species that reaction R2 consumes to make P, then R1 is treated as also producing P so influences can skip the deleted intermediate.",
-    rules=(
-        Rule(
-            identifier="casq:bridged_product:from_rule_2",
-            text=dedent("""\
-                bridgesToProduct(REACTION_1, PRODUCT_SPECIES) :-
-                    delete(DELETED_SPECIES, rule_2),
-                    reaction(REACTION_1),
-                    hasProduct(REACTION_1, REACTION_1_PRODUCT), hasReferredElement(REACTION_1_PRODUCT, DELETED_SPECIES),
-                    reaction(REACTION_2),
-                    hasReactant(REACTION_2, REACTION_2_REACTANT), hasReferredElement(REACTION_2_REACTANT, DELETED_SPECIES),
-                    hasProduct(REACTION_2, REACTION_2_PRODUCT), hasReferredElement(REACTION_2_PRODUCT, PRODUCT_SPECIES)."""),
-            docs="One-hop rewiring across a species deleted by rule_2: REACTION_1 produces DELETED_SPECIES and REACTION_2 consumes DELETED_SPECIES and produces PRODUCT_SPECIES, so REACTION_1 is treated as also producing PRODUCT_SPECIES.",
-        ),
-        Rule(
-            identifier="casq:bridged_product:from_rule_4",
-            text=dedent("""\
-                bridgesToProduct(REACTION_1, PRODUCT_SPECIES) :-
-                    delete(DELETED_SPECIES, rule_4),
-                    reaction(REACTION_1),
-                    hasProduct(REACTION_1, REACTION_1_PRODUCT), hasReferredElement(REACTION_1_PRODUCT, DELETED_SPECIES),
-                    reaction(REACTION_2),
-                    hasReactant(REACTION_2, REACTION_2_REACTANT), hasReferredElement(REACTION_2_REACTANT, DELETED_SPECIES),
-                    hasProduct(REACTION_2, REACTION_2_PRODUCT), hasReferredElement(REACTION_2_PRODUCT, PRODUCT_SPECIES)."""),
-            docs="One-hop rewiring across a species deleted by rule_4 (analog of casq:bridged_product:from_rule_2 for transport-driven deletes).",
-        ),
-    ),
-)
-
-_CASQ_ACTIVITY = RuleGroup(
-    identifier="casq:activity",
-    profiles=_CASQ_PROFILES,
-    depends_on=frozenset({"casq:delete"}),
-    docs="`casq` activity emission: every species resolves to its outermost top-level complex (recursively), and only surviving top-level entities become activities. A standalone top-level species resolves to itself and is keyed `keptSpeciesKey(SELF)`. A subunit -- at any nesting depth -- resolves to the outermost complex that contains it and is keyed by *that complex's* `keptSpeciesKey`; it is never emitted as its own activity. This mirrors casq, which collapses a subunit's participation onto its complex (a subunit is never a node in its own right). When the resolved top-level complex is deleted, the subunit has no surviving carrier and contributes no key, so its participation is dropped -- matching casq's deletion behaviour. Influence endpoints are resolved through `hasActivityKey` (in casq:influences), so an influence touching a subunit references its top-level complex's `keptSpeciesKey` key. The recursive resolution also fixes a casq bug: casq collapses only one nesting level and silently drops influences from more deeply nested subunits.",
-    rules=(
-        Rule(
-            identifier="casq:activity:top_level_self",
-            text=dedent("""\
-                resolvesToTopLevel(SPECIES, SPECIES) :-
-                    species(SPECIES),
-                    not hasSubunit(_, SPECIES)."""),
-            docs="A species that is not a subunit of any complex is its own top-level entity.",
-        ),
-        Rule(
-            identifier="casq:activity:top_level_recursive",
-            text=dedent("""\
-                resolvesToTopLevel(SUBUNIT, TOPLEVEL) :-
-                    hasSubunit(PARENT_COMPLEX, SUBUNIT),
-                    resolvesToTopLevel(PARENT_COMPLEX, TOPLEVEL)."""),
-            docs="A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex.",
-        ),
-        Rule(
-            identifier="casq:activity:key",
-            text=dedent("""\
-                hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL)) :-
-                    resolvesToTopLevel(SPECIES, TOPLEVEL),
-                    not delete(TOPLEVEL, _)."""),
-            docs="A species is keyed by the `keptSpeciesKey` activity of its surviving top-level complex (or of itself, when it is top-level). Subunits never get their own activity; when the top-level complex is deleted there is no key, so nothing it contains contributes.",
-        ),
-        Rule(
-            identifier="casq:activity:emit",
-            text="new(activity(KEY)) :- hasActivityKey(_, KEY).",
-            docs="Every distinct activity key emits an activity node with that key.",
-        ),
-    ),
-)
-
-_CASQ_INFLUENCES = RuleGroup(
-    identifier="casq:influences",
-    profiles=_CASQ_PROFILES,
-    depends_on=frozenset({"casq:bridged_product", "casq:activity", "modulation_kind"}),
-    docs="Casq-specific influence emission, written into the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation (the shared `influence_output` group fans it out to the typed heads). Directly wires reactant/catalyzer/stimulator → product (positivelyInfluences), trigger → product (triggers), inhibitor → product (negativelyInfluences), the generic and unknown modifiers (modulation / unknown_*), and the species→species modulation arcs, each with a bridged-product variant to route across deleted intermediates. Because a bridged product crosses a reaction boundary, the bridged trigger variant degrades to positive (mirroring `composesTo`).",
-    rules=(
-        Rule(
-            identifier="casq:influences:reactant_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasReactant(REACTION, REACTANT), hasReferredElement(REACTANT, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="A reactant of a reaction positively influences a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:reactant_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasReactant(REACTION, REACTANT), hasReferredElement(REACTANT, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Same as casq:influences:reactant_to_product but routed through a deleted intermediate via bridgesToProduct.",
-        ),
-        Rule(
-            identifier="casq:influences:catalyzer_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="A catalyzer of a reaction positively influences a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:catalyzer_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:catalyzer_to_product.",
-        ),
-        Rule(
-            identifier="casq:influences:physical_stimulator_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="A physical stimulator of a reaction positively influences a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:physical_stimulator_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:physical_stimulator_to_product.",
-        ),
-        Rule(
-            identifier="casq:influences:trigger_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, triggers) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="A trigger of a reaction triggers a product of that reaction (direct trigger→product, so it keeps the triggering kind).",
-        ),
-        Rule(
-            identifier="casq:influences:trigger_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:trigger_to_product. A bridged product crosses a reaction boundary, so the triggering degrades to a plain positive influence (the casq analog of composesTo).",
-        ),
-        Rule(
-            identifier="casq:influences:inhibitor_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="An inhibitor of a reaction negatively influences a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:inhibitor_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:inhibitor_to_product.",
-        ),
-        Rule(
-            identifier="casq:influences:modulator_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, modulates) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), modulator(MODIFIER),
-                    not physicalStimulator(MODIFIER),
-                    not inhibitor(MODIFIER),
-                    not trigger(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="A bare modulator (generic MODULATION modifier) of a reaction modulates a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:modulator_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, modulates) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), modulator(MODIFIER),
-                    not physicalStimulator(MODIFIER),
-                    not inhibitor(MODIFIER),
-                    not trigger(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:modulator_to_product.",
-        ),
-        Rule(
-            identifier="casq:influences:unknown_catalyzer_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), unknownCatalyzer(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="An unknown catalyzer of a reaction unknown-positively influences a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:unknown_catalyzer_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), unknownCatalyzer(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:unknown_catalyzer_to_product.",
-        ),
-        Rule(
-            identifier="casq:influences:unknown_inhibitor_to_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), unknownInhibitor(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    hasProduct(REACTION, PRODUCT), hasReferredElement(PRODUCT, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="An unknown inhibitor of a reaction unknown-negatively influences a product of that reaction.",
-        ),
-        Rule(
-            identifier="casq:influences:unknown_inhibitor_to_bridged_product",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
-                    reaction(REACTION),
-                    hasModifier(REACTION, MODIFIER), unknownInhibitor(MODIFIER),
-                    hasReferredElement(MODIFIER, SOURCE),
-                    bridgesToProduct(REACTION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="Bridged variant of casq:influences:unknown_inhibitor_to_product.",
-        ),
-        Rule(
-            identifier="casq:influences:modulation_arc_influence",
-            text=dedent("""\
-                influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND) :-
-                    hasModulationKind(MODULATION, INFLUENCE_KIND),
-                    hasSource(MODULATION, SOURCE), hasTarget(MODULATION, TARGET),
-                    hasActivityKey(SOURCE, SOURCE_KEY), hasActivityKey(TARGET, TARGET_KEY)."""),
-            docs="A modulation arc emits an influence between its source and target activities, carrying the arc's kind (`hasModulationKind`, from the `modulation_kind` group). This covers every arc type -- catalysis/physical stimulation/positive influence give `positive`, triggering gives `triggering`, inhibition/negative influence give `negative`, a bare modulation gives `modulation`, and the `unknown*` twins give the `unknown_*` kinds.",
-        ),
-    ),
+_BUILTIN_GROUPS = (
+    _ACTIVITY_CORE,
+    _ACTIVITY_PHENOTYPE,
+    _ACTIVITY_ACTIVE_MARKER,
+    _ACTIVITY_MODULATION_SOURCE,
+    _ACTIVITY_GATE_INPUT,
+    _TOPOLOGY,
+    _TOP_LEVEL,
+    _PREPARATION_COMPLEX,
+    _PREPARATION_NO_COMPLEX,
+    _MODULATION_KIND,
+    _PATHS_CORE,
+    _PATHS_CHAINING,
+    _PATHS_COMPLEX_TRAVERSAL,
+    _INFLUENCES_DERIVATION,
+    _INFLUENCES_CONSUMPTION,
+    _INFLUENCE_OUTPUT,
+    _GATES,
+    _KEEP_REACTIONS_ACTIVITY,
+    _KEEP_REACTIONS_INFLUENCES,
 )
 
 
-def build_registry() -> RuleRegistry:
+def build_registry(modes=None) -> RuleRegistry:
+    """Register the built-in rule groups plus every group the modes define.
+
+    ``modes`` is an iterable of :class:`pd2af.modes.TransformationMode`,
+    defaulting to every known mode. Passing a narrower set — the built-in modes
+    alone, say — yields a registry that ignores contributed groups.
+    """
+    if modes is None:
+        modes = pd2af.modes.get_transformation_modes().values()
+    contributed_groups = []
+    mode_by_contributed_group_id: dict[str, str] = {}
+    for mode in modes:
+        for group in mode.group_definitions:
+            already_contributed_by = mode_by_contributed_group_id.get(
+                group.identifier
+            )
+            if already_contributed_by is not None:
+                raise RuntimeError(
+                    f"transformation modes {already_contributed_by!r} and "
+                    f"{mode.name!r} both define rule group "
+                    f"{group.identifier!r}"
+                )
+            mode_by_contributed_group_id[group.identifier] = mode.name
+            contributed_groups.append(group)
     registry = RuleRegistry()
-    registry.register(
-        [
-            _ACTIVITY_CORE,
-            _ACTIVITY_PHENOTYPE,
-            _ACTIVITY_ACTIVE_MARKER,
-            _ACTIVITY_MODULATION_SOURCE,
-            _ACTIVITY_GATE_INPUT,
-            _TOPOLOGY,
-            _TOP_LEVEL,
-            _PREPARATION_COMPLEX,
-            _PREPARATION_NO_COMPLEX,
-            _MODULATION_KIND,
-            _PATHS_CORE,
-            _PATHS_CHAINING,
-            _PATHS_COMPLEX_TRAVERSAL,
-            _INFLUENCES_DERIVATION,
-            _INFLUENCES_CONSUMPTION,
-            _INFLUENCE_OUTPUT,
-            _GATES,
-            _KEEP_REACTIONS_ACTIVITY,
-            _KEEP_REACTIONS_INFLUENCES,
-            _CASQ_PARTICIPATION,
-            _CASQ_DELETE,
-            _CASQ_BRIDGED_PRODUCT,
-            _CASQ_ACTIVITY,
-            _CASQ_INFLUENCES,
-        ]
-    )
+    registry.register(list(_BUILTIN_GROUPS) + contributed_groups)
     issues = registry.validate()
     if issues:
         raise RuntimeError(
@@ -1656,25 +1232,29 @@ def build_registry() -> RuleRegistry:
     return registry
 
 
-def get_excludable_groups(profile: str) -> tuple[frozenset[str], frozenset[str]]:
-    """Return ``(excludable, mandatory)`` group ids for a profile.
+def get_excludable_groups(mode_name: str) -> tuple[frozenset[str], frozenset[str]]:
+    """Return ``(excludable, mandatory)`` group ids for a transformation mode.
 
     A group is *mandatory* when another included group depends on it (the
     dependency graph forbids excluding it — ``resolve`` would raise
     ``excluded_dependency``); every other included group is an *excludable*
-    leaf that ``--exclude-group`` can drop cleanly.
+    leaf that ``--exclude-group`` can drop cleanly. A dependency on a *slot*
+    resolves to the included group filling it, so a filler is mandatory
+    exactly like a directly named dependency.
     """
     registry = build_registry()
-    included = registry.profiles.get(profile)
-    if included is None:
-        raise ValueError(f"unknown transformation mode profile {profile!r}")
+    included = frozenset(pd2af.modes.get_transformation_mode(mode_name).group_ids)
     depended_on: set[str] = set()
     for group_id in included:
         for dependency in registry.groups[group_id].depends_on:
             if dependency in included:
                 depended_on.add(dependency)
+            else:
+                depended_on.update(
+                    registry.slots.get(dependency, frozenset()) & included
+                )
     mandatory = frozenset(depended_on)
-    excludable = frozenset(included) - mandatory
+    excludable = included - mandatory
     return excludable, mandatory
 
 
@@ -1699,19 +1279,19 @@ def _friendly_exclusion_message(error: PlanInvalidError) -> str:
 
 
 def build_program(
-    profile: str,
+    mode_name: str,
     language: str = "celldesigner",
     exclude_groups: tuple[str, ...] = (),
     exclude_rules: tuple[str, ...] = (),
 ) -> str:
-    """Return the composed ASP program text for the given profile and
-    input ``language``.
+    """Return the composed ASP program text for the named transformation mode
+    and input ``language``.
 
-    Modes are aspcompose *profiles*; the input language is an aspcompose
-    *variant*. Language-agnostic rules live in each group's ``rules`` and
-    are emitted for every language; language-specific rules live in
-    ``variants={"celldesigner": ..., "sbgn_pd": ...}`` and are selected
-    here by ``resolve(variant=language)``.
+    The mode names the groups its program is made of; the input language is an
+    aspcompose *variant*. Language-agnostic rules live in each group's
+    ``rules`` and are emitted for every language; language-specific rules live
+    in ``variants={"celldesigner": ..., "sbgn_pd": ...}`` and are selected here
+    by ``resolve(variant=language)``.
 
     ``exclude_groups`` drops whole rule groups (the primary toggle: each
     excludable group is a coherent functional unit); excluding a group that
@@ -1720,9 +1300,10 @@ def build_program(
     by identifier (used for the whole-with-scalpel table groups); an id that
     does not name a resolved rule raises ``ValueError``.
     """
-    registry = build_registry()
-    plan = CollectionPlan(registry)
-    plan.add_profile(profile)
+    mode = pd2af.modes.get_transformation_mode(mode_name)
+    plan = CollectionPlan(build_registry())
+    for group_id in mode.group_ids:
+        plan.add_group(group_id)
     for group_id in exclude_groups:
         plan.exclude_group(group_id)
     try:

@@ -1,37 +1,43 @@
+import aspcompose
 import pytest
 
+import pd2af.modes
 import pd2af.rules
 
 
-_PROFILES = (
+_MODES = (
     "normal",
-    "normal_no_complex",
-    "keep_species",
-    "keep_species_no_complex",
-    "keep_reactions",
-    "casq",
+    "normal-no-complex",
+    "keep-species",
+    "keep-species-no-complex",
+    "keep-reactions",
 )
 
 
+def _group_ids(mode_name):
+    """The rule groups a mode is made of, as the mode itself declares them."""
+    return frozenset(pd2af.modes.get_transformation_mode(mode_name).group_ids)
+
+
 class TestBuildProgram:
-    @pytest.mark.parametrize("profile", _PROFILES)
-    def test_profile_returns_program_text(self, profile):
-        program = pd2af.rules.build_program(profile)
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_mode_returns_program_text(self, mode):
+        program = pd2af.rules.build_program(mode)
         assert isinstance(program, str)
         assert len(program) > 0
 
-    @pytest.mark.parametrize("profile", _PROFILES)
-    def test_profile_has_activity_and_influence_rules(self, profile):
-        program = pd2af.rules.build_program(profile)
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_mode_has_activity_and_influence_rules(self, mode):
+        program = pd2af.rules.build_program(mode)
         assert "hasActivity" in program
         assert "hasActivityKey" in program
         assert "new(activity(KEY))" in program
         assert "new(positivelyInfluences" in program
         assert "new(negativelyInfluences" in program
 
-    @pytest.mark.parametrize("profile", _PROFILES)
-    def test_profile_emits_all_typed_influence_heads(self, profile):
-        program = pd2af.rules.build_program(profile)
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_mode_emits_all_typed_influence_heads(self, mode):
+        program = pd2af.rules.build_program(mode)
         for head in (
             "new(positivelyInfluences",
             "new(negativelyInfluences",
@@ -42,64 +48,64 @@ class TestBuildProgram:
             "new(unknownModulates",
             "new(unknownTriggers",
         ):
-            assert head in program, (profile, head)
+            assert head in program, (mode, head)
 
-    @pytest.mark.parametrize("profile", _PROFILES)
-    def test_profile_fans_out_internal_influences_relation(self, profile):
-        program = pd2af.rules.build_program(profile)
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_mode_fans_out_internal_influences_relation(self, mode):
+        program = pd2af.rules.build_program(mode)
         # The typed heads are derived from the internal influences/3 relation.
         assert "influences(SOURCE, TARGET, positivelyInfluences)" in program
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
 
-    def test_path_inference_profiles_carry_kind_through_composes_to(self):
-        for profile in ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex"):
-            program = pd2af.rules.build_program(profile)
+    def test_path_inference_modes_carry_kind_through_composes_to(self):
+        for mode in ("normal", "normal-no-complex", "keep-species", "keep-species-no-complex"):
+            program = pd2af.rules.build_program(mode)
             assert "composesTo(triggers, positivelyInfluences)" in program
             assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" in program
 
     def test_normal_no_complex_variants_promote_active_subunits(self):
-        for profile in ("normal_no_complex", "keep_species_no_complex"):
-            program = pd2af.rules.build_program(profile)
+        for mode in ("normal-no-complex", "keep-species-no-complex"):
+            program = pd2af.rules.build_program(mode)
             assert "promotedSubunitKey" in program
 
     def test_keep_complex_variants_omit_subunit_promotion(self):
-        for profile in ("normal", "keep_species"):
-            program = pd2af.rules.build_program(profile)
+        for mode in ("normal", "keep-species"):
+            program = pd2af.rules.build_program(mode)
             assert "promotedSubunitKey" not in program
 
     def test_normal_no_complex_variants_include_complex_traversal(self):
-        for profile in ("normal_no_complex", "keep_species_no_complex"):
-            program = pd2af.rules.build_program(profile)
+        for mode in ("normal-no-complex", "keep-species-no-complex"):
+            program = pd2af.rules.build_program(mode)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" in program
 
     def test_keep_complex_variants_omit_complex_traversal(self):
-        for profile in ("normal", "keep_species"):
-            program = pd2af.rules.build_program(profile)
+        for mode in ("normal", "keep-species"):
+            program = pd2af.rules.build_program(mode)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" not in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" not in program
 
-    def test_complex_keeping_profiles_key_by_top_level(self):
+    def test_complex_keeping_modes_key_by_top_level(self):
         # `normal`/`keep-species` route every species (including subunits) to
         # its top-level complex via the shared `resolvesToTopLevel` relation, so a
         # subunit never gets its own key.
-        for profile in ("normal", "keep_species"):
-            program = pd2af.rules.build_program(profile)
+        for mode in ("normal", "keep-species"):
+            program = pd2af.rules.build_program(mode)
             assert "resolvesToTopLevel(SPECIES, TOPLEVEL)" in program
             assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
 
-    def test_no_profile_uses_new_species_from_template(self):
-        for profile in _PROFILES:
-            program = pd2af.rules.build_program(profile)
+    def test_no_mode_uses_new_species_from_template(self):
+        for mode in _MODES:
+            program = pd2af.rules.build_program(mode)
             assert "new_species_from_template" not in program
 
-    def test_keep_species_profiles_use_kept_species_only(self):
-        for profile in ("keep_species", "keep_species_no_complex"):
-            program = pd2af.rules.build_program(profile)
+    def test_keep_species_modes_use_kept_species_only(self):
+        for mode in ("keep-species", "keep-species-no-complex"):
+            program = pd2af.rules.build_program(mode)
             assert "new_species_from_template" not in program
             assert "keptSpeciesKey" in program
 
-    def test_unknown_profile_raises(self):
+    def test_unknown_mode_raises(self):
         with pytest.raises(ValueError):
             pd2af.rules.build_program("does-not-exist")
 
@@ -107,47 +113,40 @@ class TestBuildProgram:
 class TestCycleAwareTransitivity:
     """Transitive influence extension is gated by the production-cycle
     relations so a source feeding a production cycle does not leak influence
-    back around the loop. Only the path-inference profiles extend paths, so only
-    they carry the guard; casq has neither the relations nor the guard, and
-    `keep_reactions` defines the relations (they come with `paths:core`) but
-    never extends a path, so it has no guard either."""
+    back around the loop. Only the path-inference modes extend paths, so only
+    they carry the guard; `keep-reactions` defines the relations (they come
+    with `paths:core`) but never extends a path, so it has no guard."""
 
     _PATH_INFERENCE = (
         "normal",
-        "normal_no_complex",
-        "keep_species",
-        "keep_species_no_complex",
+        "normal-no-complex",
+        "keep-species",
+        "keep-species-no-complex",
     )
 
-    @pytest.mark.parametrize("profile", _PATH_INFERENCE)
+    @pytest.mark.parametrize("mode", _PATH_INFERENCE)
     @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
-    def test_path_inference_profiles_define_cycle_relations(self, profile, language):
-        program = pd2af.rules.build_program(profile, language=language)
+    def test_path_inference_modes_define_cycle_relations(self, mode, language):
+        program = pd2af.rules.build_program(mode, language=language)
         assert "isDirectlyTransformedTo" in program
         assert "isTransformedTo" in program
         assert "isCyclicallyTransformedTo" in program
 
-    @pytest.mark.parametrize("profile", _PATH_INFERENCE)
-    def test_celldesigner_transitivity_guards_against_cycles(self, profile):
-        program = pd2af.rules.build_program(profile, language="celldesigner")
+    @pytest.mark.parametrize("mode", _PATH_INFERENCE)
+    def test_celldesigner_transitivity_guards_against_cycles(self, mode):
+        program = pd2af.rules.build_program(mode, language="celldesigner")
         assert (
             "not isCyclicallyTransformedTo(INTERMEDIATE_SPECIES, TARGET_SPECIES)"
             in program
         )
 
-    @pytest.mark.parametrize("profile", _PATH_INFERENCE)
-    def test_sbgn_pd_transitivity_guards_against_cycles(self, profile):
-        program = pd2af.rules.build_program(profile, language="sbgn_pd")
+    @pytest.mark.parametrize("mode", _PATH_INFERENCE)
+    def test_sbgn_pd_transitivity_guards_against_cycles(self, mode):
+        program = pd2af.rules.build_program(mode, language="sbgn_pd")
         assert (
             "not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)"
             in program
         )
-
-    def test_casq_omits_cycle_relations(self):
-        program = pd2af.rules.build_program("casq")
-        assert "isDirectlyTransformedTo" not in program
-        assert "isTransformedTo" not in program
-        assert "isCyclicallyTransformedTo" not in program
 
 
 class TestKeepReactionsProfile:
@@ -157,20 +156,20 @@ class TestKeepReactionsProfile:
     the inference layers."""
 
     def test_every_species_is_an_activity_candidate(self):
-        program = pd2af.rules.build_program("keep_reactions")
+        program = pd2af.rules.build_program("keep-reactions")
         assert (
             "hasActivityCandidate(SPECIES, isSpecies) :- species(SPECIES)." in program
         )
 
     def test_reactant_positively_influences_product(self):
-        program = pd2af.rules.build_program("keep_reactions")
+        program = pd2af.rules.build_program("keep-reactions")
         assert (
             "propagatesInfluence(REACTANT_SPECIES, PRODUCT_SPECIES, positivelyInfluences)"
             in program
         )
 
     def test_keeps_direct_modulation_influences(self):
-        program = pd2af.rules.build_program("keep_reactions")
+        program = pd2af.rules.build_program("keep-reactions")
         # the modulation-arc rule and its kind table, plus the modifier->product
         # rules, all come from `paths:core`/`modulation_kind`.
         assert "hasModulationKind(MODULATION, triggers) :- triggering(MODULATION)." in program
@@ -178,26 +177,24 @@ class TestKeepReactionsProfile:
         assert "catalyzer(MODIFIER)" in program
 
     def test_omits_multi_hop_chaining(self):
-        program = pd2af.rules.build_program("keep_reactions")
+        program = pd2af.rules.build_program("keep-reactions")
         assert "not isCyclicallyTransformedTo" not in program
         assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" not in program
 
     def test_omits_consumption_and_sparing(self):
-        program = pd2af.rules.build_program("keep_reactions")
+        program = pd2af.rules.build_program("keep-reactions")
         # the consumption/sparing rules are the only ones that make a reaction's
         # reactant the *target* of a modifier's influence.
         assert "hasReferredElement(REACTANT, TARGET_SPECIES)" not in program
-        registry = pd2af.rules.build_registry()
-        assert "influences_consumption" not in registry.profiles["keep_reactions"]
+        assert "influences_consumption" not in _group_ids("keep-reactions")
 
     def test_keys_by_top_level_and_keeps_complexes(self):
-        program = pd2af.rules.build_program("keep_reactions")
+        program = pd2af.rules.build_program("keep-reactions")
         assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
         assert "promotedSubunitKey" not in program
 
     def test_omits_inert_activity_feature_groups(self):
-        registry = pd2af.rules.build_registry()
-        included = registry.profiles["keep_reactions"]
+        included = _group_ids("keep-reactions")
         assert "activity:core" in included
         for group_id in (
             "activity:phenotype",
@@ -210,27 +207,24 @@ class TestKeepReactionsProfile:
 
 class TestInfluencesConsumptionGroup:
     """The consumption/sparing reasoning is a group of its own, carried by the
-    path-inference profiles only and excludable on its own."""
+    path-inference modes only and excludable on its own."""
 
     @pytest.mark.parametrize(
-        "profile",
-        ("normal", "normal_no_complex", "keep_species", "keep_species_no_complex"),
+        "mode",
+        ("normal", "normal-no-complex", "keep-species", "keep-species-no-complex"),
     )
-    def test_path_inference_profiles_include_it(self, profile):
-        program = pd2af.rules.build_program(profile, "celldesigner")
+    def test_path_inference_modes_include_it(self, mode):
+        program = pd2af.rules.build_program(mode, "celldesigner")
         assert "hasReferredElement(REACTANT, TARGET_SPECIES)" in program
-        registry = pd2af.rules.build_registry()
-        assert "influences_consumption" in registry.profiles[profile]
+        assert "influences_consumption" in _group_ids(mode)
 
-    @pytest.mark.parametrize("profile", ("keep_reactions", "casq"))
-    def test_other_profiles_omit_it(self, profile):
-        registry = pd2af.rules.build_registry()
-        assert "influences_consumption" not in registry.profiles[profile]
+    def test_keep_reactions_omits_it(self):
+        assert "influences_consumption" not in _group_ids("keep-reactions")
 
     def test_excluding_it_keeps_the_rest_of_the_derivation(self):
-        full = pd2af.rules.build_program("keep_species", "celldesigner")
+        full = pd2af.rules.build_program("keep-species", "celldesigner")
         pruned = pd2af.rules.build_program(
-            "keep_species", "celldesigner", exclude_groups=("influences_consumption",)
+            "keep-species", "celldesigner", exclude_groups=("influences_consumption",)
         )
         assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
         assert len(pruned.splitlines()) < len(full.splitlines())
@@ -242,9 +236,9 @@ class TestMergedProfilesSbgnPdVariant:
     templated/mergeable gating is gone -- keys are structural roles only and
     PTM stripping happens at the build stage."""
 
-    @pytest.mark.parametrize("profile", ("normal", "normal_no_complex"))
-    def test_sbgn_pd_variant_uses_entity_pool_carrier(self, profile):
-        program = pd2af.rules.build_program(profile, language="sbgn_pd")
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    def test_sbgn_pd_variant_uses_entity_pool_carrier(self, mode):
+        program = pd2af.rules.build_program(mode, language="sbgn_pd")
         assert "new_species_from_template" not in program
         assert "isMergeableEntity" not in program
         assert (
@@ -257,9 +251,9 @@ class TestMergedProfilesSbgnPdVariant:
             not in program
         )
 
-    @pytest.mark.parametrize("profile", ("normal", "normal_no_complex"))
-    def test_celldesigner_variant_uses_species_carrier(self, profile):
-        program = pd2af.rules.build_program(profile, language="celldesigner")
+    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    def test_celldesigner_variant_uses_species_carrier(self, mode):
+        program = pd2af.rules.build_program(mode, language="celldesigner")
         assert (
             "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
         )
@@ -272,16 +266,18 @@ def test_registry_validates():
     assert registry is not None
 
 
-def test_registry_registers_all_profiles():
+def test_registry_holds_every_group_the_modes_name():
     registry = pd2af.rules.build_registry()
-    assert set(registry.profiles) == set(_PROFILES)
+    for mode_name in _MODES:
+        for group_id in _group_ids(mode_name):
+            assert group_id in registry.groups
 
 
 class TestExcludeGroups:
     def test_exclude_phenotype_drops_only_that_rule(self):
-        full = pd2af.rules.build_program("keep_species", "celldesigner")
+        full = pd2af.rules.build_program("keep-species", "celldesigner")
         pruned = pd2af.rules.build_program(
-            "keep_species", "celldesigner", exclude_groups=("activity:phenotype",)
+            "keep-species", "celldesigner", exclude_groups=("activity:phenotype",)
         )
         phenotype_rule = (
             "hasActivityCandidate(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE)."
@@ -301,7 +297,7 @@ class TestExcludeGroups:
     def test_exclude_mandatory_group_raises_friendly_error(self):
         with pytest.raises(ValueError) as excinfo:
             pd2af.rules.build_program(
-                "keep_species", "celldesigner", exclude_groups=("activity:core",)
+                "keep-species", "celldesigner", exclude_groups=("activity:core",)
             )
         message = str(excinfo.value)
         assert "cannot exclude 'activity:core'" in message
@@ -310,7 +306,7 @@ class TestExcludeGroups:
     def test_exclude_unregistered_group_raises(self):
         with pytest.raises(ValueError):
             pd2af.rules.build_program(
-                "keep_species", "celldesigner", exclude_groups=("does:not:exist",)
+                "keep-species", "celldesigner", exclude_groups=("does:not:exist",)
             )
 
     def test_disable_rule_drops_one_table_entry(self):
@@ -318,9 +314,9 @@ class TestExcludeGroups:
             "hasModulationKind(MODULATION, positivelyInfluences) :- "
             "catalysis(MODULATION)."
         )
-        full = pd2af.rules.build_program("keep_species", "celldesigner")
+        full = pd2af.rules.build_program("keep-species", "celldesigner")
         pruned = pd2af.rules.build_program(
-            "keep_species",
+            "keep-species",
             "celldesigner",
             exclude_rules=("modulation_kind:celldesigner:catalysis",),
         )
@@ -330,21 +326,25 @@ class TestExcludeGroups:
     def test_disable_unknown_rule_raises(self):
         with pytest.raises(ValueError):
             pd2af.rules.build_program(
-                "keep_species", "celldesigner", exclude_rules=("no:such:rule",)
+                "keep-species", "celldesigner", exclude_rules=("no:such:rule",)
             )
 
-    @pytest.mark.parametrize("profile", _PROFILES)
-    def test_excludable_groups_are_dependency_leaves(self, profile):
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_excludable_groups_are_dependency_leaves(self, mode):
         registry = pd2af.rules.build_registry()
-        excludable, mandatory = pd2af.rules.get_excludable_groups(profile)
-        included = registry.profiles[profile]
+        excludable, mandatory = pd2af.rules.get_excludable_groups(mode)
+        included = _group_ids(mode)
         assert excludable | mandatory == set(included)
         assert not (excludable & mandatory)
         for group_id in included:
+            # A group is depended on either by id or through the slot it fills.
+            depended_on_names = {group_id}
+            if registry.groups[group_id].slot:
+                depended_on_names.add(registry.groups[group_id].slot)
             dependents = {
                 other
                 for other in included
-                if group_id in registry.groups[other].depends_on
+                if depended_on_names & registry.groups[other].depends_on
             }
             if dependents:
                 assert group_id in mandatory
@@ -352,30 +352,77 @@ class TestExcludeGroups:
                 assert group_id in excludable
 
 
-class TestCasqProfile:
-    def test_casq_includes_delete_and_bridged_product(self):
-        program = pd2af.rules.build_program("casq")
-        assert "delete(" in program
-        assert "rule_1" in program
-        assert "rule_2" in program
-        assert "rule_3" in program
-        assert "rule_4" in program
-        assert "bridgesToProduct" in program
+class TestPreparationSlot:
+    """`preparation` is an aspcompose slot: every mode must fill it exactly
+    once, and the consumers of the activity-key predicates depend on the slot
+    rather than on a particular filler."""
 
-    def test_casq_excludes_path_and_complex_traversal(self):
-        program = pd2af.rules.build_program("casq")
-        assert "propagatesInfluence(" not in program
-        assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" not in program
-        assert "hasContributingComplexAncestor" not in program
-        assert "promotedSubunitKey" not in program
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_every_mode_fills_the_slot(self, mode):
+        registry = pd2af.rules.build_registry()
+        fillers = registry.slots["preparation"] & _group_ids(mode)
+        assert len(fillers) == 1
 
-    def test_casq_uses_kept_species_keys_only(self):
-        program = pd2af.rules.build_program("casq")
-        assert "keptSpeciesKey" in program
-        assert "new_species_from_template" not in program
+    def test_excluding_the_filler_raises_rather_than_emitting_no_activities(self):
+        with pytest.raises(ValueError) as excinfo:
+            pd2af.rules.build_program(
+                "normal", "celldesigner", exclude_groups=("preparation:complex",)
+            )
+        assert "slot 'preparation'" in str(excinfo.value)
 
-    def test_casq_does_not_emit_inhibitor_spares_reactant(self):
-        # casq.lp has no rule analogous to inhibitor-spares-reactant; that
-        # belongs to the path-based modes.
-        program = pd2af.rules.build_program("casq")
-        assert "inhibitor_spares_reactant" not in program
+    @pytest.mark.parametrize("mode", _MODES)
+    def test_the_filler_precedes_its_consumers(self, mode):
+        program = pd2af.rules.build_program(mode)
+        assert program.index("hasActivityKey(SPECIES") < program.index(
+            "new(activity(KEY)) :- hasActivityKey(_, KEY)."
+        )
+
+
+class TestModeExtensionPoint:
+    """A mode contributed through the entry point composes exactly like a
+    built-in one: its `group_references` name registered groups and its
+    `group_definitions` are registered alongside them."""
+
+    def test_contributed_mode_composes_references_and_definitions(
+        self, monkeypatch
+    ):
+        contributed_group = aspcompose.RuleGroup(
+            identifier="contributed:emit",
+            depends_on=frozenset({"influence_output"}),
+            docs="A throwaway group contributed by a test-only mode.",
+            rules=(
+                aspcompose.Rule(
+                    identifier="contributed:emit:everything",
+                    text="influences(a, b, positivelyInfluences).",
+                    docs="A single ground influence, so the program is checkable.",
+                ),
+            ),
+        )
+        contributed_mode = pd2af.modes.TransformationMode(
+            name="contributed",
+            summary="a test-only mode contributed through the entry point",
+            group_references=("influence_output",),
+            group_definitions=(contributed_group,),
+        )
+
+        class _FakeEntryPoint:
+            name = "contributed"
+            value = "tests.test_rules:contributed_mode"
+
+            @staticmethod
+            def load():
+                return contributed_mode
+
+        monkeypatch.setattr(
+            pd2af.modes.importlib.metadata,
+            "entry_points",
+            lambda group: [_FakeEntryPoint],
+        )
+        pd2af.modes.get_transformation_modes.cache_clear()
+        try:
+            assert "contributed" in pd2af.modes.get_transformation_modes()
+            program = pd2af.rules.build_program("contributed")
+            assert "influences(a, b, positivelyInfluences)." in program
+            assert "new(positivelyInfluences(SOURCE, TARGET))" in program
+        finally:
+            pd2af.modes.get_transformation_modes.cache_clear()

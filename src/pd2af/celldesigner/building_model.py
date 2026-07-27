@@ -25,7 +25,6 @@ import dataclasses
 import momapy.builder
 import momapy.celldesigner
 
-import pd2af.languages
 import pd2af.predicates
 from pd2af.utils import add_model_element_if_new, register_or_reuse
 
@@ -319,7 +318,7 @@ def _compartment_for_input_species(context, input_species):
 
 
 def _make_and_add_templates(context):
-    strip = context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES
+    strip = context.mode.merges_proteoforms
     seen_template_identities = set()
 
     # Register the templates each activity carries (walking subunit trees). In
@@ -376,7 +375,7 @@ def _resolve_activity_key(context, key):
     otherwise the input species is reused by identity (``keptSpeciesKey``) or
     promoted with a corrected compartment (``promotedSubunitKey``)."""
     input_species = context.clingo_id_to_model_element[key.species]
-    if context.mode in pd2af.languages.MERGED_PROTEOFORM_MODES:
+    if context.mode.merges_proteoforms:
         compartment = _compartment_for_input_species(context, input_species)
         return get_or_make_stripped_species(
             input_species,

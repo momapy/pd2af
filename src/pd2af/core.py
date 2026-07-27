@@ -9,6 +9,7 @@ import momapy.utils
 import pd2af.annotations
 import pd2af.build
 import pd2af.languages
+import pd2af.modes
 import pd2af.solver
 
 
@@ -46,42 +47,7 @@ class TransformerResult:
     element_to_notes: dict | None = None
 
 
-_TRANSFORMATION_MODES = frozenset(
-    {
-        "normal",
-        "normal-no-complex",
-        "keep-species",
-        "keep-species-no-complex",
-        "keep-reactions",
-        "casq",
-    }
-)
-_MERGED_PROTEOFORM_MODES = pd2af.languages.MERGED_PROTEOFORM_MODES
-# Accepted `layout_mode` input values: the concrete modes plus the `"auto"`
-# meta value (resolved from the input type) and the `None` sentinel.
-_LAYOUT_MODES = frozenset({"plain", "overlay", "dot", "auto", None})
 _INFLUENCE_PAIRINGS = frozenset({"cross", "nearest"})
-
-# The concrete layout modes (excluding the `None` sentinel and the `"auto"`
-# meta value), in display order.
-LAYOUT_MODES = ("plain", "overlay", "dot")
-
-# SBGN-AF output supports the curated-geometry `plain` mode and the graphviz
-# `dot` mode; the `overlay` dimming is CellDesigner-only.
-SBGN_AF_LAYOUT_MODES = frozenset({"plain", "dot", None})
-_SBGN_AF_LAYOUT_MODES = SBGN_AF_LAYOUT_MODES
-
-
-def get_compatible_layout_modes_for_transformation_mode(mode):
-    """Return the concrete layout modes valid for a transformation mode.
-
-    The merged-proteoform modes only accept `dot`, because their synthesized
-    merged activities have no original geometry to reuse; every other mode
-    accepts all three layout modes.
-    """
-    if mode in _MERGED_PROTEOFORM_MODES:
-        return ("dot",)
-    return LAYOUT_MODES
 
 
 def _normalize_layout_mode(layout_mode):
@@ -90,19 +56,20 @@ def _normalize_layout_mode(layout_mode):
     return layout_mode
 
 
-def _validate_layout_mode(layout_mode, mode):
-    if mode in _MERGED_PROTEOFORM_MODES and layout_mode not in (None, "dot"):
-        raise ValueError(f"mode {mode} requires layout_mode 'dot' or None")
+def _validate_layout_mode(layout_mode, mode, language):
+    """Check a concrete layout mode against the transformation mode and language.
 
-
-def _validate_layout_mode_for_language(layout_mode, language):
-    if (
-        language == pd2af.languages.SBGN_PD
-        and layout_mode not in _SBGN_AF_LAYOUT_MODES
-    ):
+    The `None` sentinel means "build no layout at all", so it is always valid;
+    every other value must be one the mode accepts on input of this language.
+    """
+    if layout_mode is None:
+        return
+    compatible_layout_modes = mode.compatible_layout_modes(language)
+    if layout_mode not in compatible_layout_modes:
         raise ValueError(
-            f"SBGN-AF output supports layout_mode 'plain', 'dot' or None, "
-            f"got {layout_mode!r} ('overlay' is unsupported)"
+            f"transformation mode {mode.name!r} on {language!r} input supports "
+            f"layout_mode {', '.join(repr(candidate) for candidate in compatible_layout_modes)}"
+            f" or None, got {layout_mode!r}"
         )
 
 
@@ -120,14 +87,7 @@ def _wrap_model_in_map(model, language):
 
 def transform(
     map_or_model,
-    mode: typing.Literal[
-        "normal",
-        "normal-no-complex",
-        "keep-species",
-        "keep-species-no-complex",
-        "keep-reactions",
-        "casq",
-    ] = "normal",
+    mode: str = "normal",
     layout_mode: typing.Literal["auto", "dot", "plain", "overlay"] | None = "auto",
     influence_pairing: typing.Literal["cross", "nearest"] = "cross",
     set_active: list[str] | None = None,
@@ -139,6 +99,7 @@ def transform(
     element_to_annotations=None,
     element_to_notes=None,
 ):
+    transformation_mode = pd2af.modes.get_transformation_mode(mode)
     layout_mode = _normalize_layout_mode(layout_mode)
     is_model_input = isinstance(map_or_model, momapy.core.model.Model)
     if is_model_input:
@@ -155,10 +116,14 @@ def transform(
         map_ = map_or_model
         if layout_mode == "auto":
             layout_mode = "dot"
-    _validate_layout_mode(layout_mode, mode)
-    _validate_layout_mode_for_language(
-        layout_mode, pd2af.languages.language_from_map(map_)
-    )
+    language = pd2af.languages.language_from_map(map_)
+    if language not in transformation_mode.compatible_languages:
+        raise ValueError(
+            f"transformation mode {mode!r} does not support {language!r} "
+            f"input; it supports "
+            + ", ".join(sorted(transformation_mode.compatible_languages))
+        )
+    _validate_layout_mode(layout_mode, transformation_mode, language)
     if influence_pairing not in _INFLUENCE_PAIRINGS:
         raise ValueError(
             f"influence_pairing must be one of {sorted(_INFLUENCE_PAIRINGS)}, "
@@ -180,7 +145,7 @@ def transform(
         clingo_model,
         clingo_id_to_model_element,
         influence_pairing,
-        mode=mode,
+        mode=transformation_mode,
     )
     (
         output_element_to_annotations,

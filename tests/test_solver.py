@@ -3,7 +3,8 @@ import pytest
 
 import momapy.celldesigner
 
-import pd2af.core
+import pd2af
+import pd2af.modes
 import pd2af.predicates
 import pd2af.solver
 
@@ -95,16 +96,18 @@ class TestSolve:
 
 
 def test_supported_modes():
-    assert pd2af.core._TRANSFORMATION_MODES == frozenset(
-        {
-            "normal",
-            "normal-no-complex",
-            "keep-species",
-            "keep-species-no-complex",
-            "keep-reactions",
-            "casq",
-        }
-    )
+    # The entry point is the only way a sixth mode can appear: pd2af itself
+    # declares exactly these five, and every mode it offers is one of them
+    # unless something contributed it.
+    builtin_names = {mode.name for mode in pd2af.modes._BUILTIN_MODES}
+    assert builtin_names == {
+        "normal",
+        "normal-no-complex",
+        "keep-species",
+        "keep-species-no-complex",
+        "keep-reactions",
+    }
+    assert set(pd2af.get_transformation_modes()) >= builtin_names
 
 
 class TestSolveSbgnPdMergedModes:
@@ -331,27 +334,3 @@ class TestSetAllInactive:
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
         assert names == {"A"}
-
-
-@pytest.fixture(scope="module")
-def solved_casq(example_cd_map):
-    return pd2af.solver.solve(example_cd_map, mode="casq")
-
-
-class TestSolveCasq:
-    def test_returns_factbase_and_id_map(self, solved_casq):
-        clingo_model, id_to_model_element = solved_casq
-        assert isinstance(clingo_model, clorm.FactBase)
-        assert isinstance(id_to_model_element, dict)
-
-    def test_activity_keys_are_kept_species_key(self, solved_casq):
-        clingo_model, _ = solved_casq
-        atoms = _activity_atoms(clingo_model)
-        assert len(atoms) > 0
-        for atom in atoms:
-            assert isinstance(atom.key, pd2af.predicates.keptSpeciesKey)
-
-    def test_emits_some_influences(self, solved_casq):
-        clingo_model, _ = solved_casq
-        atoms = _influence_atoms(clingo_model)
-        assert len(atoms) > 0

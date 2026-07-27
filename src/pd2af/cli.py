@@ -8,72 +8,14 @@ import textwrap
 import momapy.io.core
 
 import pd2af
-import pd2af.core
 import pd2af.languages
+import pd2af.modes
 import pd2af.rules
 
-
-_MODE_CHOICES = (
-    "normal",
-    "normal-no-complex",
-    "keep-species",
-    "keep-species-no-complex",
-    "keep-reactions",
-    "casq",
-)
 
 _LAYOUT_CHOICES = ("plain", "overlay", "dot", "auto")
 
 _INFLUENCE_PAIRING_CHOICES = ("cross", "nearest")
-
-# Human-facing descriptions of each transformation mode, keyed by the mode
-# name. The PTM/complex behavior is presentation prose; the authoritative
-# compatibility data is derived from pd2af.core / pd2af.languages, never
-# duplicated here. `celldesigner_only` records a documented constraint that the
-# core does not hard-enforce.
-_TRANSFORMATION_MODE_INFO = {
-    "normal": {
-        "summary": (
-            "merge forms of the same base species or entity pool into a "
-            "single activity"
-        ),
-        "celldesigner_only": False,
-    },
-    "normal-no-complex": {
-        "summary": (
-            "merge forms of the same base species or entity pool into a "
-            "single activity; additionally, replace complexes with their "
-            "active subunits if any, promoting them to top-level activities"
-        ),
-        "celldesigner_only": False,
-    },
-    "keep-species": {
-        "summary": "create one activity per distinct active species or entity pool",
-        "celldesigner_only": False,
-    },
-    "keep-species-no-complex": {
-        "summary": (
-            "create one activity per distinct active species or entity pool; "
-            "additionally, replace complexes with their active subunits if "
-            "any, promoting them to top-level activities"
-        ),
-        "celldesigner_only": False,
-    },
-    "keep-reactions": {
-        "summary": (
-            "create one activity per species, and turn every reaction into a "
-            "positive influence from each of its reactants to each of its "
-            "products"
-        ),
-        "celldesigner_only": True,
-    },
-    "casq": {
-        "summary": (
-            "reproduce the CasQ transformation (Aghamiri et al., Bioinfo., 2020)"
-        ),
-        "celldesigner_only": True,
-    },
-}
 
 _LAYOUT_MODE_INFO = {
     "plain": "reuse original positions",
@@ -93,33 +35,52 @@ _INPUT_LANGUAGE_DISPLAY_NAMES = {
 def _unsupported_layout_modes_for_language(language):
     """Concrete layout modes the given input language rejects.
 
-    Derived from pd2af.core: SBGN-AF output (SBGN-PD input) does not support
-    the `overlay` dimming; CellDesigner output supports every layout mode.
+    Derived from pd2af.languages: SBGN-AF output (SBGN-PD input) does not
+    support the `overlay` dimming; CellDesigner output supports every layout
+    mode.
     """
+    supported = pd2af.languages.LAYOUT_MODES_BY_LANGUAGE[language]
     return tuple(
         layout_mode
-        for layout_mode in pd2af.core.LAYOUT_MODES
-        if language == pd2af.languages.SBGN_PD
-        and layout_mode not in pd2af.core.SBGN_AF_LAYOUT_MODES
+        for layout_mode in pd2af.languages.LAYOUT_MODES
+        if layout_mode not in supported
     )
 
 
 def _compatible_language_names_for_mode(mode):
-    """Display names of the input languages a transformation mode applies to.
+    """Display names of the input languages a transformation mode applies to."""
+    return [
+        display_name
+        for language, display_name in _INPUT_LANGUAGE_DISPLAY_NAMES.items()
+        if language in mode.compatible_languages
+    ]
 
-    Every mode works on CellDesigner input; the `celldesigner_only` modes
-    (currently `casq`) are restricted to it, the rest also accept SBGN-PD.
+
+def _compatible_layout_mode_names_for_mode(mode):
+    """The layout modes a transformation mode offers on *some* input language.
+
+    The per-language answer is the mode's own
+    `compatible_layout_modes(language)`; the listing table has one row per
+    mode, so it shows the union over the languages the mode accepts, in
+    display order. The languages column and the layout-modes table carry the
+    per-language detail.
     """
-    if _TRANSFORMATION_MODE_INFO[mode]["celldesigner_only"]:
-        return [_INPUT_LANGUAGE_DISPLAY_NAMES[pd2af.languages.CELLDESIGNER]]
-    return list(_INPUT_LANGUAGE_DISPLAY_NAMES.values())
+    offered = set()
+    for language in mode.compatible_languages:
+        offered.update(mode.compatible_layout_modes(language))
+    return [
+        layout_mode
+        for layout_mode in pd2af.languages.LAYOUT_MODES
+        if layout_mode in offered
+    ]
 
 
 def _compatible_language_names_for_layout_mode(layout_mode):
     """Display names of the input languages whose output supports a layout mode.
 
-    Derived from pd2af.core: SBGN-AF output (SBGN-PD input) does not support
-    the `overlay` dimming; CellDesigner output supports every layout mode.
+    Derived from pd2af.languages: SBGN-AF output (SBGN-PD input) does not
+    support the `overlay` dimming; CellDesigner output supports every layout
+    mode.
     """
     return [
         display_name
@@ -216,20 +177,18 @@ def _build_modes_data():
     """Assemble the structured `list-modes` payload from the source-of-truth.
 
     The payload mirrors the rendered tables exactly: one entry per table row,
-    one key per column. Compatibility is derived from pd2af.core, not
+    one key per column. Compatibility is read off each mode object, not
     duplicated, so the listing cannot drift from the validation the transform
     actually enforces.
     """
     transformation_modes = [
         {
-            "transformation_mode": mode,
-            "layout_modes": list(
-                pd2af.core.get_compatible_layout_modes_for_transformation_mode(mode)
-            ),
+            "transformation_mode": mode.name,
+            "layout_modes": _compatible_layout_mode_names_for_mode(mode),
             "languages": _compatible_language_names_for_mode(mode),
-            "description": info["summary"],
+            "description": mode.summary,
         }
-        for mode, info in _TRANSFORMATION_MODE_INFO.items()
+        for mode in pd2af.modes.get_transformation_modes().values()
     ]
     layout_modes = [
         {
@@ -362,13 +321,13 @@ def _build_groups_data():
     drop cleanly; mandatory groups are depended-on by another included group.
     """
     return {
-        mode: {
+        mode_name: {
             "excludable": sorted(excludable),
             "mandatory": sorted(mandatory),
         }
-        for mode in _MODE_CHOICES
+        for mode_name in pd2af.modes.get_transformation_modes()
         for excludable, mandatory in (
-            pd2af.rules.get_excludable_groups(mode.replace("-", "_")),
+            pd2af.rules.get_excludable_groups(mode_name),
         )
     }
 
@@ -415,7 +374,7 @@ def _add_transform_parser(subparsers):
     parser.add_argument(
         "-m",
         "--transformation-mode",
-        choices=_MODE_CHOICES,
+        choices=tuple(pd2af.modes.get_transformation_modes()),
         default="normal",
         help=(
             "transformation mode (default: normal). 'normal' and "
@@ -430,12 +389,7 @@ def _add_transform_parser(subparsers):
             "positive influence from each of its reactants to each of "
             "its products, alongside the modulation arcs and reaction "
             "modifiers, with no multi-hop or consumption inference. "
-            "'casq' emits one activity per surviving PD "
-            "species after applying CASQ-style deletion rules "
-            "(heterodimer simplification, name-preserving step pruning, "
-            "transport collapse) with single-hop rewiring across "
-            "deleted intermediates. Run `pd2af list-modes` for the full "
-            "compatibility matrix."
+            "Run `pd2af list-modes` for the full compatibility matrix."
         ),
     )
     parser.add_argument(
