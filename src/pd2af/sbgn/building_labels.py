@@ -72,16 +72,11 @@ def make_units_of_information_label(entity_pool_or_subunit):
     surrounding brackets: those are only the activity-label serialization device
     (added by :func:`make_label`), not part of the glyph text.
     """
-    units_of_information = getattr(
-        entity_pool_or_subunit, "units_of_information", None
-    )
+    units_of_information = getattr(entity_pool_or_subunit, "units_of_information", None)
     if not units_of_information:
         return None
     return "|".join(
-        sorted(
-            _make_unit_of_information_token(unit)
-            for unit in units_of_information
-        )
+        sorted(_make_unit_of_information_token(unit) for unit in units_of_information)
     )
 
 
@@ -109,9 +104,7 @@ def make_label(
             # Brackets are the activity-label serialization device only; the
             # glyph label (the helper's return value) carries none.
             decorations += f"[{units_label}]"
-    state_variables = getattr(
-        entity_pool_or_subunit, "state_variables", None
-    )
+    state_variables = getattr(entity_pool_or_subunit, "state_variables", None)
     if include_state_variables and state_variables:
         tokens = [
             _make_state_variable_token(state_variable)
