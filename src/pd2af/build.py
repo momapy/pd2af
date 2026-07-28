@@ -37,8 +37,8 @@ class BuilderContext:
     input_map: object
     layout_mode: str | None
     clingo_id_to_model_element: dict
+    mode: pd2af.modes.TransformationMode
     influence_pairing: str = "cross"
-    mode: pd2af.modes.TransformationMode | None = None
 
     # --- outputs being built ---
     model: object = None
@@ -97,7 +97,8 @@ def build_map(
     clingo_model,
     clingo_id_to_model_element,
     influence_pairing="cross",
-    mode=None,
+    *,
+    mode: pd2af.modes.TransformationMode,
 ):
     context = BuilderContext(
         input_map=map_,

@@ -111,9 +111,8 @@ def test_supported_modes():
 
 
 class TestSolveSbgnPdMergedModes:
-    """Regression guard for the SBGN-PD carrier bug: `normal`/`normal-no-complex`
-    over SBGN-PD input must emit a non-empty influence set (was zero before
-    the entity-pool carrier was added to these profiles)."""
+    """`normal`/`normal-no-complex` over SBGN-PD input must emit a non-empty
+    influence set, which takes the entity-pool carrier these modes use."""
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_sbgn_pd_merged_mode_emits_influences(self, sbgn_example_map, mode):

@@ -149,8 +149,8 @@ class TestCycleAwareTransitivity:
         )
 
 
-class TestKeepReactionsProfile:
-    """`keep_reactions` keeps the PD topology itself: every species is an
+class TestKeepReactionsMode:
+    """`keep-reactions` keeps the PD topology itself: every species is an
     activity and every reaction is rendered as reactant->product positive
     influences, so it carries the single-hop modulation influences but none of
     the inference layers."""
@@ -230,11 +230,10 @@ class TestInfluencesConsumptionGroup:
         assert len(pruned.splitlines()) < len(full.splitlines())
 
 
-class TestMergedProfilesSbgnPdVariant:
-    """`normal`/`normal_no_complex` must emit working rules for SBGN-PD input:
-    entity-pool carriers (not the CellDesigner `species` carrier). The
-    templated/mergeable gating is gone -- keys are structural roles only and
-    PTM stripping happens at the build stage."""
+class TestMergedModesSbgnPdVariant:
+    """`normal`/`normal-no-complex` must emit working rules for SBGN-PD input:
+    entity-pool carriers (not the CellDesigner `species` carrier). Keys are
+    structural roles only and PTM stripping happens at the build stage."""
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_sbgn_pd_variant_uses_entity_pool_carrier(self, mode):
@@ -424,5 +423,38 @@ class TestModeExtensionPoint:
             program = pd2af.rules.build_program("contributed")
             assert "influences(a, b, positivelyInfluences)." in program
             assert "new(positivelyInfluences(SOURCE, TARGET))" in program
+        finally:
+            pd2af.modes.get_transformation_modes.cache_clear()
+
+    def test_dangling_group_reference_names_the_mode_and_the_group(
+        self, monkeypatch
+    ):
+        contributed_mode = pd2af.modes.TransformationMode(
+            name="dangling",
+            summary="a test-only mode naming a group nothing registers",
+            group_references=("influence_output", "no_such_group"),
+        )
+
+        class _FakeEntryPoint:
+            name = "dangling"
+            value = "tests.test_rules:contributed_mode"
+
+            @staticmethod
+            def load():
+                return contributed_mode
+
+        monkeypatch.setattr(
+            pd2af.modes.importlib.metadata,
+            "entry_points",
+            lambda group: [_FakeEntryPoint],
+        )
+        pd2af.modes.get_transformation_modes.cache_clear()
+        try:
+            with pytest.raises(RuntimeError) as raised:
+                pd2af.rules.build_registry()
+            message = str(raised.value)
+            assert "dangling" in message
+            assert "no_such_group" in message
+            assert "group_references" in message
         finally:
             pd2af.modes.get_transformation_modes.cache_clear()

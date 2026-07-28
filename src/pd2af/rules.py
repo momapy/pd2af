@@ -816,7 +816,7 @@ _PATHS_CHAINING = RuleGroup(
 _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     identifier="paths_complex_traversal",
     depends_on=frozenset({"paths:core"}),
-    docs="Extends paths through complex containment for the ``*-no-complex`` profiles: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
+    docs="Extends paths through complex containment for the ``*-no-complex`` modes: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
     rules=(
         Rule(
             identifier="paths_complex_traversal:into_subunits",
@@ -870,7 +870,7 @@ _INFLUENCES_DERIVATION = RuleGroup(
 _INFLUENCES_CONSUMPTION = RuleGroup(
     identifier="influences_consumption",
     depends_on=frozenset({"activity:core", "preparation"}),
-    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences_consumption` to keep only the influences the map states. The `keep-reactions` profile omits it, since that mode renders each reaction directly instead of reasoning about it.",
+    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences_consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.",
     rules=(),
     variants={
         "sbgn_pd": (),
@@ -1132,7 +1132,7 @@ _GATES = RuleGroup(
 )
 
 
-# The `keep_reactions` profile: every species is an activity and every reaction
+# The `keep-reactions` mode: every species is an activity and every reaction
 # is rendered as reactant->product positive influences, so the map's own topology
 # *is* the influence network. It shares the whole scaffolding (activity
 # bridge, top-level resolution, `keptSpeciesKey` keying, the single-hop
@@ -1144,7 +1144,7 @@ _GATES = RuleGroup(
 _KEEP_REACTIONS_ACTIVITY = RuleGroup(
     identifier="keep_reactions:activity",
     depends_on=frozenset({"activity:core"}),
-    docs="The `keep-reactions` premise that every species is an activity, replacing the structural-reason `activity:*` feature-groups (each of which is inert once every species is a candidate, so the profile omits them). Unlike the `--set-all-active` toggle this rule carries no `not hasSubunit` guard: a subunit is a candidate too, which does not make it an activity of its own -- `preparation:complex:key` keys it by the `keptSpeciesKey` of its outermost complex -- but it does mean a reaction, modulation arc or gate input touching a subunit routes to the containing complex instead of being dropped for want of an activity key.",
+    docs="The `keep-reactions` premise that every species is an activity, replacing the structural-reason `activity:*` feature-groups (each of which is inert once every species is a candidate, so the mode omits them). Unlike the `--set-all-active` toggle this rule carries no `not hasSubunit` guard: a subunit is a candidate too, which does not make it an activity of its own -- `preparation:complex:key` keys it by the `keptSpeciesKey` of its outermost complex -- but it does mean a reaction, modulation arc or gate input touching a subunit routes to the containing complex instead of being dropped for want of an activity key.",
     rules=(
         Rule(
             identifier="keep_reactions:activity:from_species",
@@ -1203,9 +1203,13 @@ def build_registry(modes=None) -> RuleRegistry:
     ``modes`` is an iterable of :class:`pd2af.modes.TransformationMode`,
     defaulting to every known mode. Passing a narrower set — the built-in modes
     alone, say — yields a registry that ignores contributed groups.
+
+    Two modes may not define the same group id, and every group a mode
+    references must be registered; either raises naming the mode.
     """
     if modes is None:
         modes = pd2af.modes.get_transformation_modes().values()
+    modes = list(modes)
     contributed_groups = []
     mode_by_contributed_group_id: dict[str, str] = {}
     for mode in modes:
@@ -1223,6 +1227,14 @@ def build_registry(modes=None) -> RuleRegistry:
             contributed_groups.append(group)
     registry = RuleRegistry()
     registry.register(list(_BUILTIN_GROUPS) + contributed_groups)
+    for mode in modes:
+        for group_id in mode.group_references:
+            if group_id not in registry.groups:
+                raise RuntimeError(
+                    f"transformation mode {mode.name!r} references rule group "
+                    f"{group_id!r} in its group_references, which no mode "
+                    f"defines and which is not a built-in group"
+                )
     issues = registry.validate()
     if issues:
         raise RuntimeError(

@@ -80,25 +80,6 @@ def concern_of(group_identifier):
     return group_identifier.split(":", 1)[0]
 
 
-def registry_depended_on(registry):
-    """The set of group ids that some other registered group depends on.
-
-    A depended-on group is *mandatory* — the dependency graph forbids excluding
-    it; every other group is an *excludable* leaf.
-    """
-    depended_on = set()
-    for group in registry.groups.values():
-        for dependency in group.depends_on:
-            if dependency in registry.groups:
-                depended_on.add(dependency)
-    return depended_on
-
-
-def group_status(group_identifier, depended_on):
-    """``"mandatory"`` if some group depends on this one, else ``"excludable"``."""
-    return "mandatory" if group_identifier in depended_on else "excludable"
-
-
 def modes_for_group(group):
     """The modes a group is used in, as ``"all"`` or an enumerated cell."""
     modes = [
@@ -119,10 +100,8 @@ def write_intro(page):
         "rule is language-agnostic (a *base* rule) or specific to an input "
         "language (a *variant* rule, for CellDesigner or SBGN PD). Rules are "
         "organized in groups, each representing a coherent functional unit — "
-        "the whole a `--exclude-group` can drop. A group is *excludable* (a "
-        "dependency-graph leaf) or *mandatory* (depended on by another group, "
-        "so not excludable). Groups sharing an id prefix (`activity:*`, "
-        "`paths:*`) address one coarse concern.\n\n"
+        "the whole a `--exclude-group` can drop. Groups sharing an id prefix "
+        "(`activity:*`, `paths:*`) address one coarse concern.\n\n"
     )
     page.write(
         "This page is generated from the live registry in `pd2af.rules`. It "
@@ -134,6 +113,13 @@ def write_intro(page):
 
 def write_by_mode(page, registry):
     page.write("## By mode {#by-mode}\n\n")
+    page.write(
+        "Within a mode a group is *excludable* (nothing else the mode includes "
+        "depends on it, so `--exclude-group` can drop it cleanly) or "
+        "*mandatory* (another included group depends on it, directly or by "
+        "filling a slot it requires). The same group can be excludable in one "
+        "mode and mandatory in another.\n\n"
+    )
     for mode in _BUILTIN_MODES:
         group_identifiers = frozenset(mode.group_ids)
         excludable, _mandatory = get_excludable_groups(mode.name)
@@ -155,15 +141,13 @@ def write_by_mode(page, registry):
 
 def write_canonical_reference(page, registry):
     page.write("## Rule groups {#rule-groups}\n\n")
-    depended_on = registry_depended_on(registry)
     current_concern = None
     for group in registry.groups.values():
         concern = concern_of(group.identifier)
         if concern != current_concern:
             page.write(f"### `{concern}` {{#concern-{concern}}}\n\n")
             current_concern = concern
-        status = group_status(group.identifier, depended_on)
-        page.write(f"#### `{group.identifier}` ({status})\n\n")
+        page.write(f"#### `{group.identifier}`\n\n")
         if group.docs:
             page.write(f"{group.docs}\n\n")
         page.write("| Rule | Variant | Documentation |\n")

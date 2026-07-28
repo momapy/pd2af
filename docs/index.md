@@ -44,7 +44,7 @@ See [CLI reference](cli.md) for all options.
 
 ## Transformation modes
 
-Selectable with `-m` / `mode=`. Four of the six modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
+Selectable with `-m` / `mode=`. Four of the five modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
 
 |                       | keep complexes            | drop complexes (route through subunits) |
 |-----------------------|---------------------------|------------------------------------------|
