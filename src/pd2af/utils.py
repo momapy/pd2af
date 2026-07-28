@@ -77,6 +77,11 @@ class _ClassNameSuffixSelector(momapy.styling.Selector):
 _POINTS_PER_INCH = 96
 _BEZIER_OFFSET = 30.0
 
+# Where the first self-loop of a node sits (degrees, 90 being straight up) and
+# how much of the border one loop spans.
+_SELF_LOOP_CENTER_ANGLE = 90.0
+_SELF_LOOP_SPAN = 60.0
+
 _ROOT_LAYOUT_SEP = 15.0
 
 # Padding (in points) dot leaves between a compartment's contents and its
@@ -131,7 +136,8 @@ def make_arc_segments_from_source_and_target(source_layout, target_layout):
     border-to-border, falling back to corner anchors when a border point is
     undefined. Returns a list of segments."""
     if source_layout is target_layout:
-        return _make_self_loop_segments(source_layout)
+        start_angle, end_angle = _make_self_loop_angles(0, 1)
+        return _make_self_loop_segments(source_layout, start_angle, end_angle)
     start_point = source_layout.own_border(target_layout.center())
     end_point = target_layout.own_border(source_layout.center())
     if start_point is None:
@@ -339,7 +345,6 @@ def _build_dot_graph(
             else:
                 dot_graph.add_subgraph(compartment_dot_cluster)
     id_to_layout_element = {}
-    directed_pairs = set()
     # Map every descendant id to its top-level Node ancestor (the one that
     # gets added as a pydot node). Arc endpoints can reference descendants
     # (e.g. a subunit inside a complex); those must be redirected to the
@@ -404,7 +409,6 @@ def _build_dot_graph(
             ):
                 source_id, target_id = target_id, source_id
             dot_graph.add_edge(pydot.Edge(source_id, target_id))
-            directed_pairs.add((source_id, target_id))
         id_to_layout_element[layout_element_builder.id_] = layout_element_builder
     dot_graph.set("ranksep", 1.0)
     dot_graph.set("nodesep", 0.5)
@@ -413,7 +417,6 @@ def _build_dot_graph(
         dot_graph,
         id_to_layout_element,
         descendant_id_to_top_level_id,
-        directed_pairs,
         dot_cluster_name_to_compartment_layout_element,
     )
 
@@ -500,14 +503,26 @@ def _reposition_from_dot(
     return id_to_new_layout_element_builder
 
 
-def _make_self_loop_segments(layout_element):
+def _make_self_loop_angles(index, count):
+    """The (start, end) border angles of the ``index``-th of ``count`` parallel
+    self-loops on one node: the loops are spread evenly around the node, each
+    spanning :data:`_SELF_LOOP_SPAN` degrees, the first one on top."""
+    center_angle = (_SELF_LOOP_CENTER_ANGLE + index * 360 / count) % 360
+    return (
+        (center_angle + _SELF_LOOP_SPAN / 2) % 360,
+        (center_angle - _SELF_LOOP_SPAN / 2) % 360,
+    )
+
+
+def _make_self_loop_segments(layout_element, start_angle, end_angle):
     """Segments for an arc whose source and target resolve to the same node: a
-    loop bowing out through two control points, expressed as a polyline so the
+    loop leaving the border at ``start_angle`` and returning at ``end_angle``,
+    bowing out through two control points, expressed as a polyline so the
     CellDesigner writer can recover them as edit points (it only sees segment
     endpoints). Without this, a single Bezier collapses to start/end on the same
     node and the reader's modulation-geometry call hits a None border."""
-    start_point = layout_element.own_angle(120)
-    end_point = layout_element.own_angle(60)
+    start_point = layout_element.own_angle(start_angle)
+    end_point = layout_element.own_angle(end_angle)
     if start_point is None:
         start_point = layout_element.north_west()
     if end_point is None:
@@ -534,44 +549,53 @@ def _make_self_loop_segments(layout_element):
     ]
 
 
-def _bidirectional_segments(
+def _make_offset_ladder(count):
+    """The perpendicular offsets spreading ``count`` arcs that connect the same
+    two nodes: a ladder symmetric about the straight line joining them, in steps
+    of :data:`_BEZIER_OFFSET`. An odd count puts one arc on the line (offset 0);
+    an even count straddles it, so no arc is drawn straight."""
+    if count % 2 == 1:
+        return [(index - count // 2) * _BEZIER_OFFSET for index in range(count)]
+    half_count = count // 2
+    return [
+        (index - half_count) * _BEZIER_OFFSET
+        if index < half_count
+        else (index - half_count + 1) * _BEZIER_OFFSET
+        for index in range(count)
+    ]
+
+
+def _make_offset_segments(
     source_layout_element,
     target_layout_element,
-    source_top_level_id,
-    target_top_level_id,
+    frame_start_center,
+    frame_end_center,
+    offset,
 ):
-    """Segments for one arc of a bidirectional pair (A->B and B->A both exist):
-    a curve bowing away from its reverse via a single offset control point,
-    serialized as a polyline so the writer keeps the control point (see the
-    self-loop note)."""
-    source_center = source_layout_element.center()
-    target_center = target_layout_element.center()
-    delta_x = target_center.x - source_center.x
-    delta_y = target_center.y - source_center.y
+    """Segments for one arc of a group of arcs connecting the same two nodes: a
+    curve bowing ``offset`` points off the straight line through a single
+    control point, serialized as a polyline so the writer keeps that control
+    point (see the self-loop note).
+
+    The normal is taken in the group's canonical frame -- from
+    ``frame_start_center`` to ``frame_end_center``, the centers of the two nodes
+    in sorted-id order -- and not from the arc's own direction, so the sign of
+    ``offset`` names the same side of the line for every arc of the group
+    whichever way it points. A zero offset is a straight segment."""
+    delta_x = frame_end_center.x - frame_start_center.x
+    delta_y = frame_end_center.y - frame_start_center.y
     length = math.hypot(delta_x, delta_y)
-    if length == 0:
-        start_point = source_layout_element.own_border(target_center)
-        end_point = target_layout_element.own_border(source_center)
-        if start_point is None:
-            start_point = source_layout_element.north_west()
-        if end_point is None:
-            end_point = target_layout_element.north_east()
-        return [momapy.geometry.Segment(start_point, end_point)]
+    if offset == 0 or length == 0:
+        return _make_straight_segments(
+            source_layout_element, target_layout_element
+        )
     normal_x = -delta_y / length
     normal_y = delta_x / length
-    # Deterministic side rule: A→B and B→A get opposite offsets, so the two
-    # curves bow away from each other.
-    if (source_top_level_id, target_top_level_id) > (
-        target_top_level_id,
-        source_top_level_id,
-    ):
-        normal_x = -normal_x
-        normal_y = -normal_y
-    middle_x = (source_center.x + target_center.x) / 2
-    middle_y = (source_center.y + target_center.y) / 2
+    middle_x = (frame_start_center.x + frame_end_center.x) / 2
+    middle_y = (frame_start_center.y + frame_end_center.y) / 2
     control_point = momapy.geometry.Point(
-        middle_x + _BEZIER_OFFSET * normal_x,
-        middle_y + _BEZIER_OFFSET * normal_y,
+        middle_x + offset * normal_x,
+        middle_y + offset * normal_y,
     )
     start_point = source_layout_element.own_border(control_point)
     end_point = target_layout_element.own_border(control_point)
@@ -585,9 +609,10 @@ def _bidirectional_segments(
     ]
 
 
-def _simple_segments(source_layout_element, target_layout_element):
-    """Segments for a one-directional arc: a single straight segment between
-    the two node borders."""
+def _make_straight_segments(source_layout_element, target_layout_element):
+    """Segments for an arc drawn straight -- the only arc between its two nodes,
+    or the middle one of an odd group: a single segment between the two node
+    borders."""
     start_point = source_layout_element.border(target_layout_element.center())
     end_point = target_layout_element.border(source_layout_element.center())
     if start_point is None:
@@ -597,23 +622,31 @@ def _simple_segments(source_layout_element, target_layout_element):
     return [momapy.geometry.Segment(start_point, end_point)]
 
 
-def _arc_geometry(
+@dataclasses.dataclass
+class _ArcPlacement:
+    """One arc of a node-pair group, with everything the geometry needs: the arc
+    itself, the layout elements its endpoints resolve to (a subunit when the arc
+    attaches to one) and the top-level nodes those sit in."""
+
+    arc: object
+    source_layout_element: object
+    target_layout_element: object
+    source_top_level_id: str
+    target_top_level_id: str
+
+
+def _group_arcs_by_node_pair(
     new_layout_builder,
     id_to_new_layout_element_builder,
     descendant_id_to_top_level_id,
-    directed_pairs,
     operator_arc_resolver=None,
 ):
-    """Rebuild each arc's segments from the repositioned node geometry,
-    dispatching on whether the arc is a self-loop, one of a bidirectional pair,
-    or a plain one-directional arc.
-
-    ``operator_arc_resolver``: an optional ``(arc, source_builder,
-    target_builder) -> segments | None`` callback consulted first; when it
-    returns segments they are used as-is (and the arc skips the default
-    dispatch). It lets a caller attach an arc to special geometry -- e.g. an
-    SBGN operator's connector tips -- without this generic routine knowing about
-    those classes. ``None`` returned (or no callback) keeps the default."""
+    """Group the layout's arcs by the *unordered* pair of top-level nodes they
+    connect, so both directions between two nodes land in one group. Returns
+    ``{(smaller_id, greater_id): [placement, ...]}``, each group ordered
+    deterministically. Arcs the ``operator_arc_resolver`` claims get their
+    segments set here and are left out of the groups."""
+    arcs_by_node_pair = {}
     for layout_element_builder in new_layout_builder.layout_elements:
         if not momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Arc
@@ -642,26 +675,79 @@ def _arc_geometry(
             layout_element_builder.target.id_,
             layout_element_builder.target.id_,
         )
-        is_self_loop = source_top_level_id == target_top_level_id
-        is_bidirectional = not is_self_loop and (
-            target_top_level_id,
-            source_top_level_id,
-        ) in directed_pairs
-        if is_self_loop:
-            layout_element_builder.segments = _make_self_loop_segments(
-                source_layout_element_builder
+        node_pair = tuple(sorted((source_top_level_id, target_top_level_id)))
+        arcs_by_node_pair.setdefault(node_pair, []).append(
+            _ArcPlacement(
+                arc=layout_element_builder,
+                source_layout_element=source_layout_element_builder,
+                target_layout_element=target_layout_element_builder,
+                source_top_level_id=source_top_level_id,
+                target_top_level_id=target_top_level_id,
             )
-        elif is_bidirectional:
-            layout_element_builder.segments = _bidirectional_segments(
-                source_layout_element_builder,
-                target_layout_element_builder,
-                source_top_level_id,
-                target_top_level_id,
+        )
+    for placements in arcs_by_node_pair.values():
+        placements.sort(
+            key=lambda placement: (
+                placement.source_top_level_id,
+                placement.target_top_level_id,
+                placement.arc.id_,
             )
-        else:
-            layout_element_builder.segments = _simple_segments(
-                source_layout_element_builder,
-                target_layout_element_builder,
+        )
+    return arcs_by_node_pair
+
+
+def _arc_geometry(
+    new_layout_builder,
+    id_to_new_layout_element_builder,
+    descendant_id_to_top_level_id,
+    operator_arc_resolver=None,
+):
+    """Rebuild each arc's segments from the repositioned node geometry.
+
+    Arcs are handled a node pair at a time rather than one by one: every arc
+    between the same two top-level nodes -- in either direction -- takes its own
+    slot in the symmetric offset ladder of :func:`_make_offset_ladder`, measured
+    in the pair's canonical frame, so no two arcs of a pair share a curve. A
+    group whose two nodes are the same node is a bundle of self-loops instead,
+    fanned around it.
+
+    ``operator_arc_resolver``: an optional ``(arc, source_builder,
+    target_builder) -> segments | None`` callback consulted first; when it
+    returns segments they are used as-is (and the arc skips the default
+    dispatch). It lets a caller attach an arc to special geometry -- e.g. an
+    SBGN operator's connector tips -- without this generic routine knowing about
+    those classes. ``None`` returned (or no callback) keeps the default."""
+    arcs_by_node_pair = _group_arcs_by_node_pair(
+        new_layout_builder,
+        id_to_new_layout_element_builder,
+        descendant_id_to_top_level_id,
+        operator_arc_resolver=operator_arc_resolver,
+    )
+    for node_pair, placements in arcs_by_node_pair.items():
+        first_node_id, second_node_id = node_pair
+        if first_node_id == second_node_id:
+            for index, placement in enumerate(placements):
+                start_angle, end_angle = _make_self_loop_angles(
+                    index, len(placements)
+                )
+                placement.arc.segments = _make_self_loop_segments(
+                    placement.source_layout_element, start_angle, end_angle
+                )
+            continue
+        frame_start_center = id_to_new_layout_element_builder[
+            first_node_id
+        ].center()
+        frame_end_center = id_to_new_layout_element_builder[
+            second_node_id
+        ].center()
+        offsets = _make_offset_ladder(len(placements))
+        for offset, placement in zip(offsets, placements):
+            placement.arc.segments = _make_offset_segments(
+                placement.source_layout_element,
+                placement.target_layout_element,
+                frame_start_center,
+                frame_end_center,
+                offset,
             )
 
 
@@ -692,7 +778,6 @@ def make_auto_layout(
         dot_graph,
         id_to_layout_element,
         descendant_id_to_top_level_id,
-        directed_pairs,
         dot_cluster_name_to_compartment_layout_element,
     ) = _build_dot_graph(
         new_map_builder,
@@ -709,7 +794,6 @@ def make_auto_layout(
         new_layout_builder,
         id_to_new_layout_element_builder,
         descendant_id_to_top_level_id,
-        directed_pairs,
         operator_arc_resolver=operator_arc_resolver,
     )
     harmonize_root_layout(new_layout_builder)
