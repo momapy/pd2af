@@ -1,6 +1,7 @@
 import aspcompose
 import pytest
 
+import pd2af.languages
 import pd2af.modes
 import pd2af.rules
 
@@ -125,7 +126,7 @@ class TestCycleAwareTransitivity:
     )
 
     @pytest.mark.parametrize("mode", _PATH_INFERENCE)
-    @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
+    @pytest.mark.parametrize("language", tuple(pd2af.languages.LANGUAGES))
     def test_path_inference_modes_define_cycle_relations(self, mode, language):
         program = pd2af.rules.build_program(mode, language=language)
         assert "isDirectlyTransformedTo" in program
@@ -458,3 +459,18 @@ class TestModeExtensionPoint:
             assert "group_references" in message
         finally:
             pd2af.modes.get_transformation_modes.cache_clear()
+
+
+class TestRuleVariantsKeyOnLanguages:
+    """Rule variants are keyed on the input-language tokens, so the registry
+    can never grow a variant for a language pd2af does not define."""
+
+    def test_every_variant_key_is_a_registered_language(self):
+        registry = pd2af.rules.build_registry()
+        variant_keys = {
+            variant_key
+            for group in registry.groups.values()
+            for variant_key in group.variants
+        }
+        assert variant_keys
+        assert variant_keys <= set(pd2af.languages.LANGUAGES)

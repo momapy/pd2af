@@ -14,6 +14,7 @@ nav:
     - Core: api_reference/core.md
     - CLI: api_reference/cli.md
     - Languages: api_reference/languages.md
+    - Layout modes: api_reference/layout_modes.md
     - Modes: api_reference/modes.md
     - Solver: api_reference/solver.md
     - Rules: api_reference/rules.md

@@ -9,40 +9,33 @@ import momapy.io.core
 
 import pd2af
 import pd2af.languages
+import pd2af.layout_modes
 import pd2af.modes
 import pd2af.rules
 
 
-_LAYOUT_CHOICES = ("plain", "overlay", "dot", "auto")
+_LAYOUT_CHOICES = tuple(pd2af.layout_modes.LAYOUT_MODES) + (
+    pd2af.layout_modes.AUTO,
+)
 
 _INFLUENCE_PAIRING_CHOICES = ("cross", "nearest")
 
-_LAYOUT_MODE_INFO = {
-    "plain": "reuse original positions",
-    "overlay": "reuse full original layout with unmapped layout elements dimmed",
-    "dot": "graphviz `dot` auto-layout (requires `dot` on PATH)",
-    "auto": "pick automatically from the input (graphviz `dot` for a map)",
-}
-
-# Human-facing display names for the input-language tokens (also the single
-# source for the language order shown in the listing).
-_INPUT_LANGUAGE_DISPLAY_NAMES = {
-    pd2af.languages.CELLDESIGNER: "CellDesigner",
-    pd2af.languages.SBGN_PD: "SBGN PD",
+_LAYOUT_MODE_INFO = pd2af.layout_modes.LAYOUT_MODES | {
+    pd2af.layout_modes.AUTO: pd2af.layout_modes.AUTO_DESCRIPTION
 }
 
 
 def _unsupported_layout_modes_for_language(language):
     """Concrete layout modes the given input language rejects.
 
-    Derived from pd2af.languages: SBGN-AF output (SBGN-PD input) does not
+    Derived from pd2af.layout_modes: SBGN-AF output (SBGN-PD input) does not
     support the `overlay` dimming; CellDesigner output supports every layout
     mode.
     """
-    supported = pd2af.languages.LAYOUT_MODES_BY_LANGUAGE[language]
+    supported = pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
     return tuple(
         layout_mode
-        for layout_mode in pd2af.languages.LAYOUT_MODES
+        for layout_mode in pd2af.layout_modes.LAYOUT_MODES
         if layout_mode not in supported
     )
 
@@ -50,8 +43,8 @@ def _unsupported_layout_modes_for_language(language):
 def _compatible_language_names_for_mode(mode):
     """Display names of the input languages a transformation mode applies to."""
     return [
-        display_name
-        for language, display_name in _INPUT_LANGUAGE_DISPLAY_NAMES.items()
+        properties["display_name"]
+        for language, properties in pd2af.languages.LANGUAGES.items()
         if language in mode.compatible_languages
     ]
 
@@ -70,7 +63,7 @@ def _compatible_layout_mode_names_for_mode(mode):
         offered.update(mode.compatible_layout_modes(language))
     return [
         layout_mode
-        for layout_mode in pd2af.languages.LAYOUT_MODES
+        for layout_mode in pd2af.layout_modes.LAYOUT_MODES
         if layout_mode in offered
     ]
 
@@ -78,13 +71,14 @@ def _compatible_layout_mode_names_for_mode(mode):
 def _compatible_language_names_for_layout_mode(layout_mode):
     """Display names of the input languages whose output supports a layout mode.
 
-    Derived from pd2af.languages: SBGN-AF output (SBGN-PD input) does not
+    Derived from pd2af.layout_modes: SBGN-AF output (SBGN-PD input) does not
     support the `overlay` dimming; CellDesigner output supports every layout
-    mode.
+    mode. The `auto` meta value is not a concrete layout mode, so no language
+    rejects it and every display name is returned.
     """
     return [
-        display_name
-        for language, display_name in _INPUT_LANGUAGE_DISPLAY_NAMES.items()
+        properties["display_name"]
+        for language, properties in pd2af.languages.LANGUAGES.items()
         if layout_mode not in _unsupported_layout_modes_for_language(language)
     ]
 

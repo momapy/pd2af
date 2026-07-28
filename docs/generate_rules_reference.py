@@ -18,7 +18,7 @@ sentences are written as pure natural language in ``pd2af.rules``.
 
 import mkdocs_gen_files
 
-from pd2af.cli import _INPUT_LANGUAGE_DISPLAY_NAMES
+from pd2af.languages import LANGUAGES
 from pd2af.modes import _BUILTIN_MODES
 from pd2af.rules import build_registry, get_excludable_groups
 
@@ -26,8 +26,8 @@ PAGE_PATH = "rules.md"
 
 # Order in which base and per-language variant rules are presented within a
 # group: language-agnostic base rules first, then each language variant in the
-# order the CLI lists its input languages.
-_VARIANT_ORDER = tuple(_INPUT_LANGUAGE_DISPLAY_NAMES)
+# order pd2af.languages lists them.
+_VARIANT_ORDER = tuple(LANGUAGES)
 
 
 def make_rule_anchor(rule_identifier):
@@ -58,7 +58,7 @@ def variant_label(variant_key):
     """Human-facing label for a variant key, or empty for a base rule."""
     if variant_key is None:
         return ""
-    return _INPUT_LANGUAGE_DISPLAY_NAMES[variant_key]
+    return LANGUAGES[variant_key]["display_name"]
 
 
 def collect_group_rules(group):

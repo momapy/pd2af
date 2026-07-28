@@ -6,7 +6,8 @@ The pd2af public API is organized into the following modules.
 
 - [Core](core.md): the public `transform()` entry point
 - [CLI](cli.md): command-line entry point
-- [Languages](languages.md): input-language tokens, layout-mode vocabulary and inference from the input map type
+- [Languages](languages.md): the input languages, their momapy modules and inference from the input map or model type
+- [Layout modes](layout_modes.md): the layout-mode vocabulary and the modes each output language supports
 - [Modes](modes.md): the transformation modes and the entry point that contributes new ones
 
 ## Transformation pipeline

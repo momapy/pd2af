@@ -40,6 +40,7 @@ import types
 from aspcompose import RuleGroup
 
 import pd2af.languages
+import pd2af.layout_modes
 
 
 ENTRY_POINT_GROUP = "pd2af.modes"
@@ -59,7 +60,8 @@ class TransformationMode:
             tuple is the mode's full inventory.
         group_definitions: Rule groups the mode defines itself, registered with
             the built-in ones. Empty for every mode pd2af ships.
-        compatible_languages: The input-language tokens the mode accepts.
+        compatible_languages: The input-language tokens the mode accepts,
+            every registered language by default.
         merges_proteoforms: Whether the build stage strips post-translational
             decorations and merges content-equal results.
     """
@@ -68,9 +70,7 @@ class TransformationMode:
     summary: str
     group_references: tuple[str, ...] = ()
     group_definitions: tuple[RuleGroup, ...] = ()
-    compatible_languages: frozenset[str] = frozenset(
-        {pd2af.languages.CELLDESIGNER, pd2af.languages.SBGN_PD}
-    )
+    compatible_languages: frozenset[str] = frozenset(pd2af.languages.LANGUAGES)
     merges_proteoforms: bool = False
 
     @property
@@ -87,7 +87,7 @@ class TransformationMode:
         Merged activities are synthesized from several input species, so they
         have no original geometry for `plain`/`overlay` to reuse.
         """
-        available = pd2af.languages.LAYOUT_MODES_BY_LANGUAGE[language]
+        available = pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
         if not self.merges_proteoforms:
             return available
         return ("dot",) if "dot" in available else ()

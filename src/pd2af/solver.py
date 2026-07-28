@@ -174,7 +174,7 @@ def solve(
     exclude_rules=(),
 ):
     clingo_id_to_model_element = {}
-    language = pd2af.languages.language_from_map(map_)
+    language = pd2af.languages.get_language_from_map_or_model(map_)
     control = _make_control(
         map_.model,
         clingo_id_to_model_element,

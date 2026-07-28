@@ -62,6 +62,30 @@ level when its complex is dissolved). `TransformationMode.merges_proteoforms`
 (`pd2af.modes`) is the single source of truth for which modes strip; the
 builder reads it off `context.mode`.
 
+## Languages and layout modes each have one home
+
+`pd2af.languages.LANGUAGES` is the single source for input languages: its
+keyset *is* the set of languages, its order is the order the CLI and the docs
+list them in, and its values carry every per-language fact (`display_name`, the
+`momapy_module` whose classes seed the ontology vocabulary, and the `map_class`
+/ `model_class` an input is recognised by). Adding a language is one literal
+edit there; `get_language_from_map_or_model` infers the token by walking it.
+
+The token is the wire format, not just a label: it is the aspcompose variant
+key `pd2af.rules.build_program` resolves, a segment of every language-specific
+rule identifier (`activity:core:celldesigner:from_global_activate`, public via
+`--exclude-rule`), and a member of a mode's `compatible_languages`.
+
+`pd2af.layout_modes` owns the layout-mode vocabulary, the CLI descriptions, the
+`auto` meta value and `LAYOUT_MODES_BY_LANGUAGE` — the join of the two
+dimensions. It imports `pd2af.languages`, never the reverse.
+
+The per-language dispatches in `pd2af.build` (builder modules, the `dot`
+auto-layout kwargs, the provenance scratch slots) and `core._wrap_model_in_map`
+deliberately stay where they are: they select build *behavior* rather than
+define a language, and hosting builder references in `pd2af.languages` would
+make it drag the whole builder tree into every importer of `pd2af.modes`.
+
 ## Modes are objects, contributed through an entry point
 
 A mode is a `pd2af.modes.TransformationMode`: its name, its CLI summary, the

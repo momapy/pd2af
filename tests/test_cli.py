@@ -10,6 +10,7 @@ import momapy.io.core
 
 import pd2af
 import pd2af.cli
+import pd2af.languages
 import pd2af.modes
 
 from tests._helpers import MAPS_DIR, has_dot_binary
@@ -335,6 +336,23 @@ class TestListModes:
             "overlay",
             "dot",
         }
+
+    def test_json_layout_modes_reflect_language_support(self, capsys):
+        pd2af.cli.main(["list-modes", "--json"])
+        rows = {
+            row["layout_mode"]: row
+            for row in json.loads(capsys.readouterr().out)["layout_modes"]
+        }
+        every_language = [
+            properties["display_name"]
+            for properties in pd2af.languages.LANGUAGES.values()
+        ]
+        # `overlay` dimming is CellDesigner-only; `auto` is a meta value, not a
+        # concrete layout mode, so no language rejects it.
+        assert rows["overlay"]["languages"] == ["CellDesigner"]
+        assert rows["plain"]["languages"] == every_language
+        assert rows["dot"]["languages"] == every_language
+        assert rows["auto"]["languages"] == every_language
 
     def test_json_matches_rendered_tables(self, capsys):
         # The tables are an exact view of the JSON payload: every cell value

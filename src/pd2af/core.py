@@ -110,13 +110,14 @@ def transform(
             )
         layout_mode = None
         map_ = _wrap_model_in_map(
-            map_or_model, pd2af.languages.language_from_model(map_or_model)
+            map_or_model,
+            pd2af.languages.get_language_from_map_or_model(map_or_model),
         )
     else:
         map_ = map_or_model
         if layout_mode == "auto":
             layout_mode = "dot"
-    language = pd2af.languages.language_from_map(map_)
+    language = pd2af.languages.get_language_from_map_or_model(map_)
     if language not in transformation_mode.compatible_languages:
         raise ValueError(
             f"transformation mode {mode!r} does not support {language!r} "

@@ -32,6 +32,7 @@ import momapy.sbgn.af
 import pd2af
 import pd2af.celldesigner.building_layout
 import pd2af.celldesigner.building_model
+import pd2af.languages
 import pd2af.predicates
 import pd2af.rules
 import pd2af.sbgn.building_layout
@@ -141,7 +142,7 @@ class TestOperatorPredicates:
 
 class TestGateRules:
     @pytest.mark.parametrize("mode", _PATH_INFERENCE_MODES)
-    @pytest.mark.parametrize("language", ("celldesigner", "sbgn_pd"))
+    @pytest.mark.parametrize("language", tuple(pd2af.languages.LANGUAGES))
     def test_gates_group_present_in_path_inference_modes(self, mode, language):
         program = pd2af.rules.build_program(mode, language=language)
         assert "new(logicalOperator(logicalOperatorKey(OPERATOR)," in program

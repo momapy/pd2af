@@ -107,7 +107,7 @@ def build_map(
         influence_pairing=influence_pairing,
         mode=mode,
     )
-    language = pd2af.languages.language_from_map(map_)
+    language = pd2af.languages.get_language_from_map_or_model(map_)
     if language == pd2af.languages.SBGN_PD:
         pd2af.sbgn.building_model.make_and_add_model(context, clingo_model)
         if layout_mode is not None:

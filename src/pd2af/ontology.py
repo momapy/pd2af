@@ -1,18 +1,10 @@
-import momapy.celldesigner
-import momapy.sbgn.pd
 import momapy.core.elements
 import momapy.core.model
 
+import pd2af.languages
+
 
 _BASES = (momapy.core.elements.ModelElement, momapy.core.model.Model)
-
-# Input language -> the momapy package whose model-element classes seed the
-# momapy_kb ontology. Functor names derive from the class names, so each
-# language yields its own predicate vocabulary (no overlap between the two).
-_LANGUAGE_MODULES = {
-    "celldesigner": momapy.celldesigner,
-    "sbgn_pd": momapy.sbgn.pd,
-}
 
 
 def _iter_types(module):
@@ -25,7 +17,7 @@ def _iter_types(module):
 
 
 def make_rules(session, language):
-    module = _LANGUAGE_MODULES[language]
+    module = pd2af.languages.LANGUAGES[language]["momapy_module"]
     rules = set()
     for type_ in _iter_types(module):
         session.get_or_make_predicate_classes_from_type(
