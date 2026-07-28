@@ -23,7 +23,7 @@ The pd2af public API is organized into the following modules.
 - [CellDesigner layout](celldesigner_building_layout.md): build the AF layout (plain / overlay / dot), CellDesigner output
 - [SBGN-AF model](sbgn_building_model.md): build the SBGN-AF model from clingo atoms
 - [SBGN-AF layout](sbgn_building_layout.md): build the SBGN-AF layout (plain / dot)
-- [SBGN-AF labels](sbgn_labels.md): build an SBGN-AF activity's label from an SBGN-PD entity pool
+- [SBGN-AF labels](sbgn_building_labels.md): build an SBGN-AF activity's label from an SBGN-PD entity pool
 
 ## Auxiliary
 

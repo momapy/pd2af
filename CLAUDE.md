@@ -52,7 +52,7 @@ CellDesigner-only.
 
 Stripping is a single recursive operation over the resolved entity
 (`pd2af.celldesigner.building_model.get_or_make_stripped_species`;
-`pd2af.sbgn.labels.build_label` with `include_state_variables=False`),
+`pd2af.sbgn.building_labels.make_label` with `include_state_variables=False`),
 applied to *every* entity in the merged modes — complexes and
 non-templated entities included, not just templated proteoforms. The
 two structural-role activity keys are `kept_species` (a top-level

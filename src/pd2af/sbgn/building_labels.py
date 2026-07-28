@@ -1,4 +1,4 @@
-"""Build the label of an SBGN-AF activity from an SBGN-PD entity pool.
+"""Make the label of an SBGN-AF activity from an SBGN-PD entity pool.
 
 SBGN-AF activities are opaque, so two distinct PD proteoforms (same type and
 name, different state) would collapse under content-based model equality unless
@@ -20,7 +20,7 @@ Rules:
   (``include_units_of_information=False``) this block is *not* inlined into the
   label: a curator building an AF map from scratch writes ``ct:mRNA`` on the
   nucleic-acid-feature glyph, never ``[ct:mRNA]`` in the label. The block (see
-  :func:`build_units_of_information_label`) is instead placed on the activity's
+  :func:`make_units_of_information_label`) is instead placed on the activity's
   typed unit-of-information glyph by the model builder. The block is still kept
   inline for a complex's recursively built **subunit name** (below), which is a
   synthetic identity key, not a curator-facing label, so it stays maximally
@@ -37,7 +37,7 @@ There are no spaces between elements.
 """
 
 
-def _state_variable_token(state_variable):
+def _make_state_variable_token(state_variable):
     if state_variable.variable is not None:
         if state_variable.value:
             return f"{state_variable.value}@{state_variable.variable}"
@@ -45,7 +45,7 @@ def _state_variable_token(state_variable):
     return state_variable.value or ""
 
 
-def _state_variable_sort_key(state_variable):
+def _make_state_variable_sort_key(state_variable):
     return (
         state_variable.order if state_variable.order is not None else 0,
         state_variable.value or "",
@@ -53,40 +53,45 @@ def _state_variable_sort_key(state_variable):
     )
 
 
-def _unit_of_information_token(unit_of_information):
+def _make_unit_of_information_token(unit_of_information):
     if unit_of_information.prefix:
         return f"{unit_of_information.prefix}:{unit_of_information.value}"
     return unit_of_information.value
 
 
-def build_units_of_information_label(entity):
-    """Return the unit-of-information glyph label ``uoi1|uoi2|...`` for an SBGN-PD
-    ``entity`` -- tokens ``prefix:value`` (or ``value`` with no prefix), sorted,
-    joined by ``|`` -- or ``None`` when the entity carries no units of
-    information.
+def make_units_of_information_label(entity_pool_or_subunit):
+    """Return the unit-of-information glyph label ``uoi1|uoi2|...`` for an
+    SBGN-PD ``entity_pool_or_subunit`` -- tokens ``prefix:value`` (or ``value``
+    with no prefix), sorted, joined by ``|`` -- or ``None`` when it carries no
+    units of information.
 
     The merged ``normal`` / ``normal-no-complex`` modes move this off the activity
     *label* and onto the AF activity's typed unit-of-information glyph (see
     :func:`pd2af.sbgn.building_model._make_activity`), where a curator would put
     it -- e.g. ``ct:mRNA`` on a nucleic-acid-feature glyph. It carries **no**
     surrounding brackets: those are only the activity-label serialization device
-    (added by :func:`build_label`), not part of the glyph text.
+    (added by :func:`make_label`), not part of the glyph text.
     """
-    units_of_information = getattr(entity, "units_of_information", None)
+    units_of_information = getattr(
+        entity_pool_or_subunit, "units_of_information", None
+    )
     if not units_of_information:
         return None
     return "|".join(
         sorted(
-            _unit_of_information_token(unit) for unit in units_of_information
+            _make_unit_of_information_token(unit)
+            for unit in units_of_information
         )
     )
 
 
-def build_label(
-    entity, include_state_variables=True, include_units_of_information=True
+def make_label(
+    entity_pool_or_subunit,
+    include_state_variables=True,
+    include_units_of_information=True,
 ):
-    """Return the SBGN-AF activity label for an SBGN-PD ``entity`` (entity pool
-    or subunit), per the rules in the module docstring.
+    """Return the SBGN-AF activity label for an SBGN-PD
+    ``entity_pool_or_subunit``, per the rules in the module docstring.
 
     When ``include_state_variables`` is ``False`` the state-variable block is
     omitted so that distinct proteoforms (same type/name/units, different state)
@@ -99,24 +104,26 @@ def build_label(
     """
     decorations = ""
     if include_units_of_information:
-        units_label = build_units_of_information_label(entity)
+        units_label = make_units_of_information_label(entity_pool_or_subunit)
         if units_label:
             # Brackets are the activity-label serialization device only; the
             # glyph label (the helper's return value) carries none.
             decorations += f"[{units_label}]"
-    state_variables = getattr(entity, "state_variables", None)
+    state_variables = getattr(
+        entity_pool_or_subunit, "state_variables", None
+    )
     if include_state_variables and state_variables:
         tokens = [
-            _state_variable_token(state_variable)
+            _make_state_variable_token(state_variable)
             for state_variable in sorted(
-                state_variables, key=_state_variable_sort_key
+                state_variables, key=_make_state_variable_sort_key
             )
         ]
         if any(tokens):  # omit an all-blank state-variable bracket
             decorations += "[" + "|".join(tokens) + "]"
-    name = getattr(entity, "label", None) or ""
+    name = getattr(entity_pool_or_subunit, "label", None) or ""
     if not name:
-        subunits = getattr(entity, "subunits", None)
+        subunits = getattr(entity_pool_or_subunit, "subunits", None)
         if subunits:
             # An unlabelled complex's name is its subunits' labels. This name is
             # a synthetic identity key (a curator would name the complex or leave
@@ -127,7 +134,7 @@ def build_label(
             # recursively in the merged modes).
             name = ":".join(
                 sorted(
-                    build_label(
+                    make_label(
                         subunit,
                         include_state_variables=include_state_variables,
                         include_units_of_information=True,
