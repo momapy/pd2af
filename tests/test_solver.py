@@ -99,7 +99,7 @@ def test_supported_modes():
     # The entry point is the only way a sixth mode can appear: pd2af itself
     # declares exactly these five, and every mode it offers is one of them
     # unless something contributed it.
-    builtin_names = {mode.name for mode in pd2af.modes._BUILTIN_MODES}
+    builtin_names = {mode.name for mode in pd2af.modes._BUILTIN_TRANSFORMATION_MODES}
     assert builtin_names == {
         "normal",
         "normal-no-complex",

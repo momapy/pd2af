@@ -43,7 +43,7 @@ class TestWriterForOutput:
 
 class TestModeAndLayoutChoices:
     def test_mode_choices_lists_supported_modes(self):
-        assert {mode.name for mode in pd2af.modes._BUILTIN_MODES} == {
+        assert {mode.name for mode in pd2af.modes._BUILTIN_TRANSFORMATION_MODES} == {
             "normal",
             "normal-no-complex",
             "keep-species",

@@ -19,7 +19,7 @@ sentences are written as pure natural language in ``pd2af.rules``.
 import mkdocs_gen_files
 
 from pd2af.languages import LANGUAGES
-from pd2af.modes import _BUILTIN_MODES
+from pd2af.modes import _BUILTIN_TRANSFORMATION_MODES
 from pd2af.rules import build_registry, get_excludable_groups
 
 PAGE_PATH = "rules.md"
@@ -84,10 +84,10 @@ def modes_for_group(group):
     """The modes a group is used in, as ``"all"`` or an enumerated cell."""
     modes = [
         mode.name
-        for mode in _BUILTIN_MODES
+        for mode in _BUILTIN_TRANSFORMATION_MODES
         if group.identifier in mode.rule_group_ids
     ]
-    if len(modes) == len(_BUILTIN_MODES):
+    if len(modes) == len(_BUILTIN_TRANSFORMATION_MODES):
         return "all"
     return ", ".join(f"`{mode}`" for mode in modes)
 
@@ -120,7 +120,7 @@ def write_by_mode(page, registry):
         "filling a slot it requires). The same group can be excludable in one "
         "mode and mandatory in another.\n\n"
     )
-    for mode in _BUILTIN_MODES:
+    for mode in _BUILTIN_TRANSFORMATION_MODES:
         group_identifiers = frozenset(mode.rule_group_ids)
         excludable, _mandatory = get_excludable_groups(mode.name)
         page.write(f"### `{mode.name}`\n\n")
@@ -191,7 +191,7 @@ def write_rule_index(page, registry):
 def main():
     # Built-ins only: a contributed mode's groups must never reach the
     # published reference.
-    registry = build_registry(modes=_BUILTIN_MODES)
+    registry = build_registry(modes=_BUILTIN_TRANSFORMATION_MODES)
     with mkdocs_gen_files.open(PAGE_PATH, "w") as page:
         write_intro(page)
         write_by_mode(page, registry)

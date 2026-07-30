@@ -88,14 +88,12 @@ class TransformationMode:
         Merged activities are synthesized from several input species, so they
         have no original geometry for `plain`/`overlay` to reuse.
         """
-        available = pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
+        available_layout_modes = pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
         if not self.merges_proteoforms:
-            return available
-        return ("dot",) if "dot" in available else ()
+            return available_layout_modes
+        return ("dot",) if "dot" in available_layout_modes else ()
 
 
-# The rule-group inventories the built-in modes are assembled from. Every mode
-# is a sum of these, with no inline tuple left over.
 _CORE = (
     "activity:core",
     "topology",
@@ -105,33 +103,28 @@ _CORE = (
     "influence_output",
     "gates",
 )
-# Structural reasons a species is an activity, each excludable on its own.
-_DISCOVERY = (
+_ACTIVITY_INFERENCE = (
     "activity:phenotype",
     "activity:active_marker",
     "activity:modulation_source",
     "activity:gate_input",
 )
-# Influence inference beyond what the map draws: multi-hop chaining and
-# consumption/sparing reasoning.
-_INFERENCE = ("paths:chaining", "influences_consumption")
-# Complexes stay opaque: a subunit is keyed by its outermost complex.
+_INFLUENCE_INFERENCE = ("paths:chaining", "influences_consumption")
 _COMPLEX = ("top_level", "preparation:complex")
-# Complexes dissolve: active subunits are promoted to top-level activities.
 _NO_COMPLEX = ("preparation:no_complex", "paths_complex_traversal")
-# The `keep-reactions` premises: every species is an activity, every reaction
-# is a set of reactant->product influences.
-_KEEP_REACTIONS = ("keep_reactions:activity", "keep_reactions:influences")
+_KEEP_REACTIONS_INFERENCE = ("keep_reactions:activity", "keep_reactions:influences")
 
 
-_BUILTIN_MODES = (
+_BUILTIN_TRANSFORMATION_MODES = (
     TransformationMode(
         name="normal",
         docs=(
-            "merge forms of the same base species or entity pool into a "
-            "single activity"
+            "merge forms of the same base species or entity pool into a single activity"
         ),
-        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
+        rule_group_references=_CORE
+        + _ACTIVITY_INFERENCE
+        + _INFLUENCE_INFERENCE
+        + _COMPLEX,
         merges_proteoforms=True,
     ),
     TransformationMode(
@@ -141,13 +134,19 @@ _BUILTIN_MODES = (
             "single activity; additionally, replace complexes with their "
             "active subunits if any, promoting them to top-level activities"
         ),
-        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _NO_COMPLEX,
+        rule_group_references=_CORE
+        + _ACTIVITY_INFERENCE
+        + _INFLUENCE_INFERENCE
+        + _NO_COMPLEX,
         merges_proteoforms=True,
     ),
     TransformationMode(
         name="keep-species",
         docs="create one activity per distinct active species or entity pool",
-        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
+        rule_group_references=_CORE
+        + _ACTIVITY_INFERENCE
+        + _INFLUENCE_INFERENCE
+        + _COMPLEX,
     ),
     TransformationMode(
         name="keep-species-no-complex",
@@ -156,7 +155,10 @@ _BUILTIN_MODES = (
             "additionally, replace complexes with their active subunits if "
             "any, promoting them to top-level activities"
         ),
-        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _NO_COMPLEX,
+        rule_group_references=_CORE
+        + _ACTIVITY_INFERENCE
+        + _INFLUENCE_INFERENCE
+        + _NO_COMPLEX,
     ),
     TransformationMode(
         name="keep-reactions",
@@ -165,7 +167,7 @@ _BUILTIN_MODES = (
             "positive influence from each of its reactants to each of its "
             "products"
         ),
-        rule_group_references=_CORE + _COMPLEX + _KEEP_REACTIONS,
+        rule_group_references=_CORE + _COMPLEX + _KEEP_REACTIONS_INFERENCE,
         compatible_languages=frozenset({pd2af.languages.CELLDESIGNER}),
     ),
 )
@@ -179,7 +181,7 @@ def get_transformation_modes():
     through the ``pd2af.modes`` entry-point group, so ``list-modes`` and the
     ``--transformation-mode`` choices read canonically.
     """
-    modes = {mode.name: mode for mode in _BUILTIN_MODES}
+    modes = {mode.name: mode for mode in _BUILTIN_TRANSFORMATION_MODES}
     for entry_point in importlib.metadata.entry_points(group=ENTRY_POINT_GROUP):
         mode = entry_point.load()
         if not isinstance(mode, TransformationMode):
