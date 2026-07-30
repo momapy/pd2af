@@ -17,7 +17,7 @@ _MODES = (
 
 def _group_ids(mode_name):
     """The rule groups a mode is made of, as the mode itself declares them."""
-    return frozenset(pd2af.modes.get_transformation_mode(mode_name).group_ids)
+    return frozenset(pd2af.modes.get_transformation_mode(mode_name).rule_group_ids)
 
 
 class TestBuildProgram:
@@ -380,8 +380,8 @@ class TestPreparationSlot:
 
 class TestModeExtensionPoint:
     """A mode contributed through the entry point composes exactly like a
-    built-in one: its `group_references` name registered groups and its
-    `group_definitions` are registered alongside them."""
+    built-in one: its `rule_group_references` name registered groups and its
+    `rule_group_definitions` are registered alongside them."""
 
     def test_contributed_mode_composes_references_and_definitions(
         self, monkeypatch
@@ -401,8 +401,8 @@ class TestModeExtensionPoint:
         contributed_mode = pd2af.modes.TransformationMode(
             name="contributed",
             docs="a test-only mode contributed through the entry point",
-            group_references=("influence_output",),
-            group_definitions=(contributed_group,),
+            rule_group_references=("influence_output",),
+            rule_group_definitions=(contributed_group,),
         )
 
         class _FakeEntryPoint:
@@ -433,7 +433,7 @@ class TestModeExtensionPoint:
         contributed_mode = pd2af.modes.TransformationMode(
             name="dangling",
             docs="a test-only mode naming a group nothing registers",
-            group_references=("influence_output", "no_such_group"),
+            rule_group_references=("influence_output", "no_such_group"),
         )
 
         class _FakeEntryPoint:
@@ -456,7 +456,7 @@ class TestModeExtensionPoint:
             message = str(raised.value)
             assert "dangling" in message
             assert "no_such_group" in message
-            assert "group_references" in message
+            assert "rule_group_references" in message
         finally:
             pd2af.modes.get_transformation_modes.cache_clear()
 

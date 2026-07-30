@@ -85,7 +85,7 @@ def modes_for_group(group):
     modes = [
         mode.name
         for mode in _BUILTIN_MODES
-        if group.identifier in mode.group_ids
+        if group.identifier in mode.rule_group_ids
     ]
     if len(modes) == len(_BUILTIN_MODES):
         return "all"
@@ -121,7 +121,7 @@ def write_by_mode(page, registry):
         "mode and mandatory in another.\n\n"
     )
     for mode in _BUILTIN_MODES:
-        group_identifiers = frozenset(mode.group_ids)
+        group_identifiers = frozenset(mode.rule_group_ids)
         excludable, _mandatory = get_excludable_groups(mode.name)
         page.write(f"### `{mode.name}`\n\n")
         for group in registry.groups.values():

@@ -1215,7 +1215,7 @@ def build_registry(modes=None) -> RuleRegistry:
     contributed_groups = []
     mode_by_contributed_group_id: dict[str, str] = {}
     for mode in modes:
-        for group in mode.group_definitions:
+        for group in mode.rule_group_definitions:
             already_contributed_by = mode_by_contributed_group_id.get(
                 group.identifier
             )
@@ -1230,11 +1230,11 @@ def build_registry(modes=None) -> RuleRegistry:
     registry = RuleRegistry()
     registry.register(list(_BUILTIN_GROUPS) + contributed_groups)
     for mode in modes:
-        for group_id in mode.group_references:
+        for group_id in mode.rule_group_references:
             if group_id not in registry.groups:
                 raise RuntimeError(
                     f"transformation mode {mode.name!r} references rule group "
-                    f"{group_id!r} in its group_references, which no mode "
+                    f"{group_id!r} in its rule_group_references, which no mode "
                     f"defines and which is not a built-in group"
                 )
     issues = registry.validate()
@@ -1257,7 +1257,8 @@ def get_excludable_groups(mode_name: str) -> tuple[frozenset[str], frozenset[str
     exactly like a directly named dependency.
     """
     registry = build_registry()
-    included = frozenset(pd2af.modes.get_transformation_mode(mode_name).group_ids)
+    mode = pd2af.modes.get_transformation_mode(mode_name)
+    included = frozenset(mode.rule_group_ids)
     depended_on: set[str] = set()
     for group_id in included:
         for dependency in registry.groups[group_id].depends_on:
@@ -1316,7 +1317,7 @@ def build_program(
     """
     mode = pd2af.modes.get_transformation_mode(mode_name)
     plan = CollectionPlan(build_registry())
-    for group_id in mode.group_ids:
+    for group_id in mode.rule_group_ids:
         plan.add_group(group_id)
     for group_id in exclude_groups:
         plan.exclude_group(group_id)

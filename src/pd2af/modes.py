@@ -19,13 +19,13 @@ object::
     MY_MODE = pd2af.TransformationMode(
         name="my-mode",
         docs="what this mode does, in one clause",
-        group_references=("modulation_kind", "influence_output"),
-        group_definitions=MY_RULE_GROUPS,
+        rule_group_references=("modulation_kind", "influence_output"),
+        rule_group_definitions=MY_RULE_GROUPS,
     )
 
-``group_references`` names groups pd2af already registers; ``group_definitions``
-holds ``RuleGroup`` objects the mode brings with it, which
-:func:`pd2af.rules.build_registry` registers alongside the built-in ones. A
+``rule_group_references`` names groups pd2af already registers;
+``rule_group_definitions`` holds ``RuleGroup`` objects the mode brings with it,
+which :func:`pd2af.rules.build_registry` registers alongside the built-in ones. A
 contributed mode may not take the name of an existing mode, and a mode that
 fails to load — a bad import, a wrong type, a name collision, a group that
 fails registry validation — takes down every pd2af entry point rather than
@@ -55,12 +55,12 @@ class TransformationMode:
             and :func:`pd2af.transform`.
         docs: One clause of prose describing what the mode does, as listed by
             the CLI.
-        group_references: Identifiers of already-registered rule groups the
-            mode's program includes. The list is *complete*, not leaf-only:
+        rule_group_references: Identifiers of already-registered rule groups
+            the mode's program includes. The list is *complete*, not leaf-only:
             dependencies are named explicitly rather than auto-included, so the
             tuple is the mode's full inventory.
-        group_definitions: Rule groups the mode defines itself, registered with
-            the built-in ones. Empty for every mode pd2af ships.
+        rule_group_definitions: Rule groups the mode defines itself, registered
+            with the built-in ones. Empty for every mode pd2af ships.
         compatible_languages: The input-language tokens the mode accepts,
             every registered language by default.
         merges_proteoforms: Whether the build stage strips post-translational
@@ -69,16 +69,16 @@ class TransformationMode:
 
     name: str
     docs: str
-    group_references: tuple[str, ...] = ()
-    group_definitions: tuple[RuleGroup, ...] = ()
+    rule_group_references: tuple[str, ...] = ()
+    rule_group_definitions: tuple[RuleGroup, ...] = ()
     compatible_languages: frozenset[str] = frozenset(pd2af.languages.LANGUAGES)
     merges_proteoforms: bool = False
 
     @property
-    def group_ids(self):
+    def rule_group_ids(self):
         """Every group this mode is made of, defined ones included."""
-        return self.group_references + tuple(
-            rule_group.identifier for rule_group in self.group_definitions
+        return self.rule_group_references + tuple(
+            rule_group.identifier for rule_group in self.rule_group_definitions
         )
 
     def compatible_layout_modes(self, language):
@@ -131,7 +131,7 @@ _BUILTIN_MODES = (
             "merge forms of the same base species or entity pool into a "
             "single activity"
         ),
-        group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
+        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
         merges_proteoforms=True,
     ),
     TransformationMode(
@@ -141,13 +141,13 @@ _BUILTIN_MODES = (
             "single activity; additionally, replace complexes with their "
             "active subunits if any, promoting them to top-level activities"
         ),
-        group_references=_CORE + _DISCOVERY + _INFERENCE + _NO_COMPLEX,
+        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _NO_COMPLEX,
         merges_proteoforms=True,
     ),
     TransformationMode(
         name="keep-species",
         docs="create one activity per distinct active species or entity pool",
-        group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
+        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
     ),
     TransformationMode(
         name="keep-species-no-complex",
@@ -156,7 +156,7 @@ _BUILTIN_MODES = (
             "additionally, replace complexes with their active subunits if "
             "any, promoting them to top-level activities"
         ),
-        group_references=_CORE + _DISCOVERY + _INFERENCE + _NO_COMPLEX,
+        rule_group_references=_CORE + _DISCOVERY + _INFERENCE + _NO_COMPLEX,
     ),
     TransformationMode(
         name="keep-reactions",
@@ -165,7 +165,7 @@ _BUILTIN_MODES = (
             "positive influence from each of its reactants to each of its "
             "products"
         ),
-        group_references=_CORE + _COMPLEX + _KEEP_REACTIONS,
+        rule_group_references=_CORE + _COMPLEX + _KEEP_REACTIONS,
         compatible_languages=frozenset({pd2af.languages.CELLDESIGNER}),
     ),
 )

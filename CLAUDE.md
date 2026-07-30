@@ -88,10 +88,11 @@ make it drag the whole builder tree into every importer of `pd2af.modes`.
 
 ## Modes are objects, contributed through an entry point
 
-A mode is a `pd2af.modes.TransformationMode`: its name, its CLI summary, the
-rule groups its program is made of (`group_references` naming registered
-groups, `group_definitions` carrying groups the mode brings itself), the input
-languages it accepts, and `merges_proteoforms`. `pd2af.rules` owns the groups
+A mode is a `pd2af.modes.TransformationMode`: its name, its `docs` (the prose
+the CLI lists it with), the rule groups its program is made of
+(`rule_group_references` naming registered groups, `rule_group_definitions`
+carrying groups the mode brings itself), the input languages it accepts, and
+`merges_proteoforms`. `pd2af.rules` owns the groups
 and composes the program; the mode owns the membership, so no rule group names
 a mode.
 
