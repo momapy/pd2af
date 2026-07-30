@@ -400,7 +400,7 @@ class TestModeExtensionPoint:
         )
         contributed_mode = pd2af.modes.TransformationMode(
             name="contributed",
-            summary="a test-only mode contributed through the entry point",
+            docs="a test-only mode contributed through the entry point",
             group_references=("influence_output",),
             group_definitions=(contributed_group,),
         )
@@ -432,7 +432,7 @@ class TestModeExtensionPoint:
     ):
         contributed_mode = pd2af.modes.TransformationMode(
             name="dangling",
-            summary="a test-only mode naming a group nothing registers",
+            docs="a test-only mode naming a group nothing registers",
             group_references=("influence_output", "no_such_group"),
         )
 

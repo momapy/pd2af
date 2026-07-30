@@ -18,7 +18,7 @@ object::
 
     MY_MODE = pd2af.TransformationMode(
         name="my-mode",
-        summary="what this mode does, in one clause",
+        docs="what this mode does, in one clause",
         group_references=("modulation_kind", "influence_output"),
         group_definitions=MY_RULE_GROUPS,
     )
@@ -53,7 +53,8 @@ class TransformationMode:
     Attributes:
         name: The mode's only identifier, as passed to ``--transformation-mode``
             and :func:`pd2af.transform`.
-        summary: One clause of CLI listing prose describing what the mode does.
+        docs: One clause of prose describing what the mode does, as listed by
+            the CLI.
         group_references: Identifiers of already-registered rule groups the
             mode's program includes. The list is *complete*, not leaf-only:
             dependencies are named explicitly rather than auto-included, so the
@@ -67,7 +68,7 @@ class TransformationMode:
     """
 
     name: str
-    summary: str
+    docs: str
     group_references: tuple[str, ...] = ()
     group_definitions: tuple[RuleGroup, ...] = ()
     compatible_languages: frozenset[str] = frozenset(pd2af.languages.LANGUAGES)
@@ -126,7 +127,7 @@ _KEEP_REACTIONS = ("keep_reactions:activity", "keep_reactions:influences")
 _BUILTIN_MODES = (
     TransformationMode(
         name="normal",
-        summary=(
+        docs=(
             "merge forms of the same base species or entity pool into a "
             "single activity"
         ),
@@ -135,7 +136,7 @@ _BUILTIN_MODES = (
     ),
     TransformationMode(
         name="normal-no-complex",
-        summary=(
+        docs=(
             "merge forms of the same base species or entity pool into a "
             "single activity; additionally, replace complexes with their "
             "active subunits if any, promoting them to top-level activities"
@@ -145,12 +146,12 @@ _BUILTIN_MODES = (
     ),
     TransformationMode(
         name="keep-species",
-        summary="create one activity per distinct active species or entity pool",
+        docs="create one activity per distinct active species or entity pool",
         group_references=_CORE + _DISCOVERY + _INFERENCE + _COMPLEX,
     ),
     TransformationMode(
         name="keep-species-no-complex",
-        summary=(
+        docs=(
             "create one activity per distinct active species or entity pool; "
             "additionally, replace complexes with their active subunits if "
             "any, promoting them to top-level activities"
@@ -159,7 +160,7 @@ _BUILTIN_MODES = (
     ),
     TransformationMode(
         name="keep-reactions",
-        summary=(
+        docs=(
             "create one activity per species, and turn every reaction into a "
             "positive influence from each of its reactants to each of its "
             "products"

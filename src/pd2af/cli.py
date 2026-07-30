@@ -180,7 +180,7 @@ def _build_modes_data():
             "transformation_mode": mode.name,
             "layout_modes": _compatible_layout_mode_names_for_mode(mode),
             "languages": _compatible_language_names_for_mode(mode),
-            "description": mode.summary,
+            "description": mode.docs,
         }
         for mode in pd2af.modes.get_transformation_modes().values()
     ]
