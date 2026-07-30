@@ -93,21 +93,22 @@ the CLI lists it with), the rule groups its program is made of
 (`rule_group_references` naming registered groups, `rule_group_definitions`
 carrying groups the mode brings itself), the input languages it accepts, and
 `merges_proteoforms`. `pd2af.rules` owns the groups
-and composes the program; the mode owns the membership, so no rule group names
-a mode.
+and composes the program; the mode owns the membership, so no rule group decides
+which modes include it. A mode that brings its own groups names them after
+itself: `keep_reactions:*`, as a contributed `casq` mode would name `casq:*`.
 
 `pd2af.modes.get_transformation_modes()` returns the built-ins in declaration
 order followed by every mode contributed through the `pd2af.modes` entry-point
 group. A contributed mode may not shadow an existing name, and any failure to
 load one — bad import, wrong type, name collision, a group that fails
 `registry.validate()` — takes down every pd2af entry point, deliberately.
-`docs/generate_rules_reference.py` passes `_BUILTIN_MODES` to `build_registry`
-so a contributed mode never reaches the published reference.
+`docs/generate_rules_reference.py` passes `_BUILTIN_TRANSFORMATION_MODES` to
+`build_registry` so a contributed mode never reaches the published reference.
 
 Group lists are complete, not leaf-only. The `preparation` slot is what makes a
 hand-written list safe: `preparation:complex` and `preparation:no_complex` fill
 it, the three consumers of `hasActivityCarrier`/`hasActivityKey`
-(`influences_derivation`, `influences_consumption`, `gates`) depend on the slot,
+(`influences:core`, `influences:consumption`, `gates:core`) depend on the slot,
 so a mode that omits its preparation group raises `unfilled_slot` instead of
 silently emitting an activity-less program.
 

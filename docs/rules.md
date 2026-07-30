@@ -1,6 +1,6 @@
 # Rules reference
 
-The pd2af transformation is driven by a set of rules (encoded in [ASP](https://en.wikipedia.org/wiki/Answer_set_programming)). Every rule is language-agnostic (a *base* rule) or specific to an input language (a *variant* rule, for CellDesigner or SBGN PD). Rules are organized in groups, each representing a coherent functional unit — the whole a `--exclude-group` can drop. Groups sharing an id prefix (`activity:*`, `paths:*`) address one coarse concern.
+The pd2af transformation is driven by a set of rules (encoded in [ASP](https://en.wikipedia.org/wiki/Answer_set_programming)). Every rule is language-agnostic (a *base* rule) or specific to an input language (a *variant* rule, for CellDesigner or SBGN PD). Rules are organized in groups, each representing a coherent functional unit — the whole a `--exclude-group` can drop. Every group id reads `<family>:<member>`, and the family is the coarse concern the group addresses.
 
 This page is generated from the live registry in `pd2af.rules`. It presents a [by-mode](#by-mode) view of which rules each mode uses, a [canonical reference](#rule-groups) documenting each rule once, and an alphabetical [index](#rule-index) of every rule.
 
@@ -59,30 +59,30 @@ Excludable: an input feeding a boolean logic gate / logical operator is an activ
 | [`activity:gate_input:celldesigner:from_gate_input`](#rule-activity-gate_input-celldesigner-from_gate_input) | CellDesigner |
 | [`activity:gate_input:sbgn_pd:from_operator_input`](#rule-activity-gate_input-sbgn_pd-from_operator_input) | SBGN PD |
 
-**`topology`** (mandatory)
+**`topology:core`** (mandatory)
 
 Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.
 
 | Rule | Variant |
 | --- | --- |
-| [`topology:is_subunit`](#rule-topology-is_subunit) |  |
-| [`topology:has_active_descendant_direct`](#rule-topology-has_active_descendant_direct) |  |
-| [`topology:has_active_descendant_transitive`](#rule-topology-has_active_descendant_transitive) |  |
+| [`topology:core:is_subunit`](#rule-topology-core-is_subunit) |  |
+| [`topology:core:has_active_descendant_direct`](#rule-topology-core-has_active_descendant_direct) |  |
+| [`topology:core:has_active_descendant_transitive`](#rule-topology-core-has_active_descendant_transitive) |  |
 
-**`top_level`** (mandatory)
+**`topology:top_level`** (mandatory)
 
 Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it.
 
 | Rule | Variant |
 | --- | --- |
-| [`top_level:recursive`](#rule-top_level-recursive) |  |
-| [`top_level:celldesigner:self`](#rule-top_level-celldesigner-self) | CellDesigner |
-| [`top_level:sbgn_pd:self`](#rule-top_level-sbgn_pd-self) | SBGN PD |
-| [`top_level:sbgn_pd:phenotype_self`](#rule-top_level-sbgn_pd-phenotype_self) | SBGN PD |
+| [`topology:top_level:recursive`](#rule-topology-top_level-recursive) |  |
+| [`topology:top_level:celldesigner:self`](#rule-topology-top_level-celldesigner-self) | CellDesigner |
+| [`topology:top_level:sbgn_pd:self`](#rule-topology-top_level-sbgn_pd-self) | SBGN PD |
+| [`topology:top_level:sbgn_pd:phenotype_self`](#rule-topology-top_level-sbgn_pd-phenotype_self) | SBGN PD |
 
 **`preparation:complex`** (mandatory)
 
-The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit.
+The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `topology:top_level` group): itself when top-level, its outermost complex when a subunit.
 
 | Rule | Variant |
 | --- | --- |
@@ -90,31 +90,6 @@ The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a spe
 | [`preparation:complex:celldesigner:carrier`](#rule-preparation-complex-celldesigner-carrier) | CellDesigner |
 | [`preparation:complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-complex-sbgn_pd-carrier_entity_pool) | SBGN PD |
 | [`preparation:complex:sbgn_pd:carrier_phenotype`](#rule-preparation-complex-sbgn_pd-carrier_phenotype) | SBGN PD |
-
-**`modulation_kind`** (mandatory)
-
-Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
-
-| Rule | Variant |
-| --- | --- |
-| [`modulation_kind:celldesigner:catalysis`](#rule-modulation_kind-celldesigner-catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:physical_stimulation`](#rule-modulation_kind-celldesigner-physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:positive_influence`](#rule-modulation_kind-celldesigner-positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:triggering`](#rule-modulation_kind-celldesigner-triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:inhibition`](#rule-modulation_kind-celldesigner-inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:negative_influence`](#rule-modulation_kind-celldesigner-negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:modulation`](#rule-modulation_kind-celldesigner-modulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_catalysis`](#rule-modulation_kind-celldesigner-unknown_catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_physical_stimulation`](#rule-modulation_kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_positive_influence`](#rule-modulation_kind-celldesigner-unknown_positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_triggering`](#rule-modulation_kind-celldesigner-unknown_triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_inhibition`](#rule-modulation_kind-celldesigner-unknown_inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_negative_influence`](#rule-modulation_kind-celldesigner-unknown_negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_modulation`](#rule-modulation_kind-celldesigner-unknown_modulation) | CellDesigner |
-| [`modulation_kind:sbgn_pd:necessary_stimulation`](#rule-modulation_kind-sbgn_pd-necessary_stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:stimulation`](#rule-modulation_kind-sbgn_pd-stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:inhibition`](#rule-modulation_kind-sbgn_pd-inhibition) | SBGN PD |
-| [`modulation_kind:sbgn_pd:modulation`](#rule-modulation_kind-sbgn_pd-modulation) | SBGN PD |
 
 **`paths:core`** (mandatory)
 
@@ -147,60 +122,85 @@ Excludable multi-hop transitivity: extends a `propagatesInfluence` path through 
 | [`paths:chaining:celldesigner:transitive_through_reaction`](#rule-paths-chaining-celldesigner-transitive_through_reaction) | CellDesigner |
 | [`paths:chaining:sbgn_pd:transitive_through_process`](#rule-paths-chaining-sbgn_pd-transitive_through_process) | SBGN PD |
 
-**`influences_derivation`** (excludable)
+**`influences:kind`** (mandatory)
+
+Maps each modulation arc to its influence kind via `hasInfluenceKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
+
+| Rule | Variant |
+| --- | --- |
+| [`influences:kind:celldesigner:catalysis`](#rule-influences-kind-celldesigner-catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:physical_stimulation`](#rule-influences-kind-celldesigner-physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:positive_influence`](#rule-influences-kind-celldesigner-positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:triggering`](#rule-influences-kind-celldesigner-triggering) | CellDesigner |
+| [`influences:kind:celldesigner:inhibition`](#rule-influences-kind-celldesigner-inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:negative_influence`](#rule-influences-kind-celldesigner-negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:modulation`](#rule-influences-kind-celldesigner-modulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_catalysis`](#rule-influences-kind-celldesigner-unknown_catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_physical_stimulation`](#rule-influences-kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_positive_influence`](#rule-influences-kind-celldesigner-unknown_positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_triggering`](#rule-influences-kind-celldesigner-unknown_triggering) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_inhibition`](#rule-influences-kind-celldesigner-unknown_inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_negative_influence`](#rule-influences-kind-celldesigner-unknown_negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_modulation`](#rule-influences-kind-celldesigner-unknown_modulation) | CellDesigner |
+| [`influences:kind:sbgn_pd:necessary_stimulation`](#rule-influences-kind-sbgn_pd-necessary_stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:stimulation`](#rule-influences-kind-sbgn_pd-stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:inhibition`](#rule-influences-kind-sbgn_pd-inhibition) | SBGN PD |
+| [`influences:kind:sbgn_pd:modulation`](#rule-influences-kind-sbgn_pd-modulation) | SBGN PD |
+
+**`influences:core`** (excludable)
 
 Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_derivation:activity`](#rule-influences_derivation-activity) |  |
-| [`influences_derivation:path`](#rule-influences_derivation-path) |  |
+| [`influences:core:activity`](#rule-influences-core-activity) |  |
+| [`influences:core:path`](#rule-influences-core-path) |  |
 
-**`influences_consumption`** (excludable)
+**`influences:consumption`** (excludable)
 
 Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences_consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:trigger_consumes_reactant`](#rule-influences_consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences-consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:trigger_consumes_reactant`](#rule-influences-consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
 
-**`influence_output`** (excludable)
+**`influences:output`** (excludable)
 
 Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind.
 
 | Rule | Variant |
 | --- | --- |
-| [`influence_output:positive`](#rule-influence_output-positive) |  |
-| [`influence_output:negative`](#rule-influence_output-negative) |  |
-| [`influence_output:modulation`](#rule-influence_output-modulation) |  |
-| [`influence_output:triggering`](#rule-influence_output-triggering) |  |
-| [`influence_output:unknown_positive`](#rule-influence_output-unknown_positive) |  |
-| [`influence_output:unknown_negative`](#rule-influence_output-unknown_negative) |  |
-| [`influence_output:unknown_modulation`](#rule-influence_output-unknown_modulation) |  |
-| [`influence_output:unknown_triggering`](#rule-influence_output-unknown_triggering) |  |
+| [`influences:output:positive`](#rule-influences-output-positive) |  |
+| [`influences:output:negative`](#rule-influences-output-negative) |  |
+| [`influences:output:modulation`](#rule-influences-output-modulation) |  |
+| [`influences:output:triggering`](#rule-influences-output-triggering) |  |
+| [`influences:output:unknown_positive`](#rule-influences-output-unknown_positive) |  |
+| [`influences:output:unknown_negative`](#rule-influences-output-unknown_negative) |  |
+| [`influences:output:unknown_modulation`](#rule-influences-output-unknown_modulation) |  |
+| [`influences:output:unknown_triggering`](#rule-influences-output-unknown_triggering) |  |
 
-**`gates`** (excludable)
+**`gates:core`** (excludable)
 
 Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure.
 
 | Rule | Variant |
 | --- | --- |
-| [`gates:celldesigner:node_and`](#rule-gates-celldesigner-node_and) | CellDesigner |
-| [`gates:celldesigner:node_or`](#rule-gates-celldesigner-node_or) | CellDesigner |
-| [`gates:celldesigner:node_not`](#rule-gates-celldesigner-node_not) | CellDesigner |
-| [`gates:celldesigner:node_unknown`](#rule-gates-celldesigner-node_unknown) | CellDesigner |
-| [`gates:celldesigner:input_edge`](#rule-gates-celldesigner-input_edge) | CellDesigner |
-| [`gates:celldesigner:influence`](#rule-gates-celldesigner-influence) | CellDesigner |
-| [`gates:sbgn_pd:node_and`](#rule-gates-sbgn_pd-node_and) | SBGN PD |
-| [`gates:sbgn_pd:node_or`](#rule-gates-sbgn_pd-node_or) | SBGN PD |
-| [`gates:sbgn_pd:node_not`](#rule-gates-sbgn_pd-node_not) | SBGN PD |
-| [`gates:sbgn_pd:input_edge`](#rule-gates-sbgn_pd-input_edge) | SBGN PD |
-| [`gates:sbgn_pd:influence`](#rule-gates-sbgn_pd-influence) | SBGN PD |
+| [`gates:core:celldesigner:node_and`](#rule-gates-core-celldesigner-node_and) | CellDesigner |
+| [`gates:core:celldesigner:node_or`](#rule-gates-core-celldesigner-node_or) | CellDesigner |
+| [`gates:core:celldesigner:node_not`](#rule-gates-core-celldesigner-node_not) | CellDesigner |
+| [`gates:core:celldesigner:node_unknown`](#rule-gates-core-celldesigner-node_unknown) | CellDesigner |
+| [`gates:core:celldesigner:input_edge`](#rule-gates-core-celldesigner-input_edge) | CellDesigner |
+| [`gates:core:celldesigner:influence`](#rule-gates-core-celldesigner-influence) | CellDesigner |
+| [`gates:core:sbgn_pd:node_and`](#rule-gates-core-sbgn_pd-node_and) | SBGN PD |
+| [`gates:core:sbgn_pd:node_or`](#rule-gates-core-sbgn_pd-node_or) | SBGN PD |
+| [`gates:core:sbgn_pd:node_not`](#rule-gates-core-sbgn_pd-node_not) | SBGN PD |
+| [`gates:core:sbgn_pd:input_edge`](#rule-gates-core-sbgn_pd-input_edge) | SBGN PD |
+| [`gates:core:sbgn_pd:influence`](#rule-gates-core-sbgn_pd-influence) | SBGN PD |
 
 ### `normal-no-complex`
 
@@ -253,19 +253,19 @@ Excludable: an input feeding a boolean logic gate / logical operator is an activ
 | [`activity:gate_input:celldesigner:from_gate_input`](#rule-activity-gate_input-celldesigner-from_gate_input) | CellDesigner |
 | [`activity:gate_input:sbgn_pd:from_operator_input`](#rule-activity-gate_input-sbgn_pd-from_operator_input) | SBGN PD |
 
-**`topology`** (mandatory)
+**`topology:core`** (mandatory)
 
 Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.
 
 | Rule | Variant |
 | --- | --- |
-| [`topology:is_subunit`](#rule-topology-is_subunit) |  |
-| [`topology:has_active_descendant_direct`](#rule-topology-has_active_descendant_direct) |  |
-| [`topology:has_active_descendant_transitive`](#rule-topology-has_active_descendant_transitive) |  |
+| [`topology:core:is_subunit`](#rule-topology-core-is_subunit) |  |
+| [`topology:core:has_active_descendant_direct`](#rule-topology-core-has_active_descendant_direct) |  |
+| [`topology:core:has_active_descendant_transitive`](#rule-topology-core-has_active_descendant_transitive) |  |
 
 **`preparation:no_complex`** (mandatory)
 
-The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths_complex_traversal`).
+The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths:complex_traversal`).
 
 | Rule | Variant |
 | --- | --- |
@@ -278,31 +278,6 @@ The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a
 | [`preparation:no_complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-no_complex-sbgn_pd-carrier_entity_pool) | SBGN PD |
 | [`preparation:no_complex:sbgn_pd:carrier_phenotype`](#rule-preparation-no_complex-sbgn_pd-carrier_phenotype) | SBGN PD |
 | [`preparation:no_complex:sbgn_pd:carrier_subunit`](#rule-preparation-no_complex-sbgn_pd-carrier_subunit) | SBGN PD |
-
-**`modulation_kind`** (mandatory)
-
-Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
-
-| Rule | Variant |
-| --- | --- |
-| [`modulation_kind:celldesigner:catalysis`](#rule-modulation_kind-celldesigner-catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:physical_stimulation`](#rule-modulation_kind-celldesigner-physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:positive_influence`](#rule-modulation_kind-celldesigner-positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:triggering`](#rule-modulation_kind-celldesigner-triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:inhibition`](#rule-modulation_kind-celldesigner-inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:negative_influence`](#rule-modulation_kind-celldesigner-negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:modulation`](#rule-modulation_kind-celldesigner-modulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_catalysis`](#rule-modulation_kind-celldesigner-unknown_catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_physical_stimulation`](#rule-modulation_kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_positive_influence`](#rule-modulation_kind-celldesigner-unknown_positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_triggering`](#rule-modulation_kind-celldesigner-unknown_triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_inhibition`](#rule-modulation_kind-celldesigner-unknown_inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_negative_influence`](#rule-modulation_kind-celldesigner-unknown_negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_modulation`](#rule-modulation_kind-celldesigner-unknown_modulation) | CellDesigner |
-| [`modulation_kind:sbgn_pd:necessary_stimulation`](#rule-modulation_kind-sbgn_pd-necessary_stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:stimulation`](#rule-modulation_kind-sbgn_pd-stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:inhibition`](#rule-modulation_kind-sbgn_pd-inhibition) | SBGN PD |
-| [`modulation_kind:sbgn_pd:modulation`](#rule-modulation_kind-sbgn_pd-modulation) | SBGN PD |
 
 **`paths:core`** (mandatory)
 
@@ -335,69 +310,94 @@ Excludable multi-hop transitivity: extends a `propagatesInfluence` path through 
 | [`paths:chaining:celldesigner:transitive_through_reaction`](#rule-paths-chaining-celldesigner-transitive_through_reaction) | CellDesigner |
 | [`paths:chaining:sbgn_pd:transitive_through_process`](#rule-paths-chaining-sbgn_pd-transitive_through_process) | SBGN PD |
 
-**`paths_complex_traversal`** (excludable)
+**`paths:complex_traversal`** (excludable)
 
 Extends paths through complex containment for the ``*-no-complex`` modes: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.
 
 | Rule | Variant |
 | --- | --- |
-| [`paths_complex_traversal:into_subunits`](#rule-paths_complex_traversal-into_subunits) |  |
-| [`paths_complex_traversal:from_subunits`](#rule-paths_complex_traversal-from_subunits) |  |
+| [`paths:complex_traversal:into_subunits`](#rule-paths-complex_traversal-into_subunits) |  |
+| [`paths:complex_traversal:from_subunits`](#rule-paths-complex_traversal-from_subunits) |  |
 
-**`influences_derivation`** (excludable)
+**`influences:kind`** (mandatory)
+
+Maps each modulation arc to its influence kind via `hasInfluenceKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
+
+| Rule | Variant |
+| --- | --- |
+| [`influences:kind:celldesigner:catalysis`](#rule-influences-kind-celldesigner-catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:physical_stimulation`](#rule-influences-kind-celldesigner-physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:positive_influence`](#rule-influences-kind-celldesigner-positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:triggering`](#rule-influences-kind-celldesigner-triggering) | CellDesigner |
+| [`influences:kind:celldesigner:inhibition`](#rule-influences-kind-celldesigner-inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:negative_influence`](#rule-influences-kind-celldesigner-negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:modulation`](#rule-influences-kind-celldesigner-modulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_catalysis`](#rule-influences-kind-celldesigner-unknown_catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_physical_stimulation`](#rule-influences-kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_positive_influence`](#rule-influences-kind-celldesigner-unknown_positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_triggering`](#rule-influences-kind-celldesigner-unknown_triggering) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_inhibition`](#rule-influences-kind-celldesigner-unknown_inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_negative_influence`](#rule-influences-kind-celldesigner-unknown_negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_modulation`](#rule-influences-kind-celldesigner-unknown_modulation) | CellDesigner |
+| [`influences:kind:sbgn_pd:necessary_stimulation`](#rule-influences-kind-sbgn_pd-necessary_stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:stimulation`](#rule-influences-kind-sbgn_pd-stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:inhibition`](#rule-influences-kind-sbgn_pd-inhibition) | SBGN PD |
+| [`influences:kind:sbgn_pd:modulation`](#rule-influences-kind-sbgn_pd-modulation) | SBGN PD |
+
+**`influences:core`** (excludable)
 
 Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_derivation:activity`](#rule-influences_derivation-activity) |  |
-| [`influences_derivation:path`](#rule-influences_derivation-path) |  |
+| [`influences:core:activity`](#rule-influences-core-activity) |  |
+| [`influences:core:path`](#rule-influences-core-path) |  |
 
-**`influences_consumption`** (excludable)
+**`influences:consumption`** (excludable)
 
 Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences_consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:trigger_consumes_reactant`](#rule-influences_consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences-consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:trigger_consumes_reactant`](#rule-influences-consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
 
-**`influence_output`** (excludable)
+**`influences:output`** (excludable)
 
 Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind.
 
 | Rule | Variant |
 | --- | --- |
-| [`influence_output:positive`](#rule-influence_output-positive) |  |
-| [`influence_output:negative`](#rule-influence_output-negative) |  |
-| [`influence_output:modulation`](#rule-influence_output-modulation) |  |
-| [`influence_output:triggering`](#rule-influence_output-triggering) |  |
-| [`influence_output:unknown_positive`](#rule-influence_output-unknown_positive) |  |
-| [`influence_output:unknown_negative`](#rule-influence_output-unknown_negative) |  |
-| [`influence_output:unknown_modulation`](#rule-influence_output-unknown_modulation) |  |
-| [`influence_output:unknown_triggering`](#rule-influence_output-unknown_triggering) |  |
+| [`influences:output:positive`](#rule-influences-output-positive) |  |
+| [`influences:output:negative`](#rule-influences-output-negative) |  |
+| [`influences:output:modulation`](#rule-influences-output-modulation) |  |
+| [`influences:output:triggering`](#rule-influences-output-triggering) |  |
+| [`influences:output:unknown_positive`](#rule-influences-output-unknown_positive) |  |
+| [`influences:output:unknown_negative`](#rule-influences-output-unknown_negative) |  |
+| [`influences:output:unknown_modulation`](#rule-influences-output-unknown_modulation) |  |
+| [`influences:output:unknown_triggering`](#rule-influences-output-unknown_triggering) |  |
 
-**`gates`** (excludable)
+**`gates:core`** (excludable)
 
 Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure.
 
 | Rule | Variant |
 | --- | --- |
-| [`gates:celldesigner:node_and`](#rule-gates-celldesigner-node_and) | CellDesigner |
-| [`gates:celldesigner:node_or`](#rule-gates-celldesigner-node_or) | CellDesigner |
-| [`gates:celldesigner:node_not`](#rule-gates-celldesigner-node_not) | CellDesigner |
-| [`gates:celldesigner:node_unknown`](#rule-gates-celldesigner-node_unknown) | CellDesigner |
-| [`gates:celldesigner:input_edge`](#rule-gates-celldesigner-input_edge) | CellDesigner |
-| [`gates:celldesigner:influence`](#rule-gates-celldesigner-influence) | CellDesigner |
-| [`gates:sbgn_pd:node_and`](#rule-gates-sbgn_pd-node_and) | SBGN PD |
-| [`gates:sbgn_pd:node_or`](#rule-gates-sbgn_pd-node_or) | SBGN PD |
-| [`gates:sbgn_pd:node_not`](#rule-gates-sbgn_pd-node_not) | SBGN PD |
-| [`gates:sbgn_pd:input_edge`](#rule-gates-sbgn_pd-input_edge) | SBGN PD |
-| [`gates:sbgn_pd:influence`](#rule-gates-sbgn_pd-influence) | SBGN PD |
+| [`gates:core:celldesigner:node_and`](#rule-gates-core-celldesigner-node_and) | CellDesigner |
+| [`gates:core:celldesigner:node_or`](#rule-gates-core-celldesigner-node_or) | CellDesigner |
+| [`gates:core:celldesigner:node_not`](#rule-gates-core-celldesigner-node_not) | CellDesigner |
+| [`gates:core:celldesigner:node_unknown`](#rule-gates-core-celldesigner-node_unknown) | CellDesigner |
+| [`gates:core:celldesigner:input_edge`](#rule-gates-core-celldesigner-input_edge) | CellDesigner |
+| [`gates:core:celldesigner:influence`](#rule-gates-core-celldesigner-influence) | CellDesigner |
+| [`gates:core:sbgn_pd:node_and`](#rule-gates-core-sbgn_pd-node_and) | SBGN PD |
+| [`gates:core:sbgn_pd:node_or`](#rule-gates-core-sbgn_pd-node_or) | SBGN PD |
+| [`gates:core:sbgn_pd:node_not`](#rule-gates-core-sbgn_pd-node_not) | SBGN PD |
+| [`gates:core:sbgn_pd:input_edge`](#rule-gates-core-sbgn_pd-input_edge) | SBGN PD |
+| [`gates:core:sbgn_pd:influence`](#rule-gates-core-sbgn_pd-influence) | SBGN PD |
 
 ### `keep-species`
 
@@ -450,30 +450,30 @@ Excludable: an input feeding a boolean logic gate / logical operator is an activ
 | [`activity:gate_input:celldesigner:from_gate_input`](#rule-activity-gate_input-celldesigner-from_gate_input) | CellDesigner |
 | [`activity:gate_input:sbgn_pd:from_operator_input`](#rule-activity-gate_input-sbgn_pd-from_operator_input) | SBGN PD |
 
-**`topology`** (mandatory)
+**`topology:core`** (mandatory)
 
 Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.
 
 | Rule | Variant |
 | --- | --- |
-| [`topology:is_subunit`](#rule-topology-is_subunit) |  |
-| [`topology:has_active_descendant_direct`](#rule-topology-has_active_descendant_direct) |  |
-| [`topology:has_active_descendant_transitive`](#rule-topology-has_active_descendant_transitive) |  |
+| [`topology:core:is_subunit`](#rule-topology-core-is_subunit) |  |
+| [`topology:core:has_active_descendant_direct`](#rule-topology-core-has_active_descendant_direct) |  |
+| [`topology:core:has_active_descendant_transitive`](#rule-topology-core-has_active_descendant_transitive) |  |
 
-**`top_level`** (mandatory)
+**`topology:top_level`** (mandatory)
 
 Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it.
 
 | Rule | Variant |
 | --- | --- |
-| [`top_level:recursive`](#rule-top_level-recursive) |  |
-| [`top_level:celldesigner:self`](#rule-top_level-celldesigner-self) | CellDesigner |
-| [`top_level:sbgn_pd:self`](#rule-top_level-sbgn_pd-self) | SBGN PD |
-| [`top_level:sbgn_pd:phenotype_self`](#rule-top_level-sbgn_pd-phenotype_self) | SBGN PD |
+| [`topology:top_level:recursive`](#rule-topology-top_level-recursive) |  |
+| [`topology:top_level:celldesigner:self`](#rule-topology-top_level-celldesigner-self) | CellDesigner |
+| [`topology:top_level:sbgn_pd:self`](#rule-topology-top_level-sbgn_pd-self) | SBGN PD |
+| [`topology:top_level:sbgn_pd:phenotype_self`](#rule-topology-top_level-sbgn_pd-phenotype_self) | SBGN PD |
 
 **`preparation:complex`** (mandatory)
 
-The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit.
+The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `topology:top_level` group): itself when top-level, its outermost complex when a subunit.
 
 | Rule | Variant |
 | --- | --- |
@@ -481,31 +481,6 @@ The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a spe
 | [`preparation:complex:celldesigner:carrier`](#rule-preparation-complex-celldesigner-carrier) | CellDesigner |
 | [`preparation:complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-complex-sbgn_pd-carrier_entity_pool) | SBGN PD |
 | [`preparation:complex:sbgn_pd:carrier_phenotype`](#rule-preparation-complex-sbgn_pd-carrier_phenotype) | SBGN PD |
-
-**`modulation_kind`** (mandatory)
-
-Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
-
-| Rule | Variant |
-| --- | --- |
-| [`modulation_kind:celldesigner:catalysis`](#rule-modulation_kind-celldesigner-catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:physical_stimulation`](#rule-modulation_kind-celldesigner-physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:positive_influence`](#rule-modulation_kind-celldesigner-positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:triggering`](#rule-modulation_kind-celldesigner-triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:inhibition`](#rule-modulation_kind-celldesigner-inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:negative_influence`](#rule-modulation_kind-celldesigner-negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:modulation`](#rule-modulation_kind-celldesigner-modulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_catalysis`](#rule-modulation_kind-celldesigner-unknown_catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_physical_stimulation`](#rule-modulation_kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_positive_influence`](#rule-modulation_kind-celldesigner-unknown_positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_triggering`](#rule-modulation_kind-celldesigner-unknown_triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_inhibition`](#rule-modulation_kind-celldesigner-unknown_inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_negative_influence`](#rule-modulation_kind-celldesigner-unknown_negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_modulation`](#rule-modulation_kind-celldesigner-unknown_modulation) | CellDesigner |
-| [`modulation_kind:sbgn_pd:necessary_stimulation`](#rule-modulation_kind-sbgn_pd-necessary_stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:stimulation`](#rule-modulation_kind-sbgn_pd-stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:inhibition`](#rule-modulation_kind-sbgn_pd-inhibition) | SBGN PD |
-| [`modulation_kind:sbgn_pd:modulation`](#rule-modulation_kind-sbgn_pd-modulation) | SBGN PD |
 
 **`paths:core`** (mandatory)
 
@@ -538,60 +513,85 @@ Excludable multi-hop transitivity: extends a `propagatesInfluence` path through 
 | [`paths:chaining:celldesigner:transitive_through_reaction`](#rule-paths-chaining-celldesigner-transitive_through_reaction) | CellDesigner |
 | [`paths:chaining:sbgn_pd:transitive_through_process`](#rule-paths-chaining-sbgn_pd-transitive_through_process) | SBGN PD |
 
-**`influences_derivation`** (excludable)
+**`influences:kind`** (mandatory)
+
+Maps each modulation arc to its influence kind via `hasInfluenceKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
+
+| Rule | Variant |
+| --- | --- |
+| [`influences:kind:celldesigner:catalysis`](#rule-influences-kind-celldesigner-catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:physical_stimulation`](#rule-influences-kind-celldesigner-physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:positive_influence`](#rule-influences-kind-celldesigner-positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:triggering`](#rule-influences-kind-celldesigner-triggering) | CellDesigner |
+| [`influences:kind:celldesigner:inhibition`](#rule-influences-kind-celldesigner-inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:negative_influence`](#rule-influences-kind-celldesigner-negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:modulation`](#rule-influences-kind-celldesigner-modulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_catalysis`](#rule-influences-kind-celldesigner-unknown_catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_physical_stimulation`](#rule-influences-kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_positive_influence`](#rule-influences-kind-celldesigner-unknown_positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_triggering`](#rule-influences-kind-celldesigner-unknown_triggering) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_inhibition`](#rule-influences-kind-celldesigner-unknown_inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_negative_influence`](#rule-influences-kind-celldesigner-unknown_negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_modulation`](#rule-influences-kind-celldesigner-unknown_modulation) | CellDesigner |
+| [`influences:kind:sbgn_pd:necessary_stimulation`](#rule-influences-kind-sbgn_pd-necessary_stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:stimulation`](#rule-influences-kind-sbgn_pd-stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:inhibition`](#rule-influences-kind-sbgn_pd-inhibition) | SBGN PD |
+| [`influences:kind:sbgn_pd:modulation`](#rule-influences-kind-sbgn_pd-modulation) | SBGN PD |
+
+**`influences:core`** (excludable)
 
 Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_derivation:activity`](#rule-influences_derivation-activity) |  |
-| [`influences_derivation:path`](#rule-influences_derivation-path) |  |
+| [`influences:core:activity`](#rule-influences-core-activity) |  |
+| [`influences:core:path`](#rule-influences-core-path) |  |
 
-**`influences_consumption`** (excludable)
+**`influences:consumption`** (excludable)
 
 Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences_consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:trigger_consumes_reactant`](#rule-influences_consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences-consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:trigger_consumes_reactant`](#rule-influences-consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
 
-**`influence_output`** (excludable)
+**`influences:output`** (excludable)
 
 Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind.
 
 | Rule | Variant |
 | --- | --- |
-| [`influence_output:positive`](#rule-influence_output-positive) |  |
-| [`influence_output:negative`](#rule-influence_output-negative) |  |
-| [`influence_output:modulation`](#rule-influence_output-modulation) |  |
-| [`influence_output:triggering`](#rule-influence_output-triggering) |  |
-| [`influence_output:unknown_positive`](#rule-influence_output-unknown_positive) |  |
-| [`influence_output:unknown_negative`](#rule-influence_output-unknown_negative) |  |
-| [`influence_output:unknown_modulation`](#rule-influence_output-unknown_modulation) |  |
-| [`influence_output:unknown_triggering`](#rule-influence_output-unknown_triggering) |  |
+| [`influences:output:positive`](#rule-influences-output-positive) |  |
+| [`influences:output:negative`](#rule-influences-output-negative) |  |
+| [`influences:output:modulation`](#rule-influences-output-modulation) |  |
+| [`influences:output:triggering`](#rule-influences-output-triggering) |  |
+| [`influences:output:unknown_positive`](#rule-influences-output-unknown_positive) |  |
+| [`influences:output:unknown_negative`](#rule-influences-output-unknown_negative) |  |
+| [`influences:output:unknown_modulation`](#rule-influences-output-unknown_modulation) |  |
+| [`influences:output:unknown_triggering`](#rule-influences-output-unknown_triggering) |  |
 
-**`gates`** (excludable)
+**`gates:core`** (excludable)
 
 Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure.
 
 | Rule | Variant |
 | --- | --- |
-| [`gates:celldesigner:node_and`](#rule-gates-celldesigner-node_and) | CellDesigner |
-| [`gates:celldesigner:node_or`](#rule-gates-celldesigner-node_or) | CellDesigner |
-| [`gates:celldesigner:node_not`](#rule-gates-celldesigner-node_not) | CellDesigner |
-| [`gates:celldesigner:node_unknown`](#rule-gates-celldesigner-node_unknown) | CellDesigner |
-| [`gates:celldesigner:input_edge`](#rule-gates-celldesigner-input_edge) | CellDesigner |
-| [`gates:celldesigner:influence`](#rule-gates-celldesigner-influence) | CellDesigner |
-| [`gates:sbgn_pd:node_and`](#rule-gates-sbgn_pd-node_and) | SBGN PD |
-| [`gates:sbgn_pd:node_or`](#rule-gates-sbgn_pd-node_or) | SBGN PD |
-| [`gates:sbgn_pd:node_not`](#rule-gates-sbgn_pd-node_not) | SBGN PD |
-| [`gates:sbgn_pd:input_edge`](#rule-gates-sbgn_pd-input_edge) | SBGN PD |
-| [`gates:sbgn_pd:influence`](#rule-gates-sbgn_pd-influence) | SBGN PD |
+| [`gates:core:celldesigner:node_and`](#rule-gates-core-celldesigner-node_and) | CellDesigner |
+| [`gates:core:celldesigner:node_or`](#rule-gates-core-celldesigner-node_or) | CellDesigner |
+| [`gates:core:celldesigner:node_not`](#rule-gates-core-celldesigner-node_not) | CellDesigner |
+| [`gates:core:celldesigner:node_unknown`](#rule-gates-core-celldesigner-node_unknown) | CellDesigner |
+| [`gates:core:celldesigner:input_edge`](#rule-gates-core-celldesigner-input_edge) | CellDesigner |
+| [`gates:core:celldesigner:influence`](#rule-gates-core-celldesigner-influence) | CellDesigner |
+| [`gates:core:sbgn_pd:node_and`](#rule-gates-core-sbgn_pd-node_and) | SBGN PD |
+| [`gates:core:sbgn_pd:node_or`](#rule-gates-core-sbgn_pd-node_or) | SBGN PD |
+| [`gates:core:sbgn_pd:node_not`](#rule-gates-core-sbgn_pd-node_not) | SBGN PD |
+| [`gates:core:sbgn_pd:input_edge`](#rule-gates-core-sbgn_pd-input_edge) | SBGN PD |
+| [`gates:core:sbgn_pd:influence`](#rule-gates-core-sbgn_pd-influence) | SBGN PD |
 
 ### `keep-species-no-complex`
 
@@ -644,19 +644,19 @@ Excludable: an input feeding a boolean logic gate / logical operator is an activ
 | [`activity:gate_input:celldesigner:from_gate_input`](#rule-activity-gate_input-celldesigner-from_gate_input) | CellDesigner |
 | [`activity:gate_input:sbgn_pd:from_operator_input`](#rule-activity-gate_input-sbgn_pd-from_operator_input) | SBGN PD |
 
-**`topology`** (mandatory)
+**`topology:core`** (mandatory)
 
 Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.
 
 | Rule | Variant |
 | --- | --- |
-| [`topology:is_subunit`](#rule-topology-is_subunit) |  |
-| [`topology:has_active_descendant_direct`](#rule-topology-has_active_descendant_direct) |  |
-| [`topology:has_active_descendant_transitive`](#rule-topology-has_active_descendant_transitive) |  |
+| [`topology:core:is_subunit`](#rule-topology-core-is_subunit) |  |
+| [`topology:core:has_active_descendant_direct`](#rule-topology-core-has_active_descendant_direct) |  |
+| [`topology:core:has_active_descendant_transitive`](#rule-topology-core-has_active_descendant_transitive) |  |
 
 **`preparation:no_complex`** (mandatory)
 
-The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths_complex_traversal`).
+The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths:complex_traversal`).
 
 | Rule | Variant |
 | --- | --- |
@@ -669,31 +669,6 @@ The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a
 | [`preparation:no_complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-no_complex-sbgn_pd-carrier_entity_pool) | SBGN PD |
 | [`preparation:no_complex:sbgn_pd:carrier_phenotype`](#rule-preparation-no_complex-sbgn_pd-carrier_phenotype) | SBGN PD |
 | [`preparation:no_complex:sbgn_pd:carrier_subunit`](#rule-preparation-no_complex-sbgn_pd-carrier_subunit) | SBGN PD |
-
-**`modulation_kind`** (mandatory)
-
-Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
-
-| Rule | Variant |
-| --- | --- |
-| [`modulation_kind:celldesigner:catalysis`](#rule-modulation_kind-celldesigner-catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:physical_stimulation`](#rule-modulation_kind-celldesigner-physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:positive_influence`](#rule-modulation_kind-celldesigner-positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:triggering`](#rule-modulation_kind-celldesigner-triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:inhibition`](#rule-modulation_kind-celldesigner-inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:negative_influence`](#rule-modulation_kind-celldesigner-negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:modulation`](#rule-modulation_kind-celldesigner-modulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_catalysis`](#rule-modulation_kind-celldesigner-unknown_catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_physical_stimulation`](#rule-modulation_kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_positive_influence`](#rule-modulation_kind-celldesigner-unknown_positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_triggering`](#rule-modulation_kind-celldesigner-unknown_triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_inhibition`](#rule-modulation_kind-celldesigner-unknown_inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_negative_influence`](#rule-modulation_kind-celldesigner-unknown_negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_modulation`](#rule-modulation_kind-celldesigner-unknown_modulation) | CellDesigner |
-| [`modulation_kind:sbgn_pd:necessary_stimulation`](#rule-modulation_kind-sbgn_pd-necessary_stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:stimulation`](#rule-modulation_kind-sbgn_pd-stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:inhibition`](#rule-modulation_kind-sbgn_pd-inhibition) | SBGN PD |
-| [`modulation_kind:sbgn_pd:modulation`](#rule-modulation_kind-sbgn_pd-modulation) | SBGN PD |
 
 **`paths:core`** (mandatory)
 
@@ -726,69 +701,94 @@ Excludable multi-hop transitivity: extends a `propagatesInfluence` path through 
 | [`paths:chaining:celldesigner:transitive_through_reaction`](#rule-paths-chaining-celldesigner-transitive_through_reaction) | CellDesigner |
 | [`paths:chaining:sbgn_pd:transitive_through_process`](#rule-paths-chaining-sbgn_pd-transitive_through_process) | SBGN PD |
 
-**`paths_complex_traversal`** (excludable)
+**`paths:complex_traversal`** (excludable)
 
 Extends paths through complex containment for the ``*-no-complex`` modes: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.
 
 | Rule | Variant |
 | --- | --- |
-| [`paths_complex_traversal:into_subunits`](#rule-paths_complex_traversal-into_subunits) |  |
-| [`paths_complex_traversal:from_subunits`](#rule-paths_complex_traversal-from_subunits) |  |
+| [`paths:complex_traversal:into_subunits`](#rule-paths-complex_traversal-into_subunits) |  |
+| [`paths:complex_traversal:from_subunits`](#rule-paths-complex_traversal-from_subunits) |  |
 
-**`influences_derivation`** (excludable)
+**`influences:kind`** (mandatory)
+
+Maps each modulation arc to its influence kind via `hasInfluenceKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
+
+| Rule | Variant |
+| --- | --- |
+| [`influences:kind:celldesigner:catalysis`](#rule-influences-kind-celldesigner-catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:physical_stimulation`](#rule-influences-kind-celldesigner-physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:positive_influence`](#rule-influences-kind-celldesigner-positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:triggering`](#rule-influences-kind-celldesigner-triggering) | CellDesigner |
+| [`influences:kind:celldesigner:inhibition`](#rule-influences-kind-celldesigner-inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:negative_influence`](#rule-influences-kind-celldesigner-negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:modulation`](#rule-influences-kind-celldesigner-modulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_catalysis`](#rule-influences-kind-celldesigner-unknown_catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_physical_stimulation`](#rule-influences-kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_positive_influence`](#rule-influences-kind-celldesigner-unknown_positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_triggering`](#rule-influences-kind-celldesigner-unknown_triggering) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_inhibition`](#rule-influences-kind-celldesigner-unknown_inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_negative_influence`](#rule-influences-kind-celldesigner-unknown_negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_modulation`](#rule-influences-kind-celldesigner-unknown_modulation) | CellDesigner |
+| [`influences:kind:sbgn_pd:necessary_stimulation`](#rule-influences-kind-sbgn_pd-necessary_stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:stimulation`](#rule-influences-kind-sbgn_pd-stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:inhibition`](#rule-influences-kind-sbgn_pd-inhibition) | SBGN PD |
+| [`influences:kind:sbgn_pd:modulation`](#rule-influences-kind-sbgn_pd-modulation) | SBGN PD |
+
+**`influences:core`** (excludable)
 
 Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_derivation:activity`](#rule-influences_derivation-activity) |  |
-| [`influences_derivation:path`](#rule-influences_derivation-path) |  |
+| [`influences:core:activity`](#rule-influences-core-activity) |  |
+| [`influences:core:path`](#rule-influences-core-path) |  |
 
-**`influences_consumption`** (excludable)
+**`influences:consumption`** (excludable)
 
 Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences_consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:trigger_consumes_reactant`](#rule-influences_consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
-| [`influences_consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences-consumption-celldesigner-physical_stimulator_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:trigger_consumes_reactant`](#rule-influences-consumption-celldesigner-trigger_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-inhibitor_spares_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-unknown_catalyzer_consumes_reactant) | CellDesigner |
+| [`influences:consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-unknown_inhibitor_spares_reactant) | CellDesigner |
 
-**`influence_output`** (excludable)
+**`influences:output`** (excludable)
 
 Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind.
 
 | Rule | Variant |
 | --- | --- |
-| [`influence_output:positive`](#rule-influence_output-positive) |  |
-| [`influence_output:negative`](#rule-influence_output-negative) |  |
-| [`influence_output:modulation`](#rule-influence_output-modulation) |  |
-| [`influence_output:triggering`](#rule-influence_output-triggering) |  |
-| [`influence_output:unknown_positive`](#rule-influence_output-unknown_positive) |  |
-| [`influence_output:unknown_negative`](#rule-influence_output-unknown_negative) |  |
-| [`influence_output:unknown_modulation`](#rule-influence_output-unknown_modulation) |  |
-| [`influence_output:unknown_triggering`](#rule-influence_output-unknown_triggering) |  |
+| [`influences:output:positive`](#rule-influences-output-positive) |  |
+| [`influences:output:negative`](#rule-influences-output-negative) |  |
+| [`influences:output:modulation`](#rule-influences-output-modulation) |  |
+| [`influences:output:triggering`](#rule-influences-output-triggering) |  |
+| [`influences:output:unknown_positive`](#rule-influences-output-unknown_positive) |  |
+| [`influences:output:unknown_negative`](#rule-influences-output-unknown_negative) |  |
+| [`influences:output:unknown_modulation`](#rule-influences-output-unknown_modulation) |  |
+| [`influences:output:unknown_triggering`](#rule-influences-output-unknown_triggering) |  |
 
-**`gates`** (excludable)
+**`gates:core`** (excludable)
 
 Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure.
 
 | Rule | Variant |
 | --- | --- |
-| [`gates:celldesigner:node_and`](#rule-gates-celldesigner-node_and) | CellDesigner |
-| [`gates:celldesigner:node_or`](#rule-gates-celldesigner-node_or) | CellDesigner |
-| [`gates:celldesigner:node_not`](#rule-gates-celldesigner-node_not) | CellDesigner |
-| [`gates:celldesigner:node_unknown`](#rule-gates-celldesigner-node_unknown) | CellDesigner |
-| [`gates:celldesigner:input_edge`](#rule-gates-celldesigner-input_edge) | CellDesigner |
-| [`gates:celldesigner:influence`](#rule-gates-celldesigner-influence) | CellDesigner |
-| [`gates:sbgn_pd:node_and`](#rule-gates-sbgn_pd-node_and) | SBGN PD |
-| [`gates:sbgn_pd:node_or`](#rule-gates-sbgn_pd-node_or) | SBGN PD |
-| [`gates:sbgn_pd:node_not`](#rule-gates-sbgn_pd-node_not) | SBGN PD |
-| [`gates:sbgn_pd:input_edge`](#rule-gates-sbgn_pd-input_edge) | SBGN PD |
-| [`gates:sbgn_pd:influence`](#rule-gates-sbgn_pd-influence) | SBGN PD |
+| [`gates:core:celldesigner:node_and`](#rule-gates-core-celldesigner-node_and) | CellDesigner |
+| [`gates:core:celldesigner:node_or`](#rule-gates-core-celldesigner-node_or) | CellDesigner |
+| [`gates:core:celldesigner:node_not`](#rule-gates-core-celldesigner-node_not) | CellDesigner |
+| [`gates:core:celldesigner:node_unknown`](#rule-gates-core-celldesigner-node_unknown) | CellDesigner |
+| [`gates:core:celldesigner:input_edge`](#rule-gates-core-celldesigner-input_edge) | CellDesigner |
+| [`gates:core:celldesigner:influence`](#rule-gates-core-celldesigner-influence) | CellDesigner |
+| [`gates:core:sbgn_pd:node_and`](#rule-gates-core-sbgn_pd-node_and) | SBGN PD |
+| [`gates:core:sbgn_pd:node_or`](#rule-gates-core-sbgn_pd-node_or) | SBGN PD |
+| [`gates:core:sbgn_pd:node_not`](#rule-gates-core-sbgn_pd-node_not) | SBGN PD |
+| [`gates:core:sbgn_pd:input_edge`](#rule-gates-core-sbgn_pd-input_edge) | SBGN PD |
+| [`gates:core:sbgn_pd:influence`](#rule-gates-core-sbgn_pd-influence) | SBGN PD |
 
 ### `keep-reactions`
 
@@ -803,30 +803,30 @@ Mandatory activity machinery: the candidate->activity bridge and the two global 
 | [`activity:core:celldesigner:from_global_activate`](#rule-activity-core-celldesigner-from_global_activate) | CellDesigner |
 | [`activity:core:sbgn_pd:from_global_activate`](#rule-activity-core-sbgn_pd-from_global_activate) | SBGN PD |
 
-**`topology`** (mandatory)
+**`topology:core`** (mandatory)
 
 Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.
 
 | Rule | Variant |
 | --- | --- |
-| [`topology:is_subunit`](#rule-topology-is_subunit) |  |
-| [`topology:has_active_descendant_direct`](#rule-topology-has_active_descendant_direct) |  |
-| [`topology:has_active_descendant_transitive`](#rule-topology-has_active_descendant_transitive) |  |
+| [`topology:core:is_subunit`](#rule-topology-core-is_subunit) |  |
+| [`topology:core:has_active_descendant_direct`](#rule-topology-core-has_active_descendant_direct) |  |
+| [`topology:core:has_active_descendant_transitive`](#rule-topology-core-has_active_descendant_transitive) |  |
 
-**`top_level`** (mandatory)
+**`topology:top_level`** (mandatory)
 
 Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it.
 
 | Rule | Variant |
 | --- | --- |
-| [`top_level:recursive`](#rule-top_level-recursive) |  |
-| [`top_level:celldesigner:self`](#rule-top_level-celldesigner-self) | CellDesigner |
-| [`top_level:sbgn_pd:self`](#rule-top_level-sbgn_pd-self) | SBGN PD |
-| [`top_level:sbgn_pd:phenotype_self`](#rule-top_level-sbgn_pd-phenotype_self) | SBGN PD |
+| [`topology:top_level:recursive`](#rule-topology-top_level-recursive) |  |
+| [`topology:top_level:celldesigner:self`](#rule-topology-top_level-celldesigner-self) | CellDesigner |
+| [`topology:top_level:sbgn_pd:self`](#rule-topology-top_level-sbgn_pd-self) | SBGN PD |
+| [`topology:top_level:sbgn_pd:phenotype_self`](#rule-topology-top_level-sbgn_pd-phenotype_self) | SBGN PD |
 
 **`preparation:complex`** (mandatory)
 
-The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit.
+The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `topology:top_level` group): itself when top-level, its outermost complex when a subunit.
 
 | Rule | Variant |
 | --- | --- |
@@ -834,31 +834,6 @@ The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a spe
 | [`preparation:complex:celldesigner:carrier`](#rule-preparation-complex-celldesigner-carrier) | CellDesigner |
 | [`preparation:complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-complex-sbgn_pd-carrier_entity_pool) | SBGN PD |
 | [`preparation:complex:sbgn_pd:carrier_phenotype`](#rule-preparation-complex-sbgn_pd-carrier_phenotype) | SBGN PD |
-
-**`modulation_kind`** (mandatory)
-
-Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
-
-| Rule | Variant |
-| --- | --- |
-| [`modulation_kind:celldesigner:catalysis`](#rule-modulation_kind-celldesigner-catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:physical_stimulation`](#rule-modulation_kind-celldesigner-physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:positive_influence`](#rule-modulation_kind-celldesigner-positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:triggering`](#rule-modulation_kind-celldesigner-triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:inhibition`](#rule-modulation_kind-celldesigner-inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:negative_influence`](#rule-modulation_kind-celldesigner-negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:modulation`](#rule-modulation_kind-celldesigner-modulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_catalysis`](#rule-modulation_kind-celldesigner-unknown_catalysis) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_physical_stimulation`](#rule-modulation_kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_positive_influence`](#rule-modulation_kind-celldesigner-unknown_positive_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_triggering`](#rule-modulation_kind-celldesigner-unknown_triggering) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_inhibition`](#rule-modulation_kind-celldesigner-unknown_inhibition) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_negative_influence`](#rule-modulation_kind-celldesigner-unknown_negative_influence) | CellDesigner |
-| [`modulation_kind:celldesigner:unknown_modulation`](#rule-modulation_kind-celldesigner-unknown_modulation) | CellDesigner |
-| [`modulation_kind:sbgn_pd:necessary_stimulation`](#rule-modulation_kind-sbgn_pd-necessary_stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:stimulation`](#rule-modulation_kind-sbgn_pd-stimulation) | SBGN PD |
-| [`modulation_kind:sbgn_pd:inhibition`](#rule-modulation_kind-sbgn_pd-inhibition) | SBGN PD |
-| [`modulation_kind:sbgn_pd:modulation`](#rule-modulation_kind-sbgn_pd-modulation) | SBGN PD |
 
 **`paths:core`** (mandatory)
 
@@ -882,47 +857,72 @@ Builds the direct (single-hop) kinded `propagatesInfluence(SOURCE_SPECIES, TARGE
 | [`paths:core:sbgn_pd:modulation_to_phenotype`](#rule-paths-core-sbgn_pd-modulation_to_phenotype) | SBGN PD |
 | [`paths:core:sbgn_pd:is_directly_transformed_to`](#rule-paths-core-sbgn_pd-is_directly_transformed_to) | SBGN PD |
 
-**`influences_derivation`** (mandatory)
+**`influences:kind`** (mandatory)
+
+Maps each modulation arc to its influence kind via `hasInfluenceKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives.
+
+| Rule | Variant |
+| --- | --- |
+| [`influences:kind:celldesigner:catalysis`](#rule-influences-kind-celldesigner-catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:physical_stimulation`](#rule-influences-kind-celldesigner-physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:positive_influence`](#rule-influences-kind-celldesigner-positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:triggering`](#rule-influences-kind-celldesigner-triggering) | CellDesigner |
+| [`influences:kind:celldesigner:inhibition`](#rule-influences-kind-celldesigner-inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:negative_influence`](#rule-influences-kind-celldesigner-negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:modulation`](#rule-influences-kind-celldesigner-modulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_catalysis`](#rule-influences-kind-celldesigner-unknown_catalysis) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_physical_stimulation`](#rule-influences-kind-celldesigner-unknown_physical_stimulation) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_positive_influence`](#rule-influences-kind-celldesigner-unknown_positive_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_triggering`](#rule-influences-kind-celldesigner-unknown_triggering) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_inhibition`](#rule-influences-kind-celldesigner-unknown_inhibition) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_negative_influence`](#rule-influences-kind-celldesigner-unknown_negative_influence) | CellDesigner |
+| [`influences:kind:celldesigner:unknown_modulation`](#rule-influences-kind-celldesigner-unknown_modulation) | CellDesigner |
+| [`influences:kind:sbgn_pd:necessary_stimulation`](#rule-influences-kind-sbgn_pd-necessary_stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:stimulation`](#rule-influences-kind-sbgn_pd-stimulation) | SBGN PD |
+| [`influences:kind:sbgn_pd:inhibition`](#rule-influences-kind-sbgn_pd-inhibition) | SBGN PD |
+| [`influences:kind:sbgn_pd:modulation`](#rule-influences-kind-sbgn_pd-modulation) | SBGN PD |
+
+**`influences:core`** (mandatory)
 
 Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key.
 
 | Rule | Variant |
 | --- | --- |
-| [`influences_derivation:activity`](#rule-influences_derivation-activity) |  |
-| [`influences_derivation:path`](#rule-influences_derivation-path) |  |
+| [`influences:core:activity`](#rule-influences-core-activity) |  |
+| [`influences:core:path`](#rule-influences-core-path) |  |
 
-**`influence_output`** (excludable)
+**`influences:output`** (excludable)
 
 Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind.
 
 | Rule | Variant |
 | --- | --- |
-| [`influence_output:positive`](#rule-influence_output-positive) |  |
-| [`influence_output:negative`](#rule-influence_output-negative) |  |
-| [`influence_output:modulation`](#rule-influence_output-modulation) |  |
-| [`influence_output:triggering`](#rule-influence_output-triggering) |  |
-| [`influence_output:unknown_positive`](#rule-influence_output-unknown_positive) |  |
-| [`influence_output:unknown_negative`](#rule-influence_output-unknown_negative) |  |
-| [`influence_output:unknown_modulation`](#rule-influence_output-unknown_modulation) |  |
-| [`influence_output:unknown_triggering`](#rule-influence_output-unknown_triggering) |  |
+| [`influences:output:positive`](#rule-influences-output-positive) |  |
+| [`influences:output:negative`](#rule-influences-output-negative) |  |
+| [`influences:output:modulation`](#rule-influences-output-modulation) |  |
+| [`influences:output:triggering`](#rule-influences-output-triggering) |  |
+| [`influences:output:unknown_positive`](#rule-influences-output-unknown_positive) |  |
+| [`influences:output:unknown_negative`](#rule-influences-output-unknown_negative) |  |
+| [`influences:output:unknown_modulation`](#rule-influences-output-unknown_modulation) |  |
+| [`influences:output:unknown_triggering`](#rule-influences-output-unknown_triggering) |  |
 
-**`gates`** (excludable)
+**`gates:core`** (excludable)
 
 Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure.
 
 | Rule | Variant |
 | --- | --- |
-| [`gates:celldesigner:node_and`](#rule-gates-celldesigner-node_and) | CellDesigner |
-| [`gates:celldesigner:node_or`](#rule-gates-celldesigner-node_or) | CellDesigner |
-| [`gates:celldesigner:node_not`](#rule-gates-celldesigner-node_not) | CellDesigner |
-| [`gates:celldesigner:node_unknown`](#rule-gates-celldesigner-node_unknown) | CellDesigner |
-| [`gates:celldesigner:input_edge`](#rule-gates-celldesigner-input_edge) | CellDesigner |
-| [`gates:celldesigner:influence`](#rule-gates-celldesigner-influence) | CellDesigner |
-| [`gates:sbgn_pd:node_and`](#rule-gates-sbgn_pd-node_and) | SBGN PD |
-| [`gates:sbgn_pd:node_or`](#rule-gates-sbgn_pd-node_or) | SBGN PD |
-| [`gates:sbgn_pd:node_not`](#rule-gates-sbgn_pd-node_not) | SBGN PD |
-| [`gates:sbgn_pd:input_edge`](#rule-gates-sbgn_pd-input_edge) | SBGN PD |
-| [`gates:sbgn_pd:influence`](#rule-gates-sbgn_pd-influence) | SBGN PD |
+| [`gates:core:celldesigner:node_and`](#rule-gates-core-celldesigner-node_and) | CellDesigner |
+| [`gates:core:celldesigner:node_or`](#rule-gates-core-celldesigner-node_or) | CellDesigner |
+| [`gates:core:celldesigner:node_not`](#rule-gates-core-celldesigner-node_not) | CellDesigner |
+| [`gates:core:celldesigner:node_unknown`](#rule-gates-core-celldesigner-node_unknown) | CellDesigner |
+| [`gates:core:celldesigner:input_edge`](#rule-gates-core-celldesigner-input_edge) | CellDesigner |
+| [`gates:core:celldesigner:influence`](#rule-gates-core-celldesigner-influence) | CellDesigner |
+| [`gates:core:sbgn_pd:node_and`](#rule-gates-core-sbgn_pd-node_and) | SBGN PD |
+| [`gates:core:sbgn_pd:node_or`](#rule-gates-core-sbgn_pd-node_or) | SBGN PD |
+| [`gates:core:sbgn_pd:node_not`](#rule-gates-core-sbgn_pd-node_not) | SBGN PD |
+| [`gates:core:sbgn_pd:input_edge`](#rule-gates-core-sbgn_pd-input_edge) | SBGN PD |
+| [`gates:core:sbgn_pd:influence`](#rule-gates-core-sbgn_pd-influence) | SBGN PD |
 
 **`keep_reactions:activity`** (excludable)
 
@@ -995,45 +995,43 @@ Excludable: an input feeding a boolean logic gate / logical operator is an activ
 
 ### `topology` {#concern-topology}
 
-#### `topology`
+#### `topology:core`
 
 Mode-agnostic structural helpers shared by every mode: `isSubunit`, `hasActiveDescendantSubunit`.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
-| <a id="rule-topology-is_subunit"></a>`topology:is_subunit` |  | A species is a subunit if it appears on the right side of any `hasSubunit` relation. |
-| <a id="rule-topology-has_active_descendant_direct"></a>`topology:has_active_descendant_direct` |  | A complex has an active descendant if any direct subunit has activity. |
-| <a id="rule-topology-has_active_descendant_transitive"></a>`topology:has_active_descendant_transitive` |  | The `hasActiveDescendantSubunit` relation is transitive through complex containment. |
+| <a id="rule-topology-core-is_subunit"></a>`topology:core:is_subunit` |  | A species is a subunit if it appears on the right side of any `hasSubunit` relation. |
+| <a id="rule-topology-core-has_active_descendant_direct"></a>`topology:core:has_active_descendant_direct` |  | A complex has an active descendant if any direct subunit has activity. |
+| <a id="rule-topology-core-has_active_descendant_transitive"></a>`topology:core:has_active_descendant_transitive` |  | The `hasActiveDescendantSubunit` relation is transitive through complex containment. |
 
-### `top_level` {#concern-top_level}
-
-#### `top_level`
+#### `topology:top_level`
 
 Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`, `keep-reactions`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer).
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
-| <a id="rule-top_level-recursive"></a>`top_level:recursive` |  | A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex. |
-| <a id="rule-top_level-celldesigner-self"></a>`top_level:celldesigner:self` | CellDesigner | CellDesigner: a species that is not a subunit of any complex is its own top-level entity. |
-| <a id="rule-top_level-sbgn_pd-self"></a>`top_level:sbgn_pd:self` | SBGN PD | SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity. |
-| <a id="rule-top_level-sbgn_pd-phenotype_self"></a>`top_level:sbgn_pd:phenotype_self` | SBGN PD | SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `keep-species`/`normal` output. The `*-no-complex` modes key via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule). |
+| <a id="rule-topology-top_level-recursive"></a>`topology:top_level:recursive` |  | A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex. |
+| <a id="rule-topology-top_level-celldesigner-self"></a>`topology:top_level:celldesigner:self` | CellDesigner | CellDesigner: a species that is not a subunit of any complex is its own top-level entity. |
+| <a id="rule-topology-top_level-sbgn_pd-self"></a>`topology:top_level:sbgn_pd:self` | SBGN PD | SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity. |
+| <a id="rule-topology-top_level-sbgn_pd-phenotype_self"></a>`topology:top_level:sbgn_pd:phenotype_self` | SBGN PD | SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `keep-species`/`normal` output. The `*-no-complex` modes key via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule). |
 
 ### `preparation` {#concern-preparation}
 
 #### `preparation:complex`
 
-The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.
+The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `topology:top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
 | <a id="rule-preparation-complex-key"></a>`preparation:complex:key` |  | A species with activity is keyed by the `keptSpeciesKey` of its top-level entity (itself when top-level; its outermost complex when a subunit). |
-| <a id="rule-preparation-complex-celldesigner-carrier"></a>`preparation:complex:celldesigner:carrier` | CellDesigner | Each species is its own activity carrier (no rerouting; a subunit endpoint is rerouted to its top-level complex by the `top_level` key, not by the carrier). |
+| <a id="rule-preparation-complex-celldesigner-carrier"></a>`preparation:complex:celldesigner:carrier` | CellDesigner | Each species is its own activity carrier (no rerouting; a subunit endpoint is rerouted to its top-level complex by the `topology:top_level` key, not by the carrier). |
 | <a id="rule-preparation-complex-sbgn_pd-carrier_entity_pool"></a>`preparation:complex:sbgn_pd:carrier_entity_pool` | SBGN PD | SBGN-PD: each entity pool is its own activity carrier. |
 | <a id="rule-preparation-complex-sbgn_pd-carrier_phenotype"></a>`preparation:complex:sbgn_pd:carrier_phenotype` | SBGN PD | SBGN-PD: each phenotype process is its own activity carrier (phenotypes are activities, not entity pools). |
 
 #### `preparation:no_complex`
 
-The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths_complex_traversal`). `normal-no-complex` and `keep-species-no-complex` share these keys and differ only at the build stage, where `normal-no-complex` strips PTM decorations and merges content-equal results while `keep-species-no-complex` keeps the decorations.
+The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths:complex_traversal`). `normal-no-complex` and `keep-species-no-complex` share these keys and differ only at the build stage, where `normal-no-complex` strips PTM decorations and merges content-equal results while `keep-species-no-complex` keeps the decorations.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
@@ -1045,34 +1043,7 @@ The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a
 | <a id="rule-preparation-no_complex-celldesigner-carrier"></a>`preparation:no_complex:celldesigner:carrier` | CellDesigner | Each species is its own activity carrier. |
 | <a id="rule-preparation-no_complex-sbgn_pd-carrier_entity_pool"></a>`preparation:no_complex:sbgn_pd:carrier_entity_pool` | SBGN PD | SBGN-PD: each entity pool is its own activity carrier. |
 | <a id="rule-preparation-no_complex-sbgn_pd-carrier_phenotype"></a>`preparation:no_complex:sbgn_pd:carrier_phenotype` | SBGN PD | SBGN-PD: each phenotype process is its own activity carrier. |
-| <a id="rule-preparation-no_complex-sbgn_pd-carrier_subunit"></a>`preparation:no_complex:sbgn_pd:carrier_subunit` | SBGN PD | SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths_complex_traversal`). |
-
-### `modulation_kind` {#concern-modulation_kind}
-
-#### `modulation_kind`
-
-Maps each modulation arc to its influence kind via `hasModulationKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives. Every group that emits a modulation-arc influence reads this relation rather than re-encoding the mapping. The mapping is per-language: CellDesigner arcs carry the sign in the arc type (catalysis, inhibition, ...), while an SBGN-PD arc's kind comes from its stimulation/inhibition/necessary-stimulation classification.
-
-| Rule | Variant | Documentation |
-| --- | --- | --- |
-| <a id="rule-modulation_kind-celldesigner-catalysis"></a>`modulation_kind:celldesigner:catalysis` | CellDesigner | A catalysis arc contributes a `positive` kind. |
-| <a id="rule-modulation_kind-celldesigner-physical_stimulation"></a>`modulation_kind:celldesigner:physical_stimulation` | CellDesigner | A physical stimulation arc contributes a `positive` kind. |
-| <a id="rule-modulation_kind-celldesigner-positive_influence"></a>`modulation_kind:celldesigner:positive_influence` | CellDesigner | A positive influence arc contributes a `positive` kind. |
-| <a id="rule-modulation_kind-celldesigner-triggering"></a>`modulation_kind:celldesigner:triggering` | CellDesigner | A triggering arc contributes a `triggering` kind (kept on the direct edge; it degrades to `positive` when composed through a reaction). |
-| <a id="rule-modulation_kind-celldesigner-inhibition"></a>`modulation_kind:celldesigner:inhibition` | CellDesigner | An inhibition arc contributes a `negative` kind. |
-| <a id="rule-modulation_kind-celldesigner-negative_influence"></a>`modulation_kind:celldesigner:negative_influence` | CellDesigner | A negative influence arc contributes a `negative` kind. |
-| <a id="rule-modulation_kind-celldesigner-modulation"></a>`modulation_kind:celldesigner:modulation` | CellDesigner | A bare modulation arc (the generic MODULATION arc, not one of the signed/typed subtypes) contributes an unknown-sign `modulation` kind. The negations exclude the subtypes, which `modulation` is the umbrella over. |
-| <a id="rule-modulation_kind-celldesigner-unknown_catalysis"></a>`modulation_kind:celldesigner:unknown_catalysis` | CellDesigner | An unknown catalysis arc contributes an `unknown_positive` kind. |
-| <a id="rule-modulation_kind-celldesigner-unknown_physical_stimulation"></a>`modulation_kind:celldesigner:unknown_physical_stimulation` | CellDesigner | An unknown physical stimulation arc contributes an `unknown_positive` kind. |
-| <a id="rule-modulation_kind-celldesigner-unknown_positive_influence"></a>`modulation_kind:celldesigner:unknown_positive_influence` | CellDesigner | An unknown positive influence arc contributes an `unknown_positive` kind. |
-| <a id="rule-modulation_kind-celldesigner-unknown_triggering"></a>`modulation_kind:celldesigner:unknown_triggering` | CellDesigner | An unknown triggering arc contributes an `unknown_triggering` kind (kept on the direct edge; it degrades to `unknown_positive` when composed through a reaction). |
-| <a id="rule-modulation_kind-celldesigner-unknown_inhibition"></a>`modulation_kind:celldesigner:unknown_inhibition` | CellDesigner | An unknown inhibition arc contributes an `unknown_negative` kind. |
-| <a id="rule-modulation_kind-celldesigner-unknown_negative_influence"></a>`modulation_kind:celldesigner:unknown_negative_influence` | CellDesigner | An unknown negative influence arc contributes an `unknown_negative` kind. |
-| <a id="rule-modulation_kind-celldesigner-unknown_modulation"></a>`modulation_kind:celldesigner:unknown_modulation` | CellDesigner | A bare unknown modulation arc (not one of the unknown subtypes) contributes an `unknown_modulation` kind. The negations exclude the subtypes, which `unknownModulation` is the umbrella over. |
-| <a id="rule-modulation_kind-sbgn_pd-necessary_stimulation"></a>`modulation_kind:sbgn_pd:necessary_stimulation` | SBGN PD | An SBGN-PD necessary stimulation contributes a `triggering` kind. |
-| <a id="rule-modulation_kind-sbgn_pd-stimulation"></a>`modulation_kind:sbgn_pd:stimulation` | SBGN PD | A stimulation (catalysis included) that is not a necessary stimulation contributes a `positive` kind. |
-| <a id="rule-modulation_kind-sbgn_pd-inhibition"></a>`modulation_kind:sbgn_pd:inhibition` | SBGN PD | An SBGN-PD inhibition contributes a `negative` kind. |
-| <a id="rule-modulation_kind-sbgn_pd-modulation"></a>`modulation_kind:sbgn_pd:modulation` | SBGN PD | A bare modulation (neither stimulation nor inhibition) contributes an unknown-sign `modulation` kind. |
+| <a id="rule-preparation-no_complex-sbgn_pd-carrier_subunit"></a>`preparation:no_complex:sbgn_pd:carrier_subunit` | SBGN PD | SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths:complex_traversal`). |
 
 ### `paths` {#concern-paths}
 
@@ -1088,7 +1059,7 @@ Builds the direct (single-hop) kinded `propagatesInfluence(SOURCE_SPECIES, TARGE
 | <a id="rule-paths-core-celldesigner-catalyzer_to_product"></a>`paths:core:celldesigner:catalyzer_to_product` | CellDesigner | If a species is referred to by a catalyzer of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second. |
 | <a id="rule-paths-core-celldesigner-physical_stimulator_to_product"></a>`paths:core:celldesigner:physical_stimulator_to_product` | CellDesigner | If a species is referred to by a physical stimulator of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second. |
 | <a id="rule-paths-core-celldesigner-trigger_to_product"></a>`paths:core:celldesigner:trigger_to_product` | CellDesigner | If a species is referred to by a trigger of a reaction and another species is referred to by a product of that reaction, then there is a triggering path from the first to the second (a trigger→product edge is direct, so it keeps the `triggering` kind). |
-| <a id="rule-paths-core-celldesigner-modulation_arc_influence"></a>`paths:core:celldesigner:modulation_arc_influence` | CellDesigner | A modulation arc influences its target with the arc's kind (`hasModulationKind`, from the `modulation_kind` group). This covers every arc type -- catalysis/physical stimulation/positive influence give `positive`, triggering gives `triggering`, inhibition/negative influence give `negative`, a bare modulation gives `modulation`, and the `unknown*` twins give the `unknown_*` kinds. The reaction modifier->product rules and the transitive/cycle rules remain separate. |
+| <a id="rule-paths-core-celldesigner-modulation_arc_influence"></a>`paths:core:celldesigner:modulation_arc_influence` | CellDesigner | A modulation arc influences its target with the arc's kind (`hasInfluenceKind`, from the `influences:kind` group). This covers every arc type -- catalysis/physical stimulation/positive influence give `positive`, triggering gives `triggering`, inhibition/negative influence give `negative`, a bare modulation gives `modulation`, and the `unknown*` twins give the `unknown_*` kinds. The reaction modifier->product rules and the transitive/cycle rules remain separate. |
 | <a id="rule-paths-core-celldesigner-inhibitor_to_product"></a>`paths:core:celldesigner:inhibitor_to_product` | CellDesigner | If a species is referred to by an inhibitor of a reaction and another species is referred to by a product of that reaction, then there is a negative path from the first to the second. |
 | <a id="rule-paths-core-celldesigner-modulator_to_product"></a>`paths:core:celldesigner:modulator_to_product` | CellDesigner | If a species is referred to by a *bare* modulator of a reaction (a generic MODULATION modifier — not a physical stimulator, inhibitor or trigger; catalyzers are physical stimulators) and another species is referred to by a product of that reaction, then there is a modulation path from the first to the second. |
 | <a id="rule-paths-core-celldesigner-unknown_catalyzer_to_product"></a>`paths:core:celldesigner:unknown_catalyzer_to_product` | CellDesigner | If a species is referred to by an unknown catalyzer of a reaction and another species is referred to by a product of that reaction, then there is an unknown-positive path from the first to the second. |
@@ -1107,79 +1078,98 @@ Excludable multi-hop transitivity: extends a `propagatesInfluence` path through 
 | <a id="rule-paths-chaining-celldesigner-transitive_through_reaction"></a>`paths:chaining:celldesigner:transitive_through_reaction` | CellDesigner | If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. The kind is carried through `composesTo`, which degrades `triggering`→`positive` (and `unknown_triggering`→`unknown_positive`) at the reaction hop while leaving every other kind unchanged. Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes. |
 | <a id="rule-paths-chaining-sbgn_pd-transitive_through_process"></a>`paths:chaining:sbgn_pd:transitive_through_process` | SBGN PD | Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences). Extension is suppressed across a reactant->product hop that lies inside a cycle (`isCyclicallyTransformedTo`), so a source feeding a production cycle does not leak influence back around the loop onto members it directly depletes. |
 
-### `paths_complex_traversal` {#concern-paths_complex_traversal}
-
-#### `paths_complex_traversal`
+#### `paths:complex_traversal`
 
 Extends paths through complex containment for the ``*-no-complex`` modes: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
-| <a id="rule-paths_complex_traversal-into_subunits"></a>`paths_complex_traversal:into_subunits` |  | If an influence of a given kind propagates from a source to a complex, then it also propagates from the source to each subunit of the complex. |
-| <a id="rule-paths_complex_traversal-from_subunits"></a>`paths_complex_traversal:from_subunits` |  | If an influence of a given kind propagates from a complex to a target, then it also propagates from each subunit of the complex to the target. |
+| <a id="rule-paths-complex_traversal-into_subunits"></a>`paths:complex_traversal:into_subunits` |  | If an influence of a given kind propagates from a source to a complex, then it also propagates from the source to each subunit of the complex. |
+| <a id="rule-paths-complex_traversal-from_subunits"></a>`paths:complex_traversal:from_subunits` |  | If an influence of a given kind propagates from a complex to a target, then it also propagates from each subunit of the complex to the target. |
 
-### `influences_derivation` {#concern-influences_derivation}
+### `influences` {#concern-influences}
 
-#### `influences_derivation`
+#### `influences:kind`
 
-Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key. Both rules are mode- and language-agnostic; the consumption/sparing reasoning lives in the separate `influences_consumption` group. The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influence_output` group.
-
-| Rule | Variant | Documentation |
-| --- | --- | --- |
-| <a id="rule-influences_derivation-activity"></a>`influences_derivation:activity` |  | Every species with an activity key emits an activity node with that key. |
-| <a id="rule-influences_derivation-path"></a>`influences_derivation:path` |  | A propagated influence of any kind between two raw nodes yields an influence of that same kind between their activity-key images (via their carriers). |
-
-### `influences_consumption` {#concern-influences_consumption}
-
-#### `influences_consumption`
-
-Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences_consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.
+Maps each modulation arc to its influence kind via `hasInfluenceKind(MODULATION, INFLUENCE_KIND)`, the single place the arc-type->kind knowledge lives. Every group that emits a modulation-arc influence reads this relation rather than re-encoding the mapping. The mapping is per-language: CellDesigner arcs carry the sign in the arc type (catalysis, inhibition, ...), while an SBGN-PD arc's kind comes from its stimulation/inhibition/necessary-stimulation classification.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
-| <a id="rule-influences_consumption-celldesigner-catalyzer_consumes_reactant"></a>`influences_consumption:celldesigner:catalyzer_consumes_reactant` | CellDesigner | A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product). |
-| <a id="rule-influences_consumption-celldesigner-physical_stimulator_consumes_reactant"></a>`influences_consumption:celldesigner:physical_stimulator_consumes_reactant` | CellDesigner | A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption). |
-| <a id="rule-influences_consumption-celldesigner-trigger_consumes_reactant"></a>`influences_consumption:celldesigner:trigger_consumes_reactant` | CellDesigner | A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship). |
-| <a id="rule-influences_consumption-celldesigner-inhibitor_spares_reactant"></a>`influences_consumption:celldesigner:inhibitor_spares_reactant` | CellDesigner | An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing). |
-| <a id="rule-influences_consumption-celldesigner-unknown_catalyzer_consumes_reactant"></a>`influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant` | CellDesigner | An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain). |
-| <a id="rule-influences_consumption-celldesigner-unknown_inhibitor_spares_reactant"></a>`influences_consumption:celldesigner:unknown_inhibitor_spares_reactant` | CellDesigner | An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain). |
+| <a id="rule-influences-kind-celldesigner-catalysis"></a>`influences:kind:celldesigner:catalysis` | CellDesigner | A catalysis arc contributes a `positive` kind. |
+| <a id="rule-influences-kind-celldesigner-physical_stimulation"></a>`influences:kind:celldesigner:physical_stimulation` | CellDesigner | A physical stimulation arc contributes a `positive` kind. |
+| <a id="rule-influences-kind-celldesigner-positive_influence"></a>`influences:kind:celldesigner:positive_influence` | CellDesigner | A positive influence arc contributes a `positive` kind. |
+| <a id="rule-influences-kind-celldesigner-triggering"></a>`influences:kind:celldesigner:triggering` | CellDesigner | A triggering arc contributes a `triggering` kind (kept on the direct edge; it degrades to `positive` when composed through a reaction). |
+| <a id="rule-influences-kind-celldesigner-inhibition"></a>`influences:kind:celldesigner:inhibition` | CellDesigner | An inhibition arc contributes a `negative` kind. |
+| <a id="rule-influences-kind-celldesigner-negative_influence"></a>`influences:kind:celldesigner:negative_influence` | CellDesigner | A negative influence arc contributes a `negative` kind. |
+| <a id="rule-influences-kind-celldesigner-modulation"></a>`influences:kind:celldesigner:modulation` | CellDesigner | A bare modulation arc (the generic MODULATION arc, not one of the signed/typed subtypes) contributes an unknown-sign `modulation` kind. The negations exclude the subtypes, which `modulation` is the umbrella over. |
+| <a id="rule-influences-kind-celldesigner-unknown_catalysis"></a>`influences:kind:celldesigner:unknown_catalysis` | CellDesigner | An unknown catalysis arc contributes an `unknown_positive` kind. |
+| <a id="rule-influences-kind-celldesigner-unknown_physical_stimulation"></a>`influences:kind:celldesigner:unknown_physical_stimulation` | CellDesigner | An unknown physical stimulation arc contributes an `unknown_positive` kind. |
+| <a id="rule-influences-kind-celldesigner-unknown_positive_influence"></a>`influences:kind:celldesigner:unknown_positive_influence` | CellDesigner | An unknown positive influence arc contributes an `unknown_positive` kind. |
+| <a id="rule-influences-kind-celldesigner-unknown_triggering"></a>`influences:kind:celldesigner:unknown_triggering` | CellDesigner | An unknown triggering arc contributes an `unknown_triggering` kind (kept on the direct edge; it degrades to `unknown_positive` when composed through a reaction). |
+| <a id="rule-influences-kind-celldesigner-unknown_inhibition"></a>`influences:kind:celldesigner:unknown_inhibition` | CellDesigner | An unknown inhibition arc contributes an `unknown_negative` kind. |
+| <a id="rule-influences-kind-celldesigner-unknown_negative_influence"></a>`influences:kind:celldesigner:unknown_negative_influence` | CellDesigner | An unknown negative influence arc contributes an `unknown_negative` kind. |
+| <a id="rule-influences-kind-celldesigner-unknown_modulation"></a>`influences:kind:celldesigner:unknown_modulation` | CellDesigner | A bare unknown modulation arc (not one of the unknown subtypes) contributes an `unknown_modulation` kind. The negations exclude the subtypes, which `unknownModulation` is the umbrella over. |
+| <a id="rule-influences-kind-sbgn_pd-necessary_stimulation"></a>`influences:kind:sbgn_pd:necessary_stimulation` | SBGN PD | An SBGN-PD necessary stimulation contributes a `triggering` kind. |
+| <a id="rule-influences-kind-sbgn_pd-stimulation"></a>`influences:kind:sbgn_pd:stimulation` | SBGN PD | A stimulation (catalysis included) that is not a necessary stimulation contributes a `positive` kind. |
+| <a id="rule-influences-kind-sbgn_pd-inhibition"></a>`influences:kind:sbgn_pd:inhibition` | SBGN PD | An SBGN-PD inhibition contributes a `negative` kind. |
+| <a id="rule-influences-kind-sbgn_pd-modulation"></a>`influences:kind:sbgn_pd:modulation` | SBGN PD | A bare modulation (neither stimulation nor inhibition) contributes an unknown-sign `modulation` kind. |
 
-### `influence_output` {#concern-influence_output}
+#### `influences:core`
 
-#### `influence_output`
+Derivation: emits `new(activity(KEY))` for every activity key, and lifts every kinded path into the internal `influences(SOURCE_KEY, TARGET_KEY, INFLUENCE_KIND)` relation by resolving both endpoints through their activity carrier and key. Both rules are mode- and language-agnostic; the consumption/sparing reasoning lives in the separate `influences:consumption` group. The internal `influences/3` relation is fanned out to the typed `new(...)` heads by the shared `influences:output` group.
+
+| Rule | Variant | Documentation |
+| --- | --- | --- |
+| <a id="rule-influences-core-activity"></a>`influences:core:activity` |  | Every species with an activity key emits an activity node with that key. |
+| <a id="rule-influences-core-path"></a>`influences:core:path` |  | A propagated influence of any kind between two raw nodes yields an influence of that same kind between their activity-key images (via their carriers). |
+
+#### `influences:consumption`
+
+Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences:consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.
+
+| Rule | Variant | Documentation |
+| --- | --- | --- |
+| <a id="rule-influences-consumption-celldesigner-catalyzer_consumes_reactant"></a>`influences:consumption:celldesigner:catalyzer_consumes_reactant` | CellDesigner | A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product). |
+| <a id="rule-influences-consumption-celldesigner-physical_stimulator_consumes_reactant"></a>`influences:consumption:celldesigner:physical_stimulator_consumes_reactant` | CellDesigner | A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption). |
+| <a id="rule-influences-consumption-celldesigner-trigger_consumes_reactant"></a>`influences:consumption:celldesigner:trigger_consumes_reactant` | CellDesigner | A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship). |
+| <a id="rule-influences-consumption-celldesigner-inhibitor_spares_reactant"></a>`influences:consumption:celldesigner:inhibitor_spares_reactant` | CellDesigner | An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing). |
+| <a id="rule-influences-consumption-celldesigner-unknown_catalyzer_consumes_reactant"></a>`influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant` | CellDesigner | An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain). |
+| <a id="rule-influences-consumption-celldesigner-unknown_inhibitor_spares_reactant"></a>`influences:consumption:celldesigner:unknown_inhibitor_spares_reactant` | CellDesigner | An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain). |
+
+#### `influences:output`
 
 Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind. Every pipeline converges on `influences/3`; this group is the single place that turns a kind into its output predicate.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
-| <a id="rule-influence_output-positive"></a>`influence_output:positive` |  | A `positive` influence emits a `positivelyInfluences` edge (PositiveInfluence). |
-| <a id="rule-influence_output-negative"></a>`influence_output:negative` |  | A `negative` influence emits a `negativelyInfluences` edge (NegativeInfluence). |
-| <a id="rule-influence_output-modulation"></a>`influence_output:modulation` |  | A `modulation` influence emits a `modulates` edge (Modulation). |
-| <a id="rule-influence_output-triggering"></a>`influence_output:triggering` |  | A `triggering` influence emits a `triggers` edge (Triggering). |
-| <a id="rule-influence_output-unknown_positive"></a>`influence_output:unknown_positive` |  | An `unknown_positive` influence emits an `unknownPositivelyInfluences` edge (UnknownPositiveInfluence). |
-| <a id="rule-influence_output-unknown_negative"></a>`influence_output:unknown_negative` |  | An `unknown_negative` influence emits an `unknownNegativelyInfluences` edge (UnknownNegativeInfluence). |
-| <a id="rule-influence_output-unknown_modulation"></a>`influence_output:unknown_modulation` |  | An `unknown_modulation` influence emits an `unknownModulates` edge (UnknownModulation). |
-| <a id="rule-influence_output-unknown_triggering"></a>`influence_output:unknown_triggering` |  | An `unknown_triggering` influence emits an `unknownTriggers` edge (UnknownTriggering). |
+| <a id="rule-influences-output-positive"></a>`influences:output:positive` |  | A `positive` influence emits a `positivelyInfluences` edge (PositiveInfluence). |
+| <a id="rule-influences-output-negative"></a>`influences:output:negative` |  | A `negative` influence emits a `negativelyInfluences` edge (NegativeInfluence). |
+| <a id="rule-influences-output-modulation"></a>`influences:output:modulation` |  | A `modulation` influence emits a `modulates` edge (Modulation). |
+| <a id="rule-influences-output-triggering"></a>`influences:output:triggering` |  | A `triggering` influence emits a `triggers` edge (Triggering). |
+| <a id="rule-influences-output-unknown_positive"></a>`influences:output:unknown_positive` |  | An `unknown_positive` influence emits an `unknownPositivelyInfluences` edge (UnknownPositiveInfluence). |
+| <a id="rule-influences-output-unknown_negative"></a>`influences:output:unknown_negative` |  | An `unknown_negative` influence emits an `unknownNegativelyInfluences` edge (UnknownNegativeInfluence). |
+| <a id="rule-influences-output-unknown_modulation"></a>`influences:output:unknown_modulation` |  | An `unknown_modulation` influence emits an `unknownModulates` edge (UnknownModulation). |
+| <a id="rule-influences-output-unknown_triggering"></a>`influences:output:unknown_triggering` |  | An `unknown_triggering` influence emits an `unknownTriggers` edge (UnknownTriggering). |
 
 ### `gates` {#concern-gates}
 
-#### `gates`
+#### `gates:core`
 
-Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influence_output` fan these out with no change. Provenance-agnostic.
+Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influences:output` fan these out with no change. Provenance-agnostic.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
-| <a id="rule-gates-celldesigner-node_and"></a>`gates:celldesigner:node_and` | CellDesigner | An `andGate` emits an AND logical-operator node. |
-| <a id="rule-gates-celldesigner-node_or"></a>`gates:celldesigner:node_or` | CellDesigner | An `orGate` emits an OR logical-operator node. |
-| <a id="rule-gates-celldesigner-node_not"></a>`gates:celldesigner:node_not` | CellDesigner | A `notGate` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. |
-| <a id="rule-gates-celldesigner-node_unknown"></a>`gates:celldesigner:node_unknown` | CellDesigner | An `unknownGate` emits an unknown-type logical-operator node. |
-| <a id="rule-gates-celldesigner-input_edge"></a>`gates:celldesigner:input_edge` | CellDesigner | Each gate input is resolved through its activity carrier and key (mirroring `influences_derivation:path`), so an input that is a subunit resolves to its top-level complex's key. The `booleanLogicGate` umbrella matches every gate type via the ontology's isa rules. |
-| <a id="rule-gates-celldesigner-influence"></a>`gates:celldesigner:influence` | CellDesigner | One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key. |
-| <a id="rule-gates-sbgn_pd-node_and"></a>`gates:sbgn_pd:node_and` | SBGN PD | An `andOperator` emits an AND logical-operator node. |
-| <a id="rule-gates-sbgn_pd-node_or"></a>`gates:sbgn_pd:node_or` | SBGN PD | An `orOperator` emits an OR logical-operator node. |
-| <a id="rule-gates-sbgn_pd-node_not"></a>`gates:sbgn_pd:node_not` | SBGN PD | A `notOperator` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. (SBGN-PD has no unknown-operator type.) |
-| <a id="rule-gates-sbgn_pd-input_edge"></a>`gates:sbgn_pd:input_edge` | SBGN PD | SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules). |
-| <a id="rule-gates-sbgn_pd-influence"></a>`gates:sbgn_pd:influence` | SBGN PD | SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths:core`, resolving only the target through carrier/key. |
+| <a id="rule-gates-core-celldesigner-node_and"></a>`gates:core:celldesigner:node_and` | CellDesigner | An `andGate` emits an AND logical-operator node. |
+| <a id="rule-gates-core-celldesigner-node_or"></a>`gates:core:celldesigner:node_or` | CellDesigner | An `orGate` emits an OR logical-operator node. |
+| <a id="rule-gates-core-celldesigner-node_not"></a>`gates:core:celldesigner:node_not` | CellDesigner | A `notGate` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. |
+| <a id="rule-gates-core-celldesigner-node_unknown"></a>`gates:core:celldesigner:node_unknown` | CellDesigner | An `unknownGate` emits an unknown-type logical-operator node. |
+| <a id="rule-gates-core-celldesigner-input_edge"></a>`gates:core:celldesigner:input_edge` | CellDesigner | Each gate input is resolved through its activity carrier and key (mirroring `influences:core:path`), so an input that is a subunit resolves to its top-level complex's key. The `booleanLogicGate` umbrella matches every gate type via the ontology's isa rules. |
+| <a id="rule-gates-core-celldesigner-influence"></a>`gates:core:celldesigner:influence` | CellDesigner | One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key. |
+| <a id="rule-gates-core-sbgn_pd-node_and"></a>`gates:core:sbgn_pd:node_and` | SBGN PD | An `andOperator` emits an AND logical-operator node. |
+| <a id="rule-gates-core-sbgn_pd-node_or"></a>`gates:core:sbgn_pd:node_or` | SBGN PD | An `orOperator` emits an OR logical-operator node. |
+| <a id="rule-gates-core-sbgn_pd-node_not"></a>`gates:core:sbgn_pd:node_not` | SBGN PD | A `notOperator` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. (SBGN-PD has no unknown-operator type.) |
+| <a id="rule-gates-core-sbgn_pd-input_edge"></a>`gates:core:sbgn_pd:input_edge` | SBGN PD | SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules). |
+| <a id="rule-gates-core-sbgn_pd-influence"></a>`gates:core:sbgn_pd:influence` | SBGN PD | SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths:core`, resolving only the target through carrier/key. |
 
 ### `keep_reactions` {#concern-keep_reactions}
 
@@ -1193,7 +1183,7 @@ The `keep-reactions` premise that every species is an activity, replacing the st
 
 #### `keep_reactions:influences`
 
-The `keep-reactions` premise that every reaction is kept: each (reactant, product) pair of a reaction becomes one positive influence. `positivelyInfluences` rather than `triggers` -- consuming a reactant to make a product is a contribution to it, not the necessary-stimulation relationship `triggers` (CellDesigner `Triggering`, SBGN-AF `NecessaryStimulation`) asserts. The rule writes `propagatesInfluence/3` rather than `influences/3` so the shared `influences_derivation:path` bridge resolves both endpoints through their carrier and key, routing a subunit endpoint to its top-level complex. Reactant and product may resolve to the same activity (a reaction whose participants share a complex, or a state transition drawn on a single species), and the resulting self-influence is emitted like any other.
+The `keep-reactions` premise that every reaction is kept: each (reactant, product) pair of a reaction becomes one positive influence. `positivelyInfluences` rather than `triggers` -- consuming a reactant to make a product is a contribution to it, not the necessary-stimulation relationship `triggers` (CellDesigner `Triggering`, SBGN-AF `NecessaryStimulation`) asserts. The rule writes `propagatesInfluence/3` rather than `influences/3` so the shared `influences:core:path` bridge resolves both endpoints through their carrier and key, routing a subunit endpoint to its top-level complex. Reactant and product may resolve to the same activity (a reaction whose participants share a complex, or a state transition drawn on a single species), and the resulting self-influence is emitted like any other.
 
 | Rule | Variant | Documentation |
 | --- | --- | --- |
@@ -1219,59 +1209,61 @@ All rules in alphabetical order (identifiers are group- and variant-prefixed).
 | [`activity:modulation_source:celldesigner:from_reaction_modulator`](#rule-activity-modulation_source-celldesigner-from_reaction_modulator) | `activity:modulation_source` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A species that modulates a reaction is an activity candidate. |
 | [`activity:modulation_source:sbgn_pd:from_modulation_source`](#rule-activity-modulation_source-sbgn_pd-from_modulation_source) | `activity:modulation_source` | SBGN PD | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An entity pool that is the source of a modulation arc is an activity candidate. |
 | [`activity:phenotype:from_phenotype`](#rule-activity-phenotype-from_phenotype) | `activity:phenotype` |  | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A phenotype is always an activity candidate. |
-| [`gates:celldesigner:influence`](#rule-gates-celldesigner-influence) | `gates` | CellDesigner | all | One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. |
-| [`gates:celldesigner:input_edge`](#rule-gates-celldesigner-input_edge) | `gates` | CellDesigner | all | Each gate input is resolved through its activity carrier and key (mirroring `influences_derivation:path`), so an input that is a subunit resolves to its top-level complex's key. |
-| [`gates:celldesigner:node_and`](#rule-gates-celldesigner-node_and) | `gates` | CellDesigner | all | An `andGate` emits an AND logical-operator node. |
-| [`gates:celldesigner:node_not`](#rule-gates-celldesigner-node_not) | `gates` | CellDesigner | all | A `notGate` emits a NOT logical-operator node. |
-| [`gates:celldesigner:node_or`](#rule-gates-celldesigner-node_or) | `gates` | CellDesigner | all | An `orGate` emits an OR logical-operator node. |
-| [`gates:celldesigner:node_unknown`](#rule-gates-celldesigner-node_unknown) | `gates` | CellDesigner | all | An `unknownGate` emits an unknown-type logical-operator node. |
-| [`gates:sbgn_pd:influence`](#rule-gates-sbgn_pd-influence) | `gates` | SBGN PD | all | SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). |
-| [`gates:sbgn_pd:input_edge`](#rule-gates-sbgn_pd-input_edge) | `gates` | SBGN PD | all | SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules). |
-| [`gates:sbgn_pd:node_and`](#rule-gates-sbgn_pd-node_and) | `gates` | SBGN PD | all | An `andOperator` emits an AND logical-operator node. |
-| [`gates:sbgn_pd:node_not`](#rule-gates-sbgn_pd-node_not) | `gates` | SBGN PD | all | A `notOperator` emits a NOT logical-operator node. |
-| [`gates:sbgn_pd:node_or`](#rule-gates-sbgn_pd-node_or) | `gates` | SBGN PD | all | An `orOperator` emits an OR logical-operator node. |
-| [`influence_output:modulation`](#rule-influence_output-modulation) | `influence_output` |  | all | A `modulation` influence emits a `modulates` edge (Modulation). |
-| [`influence_output:negative`](#rule-influence_output-negative) | `influence_output` |  | all | A `negative` influence emits a `negativelyInfluences` edge (NegativeInfluence). |
-| [`influence_output:positive`](#rule-influence_output-positive) | `influence_output` |  | all | A `positive` influence emits a `positivelyInfluences` edge (PositiveInfluence). |
-| [`influence_output:triggering`](#rule-influence_output-triggering) | `influence_output` |  | all | A `triggering` influence emits a `triggers` edge (Triggering). |
-| [`influence_output:unknown_modulation`](#rule-influence_output-unknown_modulation) | `influence_output` |  | all | An `unknown_modulation` influence emits an `unknownModulates` edge (UnknownModulation). |
-| [`influence_output:unknown_negative`](#rule-influence_output-unknown_negative) | `influence_output` |  | all | An `unknown_negative` influence emits an `unknownNegativelyInfluences` edge (UnknownNegativeInfluence). |
-| [`influence_output:unknown_positive`](#rule-influence_output-unknown_positive) | `influence_output` |  | all | An `unknown_positive` influence emits an `unknownPositivelyInfluences` edge (UnknownPositiveInfluence). |
-| [`influence_output:unknown_triggering`](#rule-influence_output-unknown_triggering) | `influence_output` |  | all | An `unknown_triggering` influence emits an `unknownTriggers` edge (UnknownTriggering). |
-| [`influences_consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-catalyzer_consumes_reactant) | `influences_consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product). |
-| [`influences_consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-inhibitor_spares_reactant) | `influences_consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing). |
-| [`influences_consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences_consumption-celldesigner-physical_stimulator_consumes_reactant) | `influences_consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption). |
-| [`influences_consumption:celldesigner:trigger_consumes_reactant`](#rule-influences_consumption-celldesigner-trigger_consumes_reactant) | `influences_consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship). |
-| [`influences_consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences_consumption-celldesigner-unknown_catalyzer_consumes_reactant) | `influences_consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain). |
-| [`influences_consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences_consumption-celldesigner-unknown_inhibitor_spares_reactant) | `influences_consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain). |
-| [`influences_derivation:activity`](#rule-influences_derivation-activity) | `influences_derivation` |  | all | Every species with an activity key emits an activity node with that key. |
-| [`influences_derivation:path`](#rule-influences_derivation-path) | `influences_derivation` |  | all | A propagated influence of any kind between two raw nodes yields an influence of that same kind between their activity-key images (via their carriers). |
+| [`gates:core:celldesigner:influence`](#rule-gates-core-celldesigner-influence) | `gates:core` | CellDesigner | all | One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. |
+| [`gates:core:celldesigner:input_edge`](#rule-gates-core-celldesigner-input_edge) | `gates:core` | CellDesigner | all | Each gate input is resolved through its activity carrier and key (mirroring `influences:core:path`), so an input that is a subunit resolves to its top-level complex's key. |
+| [`gates:core:celldesigner:node_and`](#rule-gates-core-celldesigner-node_and) | `gates:core` | CellDesigner | all | An `andGate` emits an AND logical-operator node. |
+| [`gates:core:celldesigner:node_not`](#rule-gates-core-celldesigner-node_not) | `gates:core` | CellDesigner | all | A `notGate` emits a NOT logical-operator node. |
+| [`gates:core:celldesigner:node_or`](#rule-gates-core-celldesigner-node_or) | `gates:core` | CellDesigner | all | An `orGate` emits an OR logical-operator node. |
+| [`gates:core:celldesigner:node_unknown`](#rule-gates-core-celldesigner-node_unknown) | `gates:core` | CellDesigner | all | An `unknownGate` emits an unknown-type logical-operator node. |
+| [`gates:core:sbgn_pd:influence`](#rule-gates-core-sbgn_pd-influence) | `gates:core` | SBGN PD | all | SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). |
+| [`gates:core:sbgn_pd:input_edge`](#rule-gates-core-sbgn_pd-input_edge) | `gates:core` | SBGN PD | all | SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules). |
+| [`gates:core:sbgn_pd:node_and`](#rule-gates-core-sbgn_pd-node_and) | `gates:core` | SBGN PD | all | An `andOperator` emits an AND logical-operator node. |
+| [`gates:core:sbgn_pd:node_not`](#rule-gates-core-sbgn_pd-node_not) | `gates:core` | SBGN PD | all | A `notOperator` emits a NOT logical-operator node. |
+| [`gates:core:sbgn_pd:node_or`](#rule-gates-core-sbgn_pd-node_or) | `gates:core` | SBGN PD | all | An `orOperator` emits an OR logical-operator node. |
+| [`influences:consumption:celldesigner:catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-catalyzer_consumes_reactant) | `influences:consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product). |
+| [`influences:consumption:celldesigner:inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-inhibitor_spares_reactant) | `influences:consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing). |
+| [`influences:consumption:celldesigner:physical_stimulator_consumes_reactant`](#rule-influences-consumption-celldesigner-physical_stimulator_consumes_reactant) | `influences:consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption). |
+| [`influences:consumption:celldesigner:trigger_consumes_reactant`](#rule-influences-consumption-celldesigner-trigger_consumes_reactant) | `influences:consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship). |
+| [`influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant`](#rule-influences-consumption-celldesigner-unknown_catalyzer_consumes_reactant) | `influences:consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain). |
+| [`influences:consumption:celldesigner:unknown_inhibitor_spares_reactant`](#rule-influences-consumption-celldesigner-unknown_inhibitor_spares_reactant) | `influences:consumption` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain). |
+| [`influences:core:activity`](#rule-influences-core-activity) | `influences:core` |  | all | Every species with an activity key emits an activity node with that key. |
+| [`influences:core:path`](#rule-influences-core-path) | `influences:core` |  | all | A propagated influence of any kind between two raw nodes yields an influence of that same kind between their activity-key images (via their carriers). |
+| [`influences:kind:celldesigner:catalysis`](#rule-influences-kind-celldesigner-catalysis) | `influences:kind` | CellDesigner | all | A catalysis arc contributes a `positive` kind. |
+| [`influences:kind:celldesigner:inhibition`](#rule-influences-kind-celldesigner-inhibition) | `influences:kind` | CellDesigner | all | An inhibition arc contributes a `negative` kind. |
+| [`influences:kind:celldesigner:modulation`](#rule-influences-kind-celldesigner-modulation) | `influences:kind` | CellDesigner | all | A bare modulation arc (the generic MODULATION arc, not one of the signed/typed subtypes) contributes an unknown-sign `modulation` kind. |
+| [`influences:kind:celldesigner:negative_influence`](#rule-influences-kind-celldesigner-negative_influence) | `influences:kind` | CellDesigner | all | A negative influence arc contributes a `negative` kind. |
+| [`influences:kind:celldesigner:physical_stimulation`](#rule-influences-kind-celldesigner-physical_stimulation) | `influences:kind` | CellDesigner | all | A physical stimulation arc contributes a `positive` kind. |
+| [`influences:kind:celldesigner:positive_influence`](#rule-influences-kind-celldesigner-positive_influence) | `influences:kind` | CellDesigner | all | A positive influence arc contributes a `positive` kind. |
+| [`influences:kind:celldesigner:triggering`](#rule-influences-kind-celldesigner-triggering) | `influences:kind` | CellDesigner | all | A triggering arc contributes a `triggering` kind (kept on the direct edge; it degrades to `positive` when composed through a reaction). |
+| [`influences:kind:celldesigner:unknown_catalysis`](#rule-influences-kind-celldesigner-unknown_catalysis) | `influences:kind` | CellDesigner | all | An unknown catalysis arc contributes an `unknown_positive` kind. |
+| [`influences:kind:celldesigner:unknown_inhibition`](#rule-influences-kind-celldesigner-unknown_inhibition) | `influences:kind` | CellDesigner | all | An unknown inhibition arc contributes an `unknown_negative` kind. |
+| [`influences:kind:celldesigner:unknown_modulation`](#rule-influences-kind-celldesigner-unknown_modulation) | `influences:kind` | CellDesigner | all | A bare unknown modulation arc (not one of the unknown subtypes) contributes an `unknown_modulation` kind. |
+| [`influences:kind:celldesigner:unknown_negative_influence`](#rule-influences-kind-celldesigner-unknown_negative_influence) | `influences:kind` | CellDesigner | all | An unknown negative influence arc contributes an `unknown_negative` kind. |
+| [`influences:kind:celldesigner:unknown_physical_stimulation`](#rule-influences-kind-celldesigner-unknown_physical_stimulation) | `influences:kind` | CellDesigner | all | An unknown physical stimulation arc contributes an `unknown_positive` kind. |
+| [`influences:kind:celldesigner:unknown_positive_influence`](#rule-influences-kind-celldesigner-unknown_positive_influence) | `influences:kind` | CellDesigner | all | An unknown positive influence arc contributes an `unknown_positive` kind. |
+| [`influences:kind:celldesigner:unknown_triggering`](#rule-influences-kind-celldesigner-unknown_triggering) | `influences:kind` | CellDesigner | all | An unknown triggering arc contributes an `unknown_triggering` kind (kept on the direct edge; it degrades to `unknown_positive` when composed through a reaction). |
+| [`influences:kind:sbgn_pd:inhibition`](#rule-influences-kind-sbgn_pd-inhibition) | `influences:kind` | SBGN PD | all | An SBGN-PD inhibition contributes a `negative` kind. |
+| [`influences:kind:sbgn_pd:modulation`](#rule-influences-kind-sbgn_pd-modulation) | `influences:kind` | SBGN PD | all | A bare modulation (neither stimulation nor inhibition) contributes an unknown-sign `modulation` kind. |
+| [`influences:kind:sbgn_pd:necessary_stimulation`](#rule-influences-kind-sbgn_pd-necessary_stimulation) | `influences:kind` | SBGN PD | all | An SBGN-PD necessary stimulation contributes a `triggering` kind. |
+| [`influences:kind:sbgn_pd:stimulation`](#rule-influences-kind-sbgn_pd-stimulation) | `influences:kind` | SBGN PD | all | A stimulation (catalysis included) that is not a necessary stimulation contributes a `positive` kind. |
+| [`influences:output:modulation`](#rule-influences-output-modulation) | `influences:output` |  | all | A `modulation` influence emits a `modulates` edge (Modulation). |
+| [`influences:output:negative`](#rule-influences-output-negative) | `influences:output` |  | all | A `negative` influence emits a `negativelyInfluences` edge (NegativeInfluence). |
+| [`influences:output:positive`](#rule-influences-output-positive) | `influences:output` |  | all | A `positive` influence emits a `positivelyInfluences` edge (PositiveInfluence). |
+| [`influences:output:triggering`](#rule-influences-output-triggering) | `influences:output` |  | all | A `triggering` influence emits a `triggers` edge (Triggering). |
+| [`influences:output:unknown_modulation`](#rule-influences-output-unknown_modulation) | `influences:output` |  | all | An `unknown_modulation` influence emits an `unknownModulates` edge (UnknownModulation). |
+| [`influences:output:unknown_negative`](#rule-influences-output-unknown_negative) | `influences:output` |  | all | An `unknown_negative` influence emits an `unknownNegativelyInfluences` edge (UnknownNegativeInfluence). |
+| [`influences:output:unknown_positive`](#rule-influences-output-unknown_positive) | `influences:output` |  | all | An `unknown_positive` influence emits an `unknownPositivelyInfluences` edge (UnknownPositiveInfluence). |
+| [`influences:output:unknown_triggering`](#rule-influences-output-unknown_triggering) | `influences:output` |  | all | An `unknown_triggering` influence emits an `unknownTriggers` edge (UnknownTriggering). |
 | [`keep_reactions:activity:from_species`](#rule-keep_reactions-activity-from_species) | `keep_reactions:activity` |  | `keep-reactions` | Every species is an activity candidate, for the sole reason that it is a species (reason `isSpecies`). |
 | [`keep_reactions:influences:reactant_to_product`](#rule-keep_reactions-influences-reactant_to_product) | `keep_reactions:influences` |  | `keep-reactions` | Each reactant of a reaction positively influences each product of that reaction. |
-| [`modulation_kind:celldesigner:catalysis`](#rule-modulation_kind-celldesigner-catalysis) | `modulation_kind` | CellDesigner | all | A catalysis arc contributes a `positive` kind. |
-| [`modulation_kind:celldesigner:inhibition`](#rule-modulation_kind-celldesigner-inhibition) | `modulation_kind` | CellDesigner | all | An inhibition arc contributes a `negative` kind. |
-| [`modulation_kind:celldesigner:modulation`](#rule-modulation_kind-celldesigner-modulation) | `modulation_kind` | CellDesigner | all | A bare modulation arc (the generic MODULATION arc, not one of the signed/typed subtypes) contributes an unknown-sign `modulation` kind. |
-| [`modulation_kind:celldesigner:negative_influence`](#rule-modulation_kind-celldesigner-negative_influence) | `modulation_kind` | CellDesigner | all | A negative influence arc contributes a `negative` kind. |
-| [`modulation_kind:celldesigner:physical_stimulation`](#rule-modulation_kind-celldesigner-physical_stimulation) | `modulation_kind` | CellDesigner | all | A physical stimulation arc contributes a `positive` kind. |
-| [`modulation_kind:celldesigner:positive_influence`](#rule-modulation_kind-celldesigner-positive_influence) | `modulation_kind` | CellDesigner | all | A positive influence arc contributes a `positive` kind. |
-| [`modulation_kind:celldesigner:triggering`](#rule-modulation_kind-celldesigner-triggering) | `modulation_kind` | CellDesigner | all | A triggering arc contributes a `triggering` kind (kept on the direct edge; it degrades to `positive` when composed through a reaction). |
-| [`modulation_kind:celldesigner:unknown_catalysis`](#rule-modulation_kind-celldesigner-unknown_catalysis) | `modulation_kind` | CellDesigner | all | An unknown catalysis arc contributes an `unknown_positive` kind. |
-| [`modulation_kind:celldesigner:unknown_inhibition`](#rule-modulation_kind-celldesigner-unknown_inhibition) | `modulation_kind` | CellDesigner | all | An unknown inhibition arc contributes an `unknown_negative` kind. |
-| [`modulation_kind:celldesigner:unknown_modulation`](#rule-modulation_kind-celldesigner-unknown_modulation) | `modulation_kind` | CellDesigner | all | A bare unknown modulation arc (not one of the unknown subtypes) contributes an `unknown_modulation` kind. |
-| [`modulation_kind:celldesigner:unknown_negative_influence`](#rule-modulation_kind-celldesigner-unknown_negative_influence) | `modulation_kind` | CellDesigner | all | An unknown negative influence arc contributes an `unknown_negative` kind. |
-| [`modulation_kind:celldesigner:unknown_physical_stimulation`](#rule-modulation_kind-celldesigner-unknown_physical_stimulation) | `modulation_kind` | CellDesigner | all | An unknown physical stimulation arc contributes an `unknown_positive` kind. |
-| [`modulation_kind:celldesigner:unknown_positive_influence`](#rule-modulation_kind-celldesigner-unknown_positive_influence) | `modulation_kind` | CellDesigner | all | An unknown positive influence arc contributes an `unknown_positive` kind. |
-| [`modulation_kind:celldesigner:unknown_triggering`](#rule-modulation_kind-celldesigner-unknown_triggering) | `modulation_kind` | CellDesigner | all | An unknown triggering arc contributes an `unknown_triggering` kind (kept on the direct edge; it degrades to `unknown_positive` when composed through a reaction). |
-| [`modulation_kind:sbgn_pd:inhibition`](#rule-modulation_kind-sbgn_pd-inhibition) | `modulation_kind` | SBGN PD | all | An SBGN-PD inhibition contributes a `negative` kind. |
-| [`modulation_kind:sbgn_pd:modulation`](#rule-modulation_kind-sbgn_pd-modulation) | `modulation_kind` | SBGN PD | all | A bare modulation (neither stimulation nor inhibition) contributes an unknown-sign `modulation` kind. |
-| [`modulation_kind:sbgn_pd:necessary_stimulation`](#rule-modulation_kind-sbgn_pd-necessary_stimulation) | `modulation_kind` | SBGN PD | all | An SBGN-PD necessary stimulation contributes a `triggering` kind. |
-| [`modulation_kind:sbgn_pd:stimulation`](#rule-modulation_kind-sbgn_pd-stimulation) | `modulation_kind` | SBGN PD | all | A stimulation (catalysis included) that is not a necessary stimulation contributes a `positive` kind. |
 | [`paths:chaining:celldesigner:transitive_through_reaction`](#rule-paths-chaining-celldesigner-transitive_through_reaction) | `paths:chaining` | CellDesigner | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | If there is a path from a species to an intermediate species, and the intermediate species is referred to by a reactant of a reaction whose product refers to another species, then there is a path from the first species to the second. |
 | [`paths:chaining:sbgn_pd:transitive_through_process`](#rule-paths-chaining-sbgn_pd-transitive_through_process) | `paths:chaining` | SBGN PD | `normal`, `normal-no-complex`, `keep-species`, `keep-species-no-complex` | Extends a path through a process reactant->product hop, carrying the kind via `composesTo` (triggering degrades to positivelyInfluences). |
+| [`paths:complex_traversal:from_subunits`](#rule-paths-complex_traversal-from_subunits) | `paths:complex_traversal` |  | `normal-no-complex`, `keep-species-no-complex` | If an influence of a given kind propagates from a complex to a target, then it also propagates from each subunit of the complex to the target. |
+| [`paths:complex_traversal:into_subunits`](#rule-paths-complex_traversal-into_subunits) | `paths:complex_traversal` |  | `normal-no-complex`, `keep-species-no-complex` | If an influence of a given kind propagates from a source to a complex, then it also propagates from the source to each subunit of the complex. |
 | [`paths:core:celldesigner:catalyzer_to_product`](#rule-paths-core-celldesigner-catalyzer_to_product) | `paths:core` | CellDesigner | all | If a species is referred to by a catalyzer of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second. |
 | [`paths:core:celldesigner:inhibitor_to_product`](#rule-paths-core-celldesigner-inhibitor_to_product) | `paths:core` | CellDesigner | all | If a species is referred to by an inhibitor of a reaction and another species is referred to by a product of that reaction, then there is a negative path from the first to the second. |
 | [`paths:core:celldesigner:is_directly_transformed_to`](#rule-paths-core-celldesigner-is_directly_transformed_to) | `paths:core` | CellDesigner | all | The single reactant->product hop in the production graph: the upstream species is referred to by a reactant and the downstream species by a product of the same reaction. |
-| [`paths:core:celldesigner:modulation_arc_influence`](#rule-paths-core-celldesigner-modulation_arc_influence) | `paths:core` | CellDesigner | all | A modulation arc influences its target with the arc's kind (`hasModulationKind`, from the `modulation_kind` group). |
+| [`paths:core:celldesigner:modulation_arc_influence`](#rule-paths-core-celldesigner-modulation_arc_influence) | `paths:core` | CellDesigner | all | A modulation arc influences its target with the arc's kind (`hasInfluenceKind`, from the `influences:kind` group). |
 | [`paths:core:celldesigner:modulator_to_product`](#rule-paths-core-celldesigner-modulator_to_product) | `paths:core` | CellDesigner | all | If a species is referred to by a *bare* modulator of a reaction (a generic MODULATION modifier — not a physical stimulator, inhibitor or trigger; catalyzers are physical stimulators) and another species is referred to by a product of that reaction, then there is a modulation path from the first to the second. |
 | [`paths:core:celldesigner:physical_stimulator_to_product`](#rule-paths-core-celldesigner-physical_stimulator_to_product) | `paths:core` | CellDesigner | all | If a species is referred to by a physical stimulator of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second. |
 | [`paths:core:celldesigner:trigger_to_product`](#rule-paths-core-celldesigner-trigger_to_product) | `paths:core` | CellDesigner | all | If a species is referred to by a trigger of a reaction and another species is referred to by a product of that reaction, then there is a triggering path from the first to the second (a trigger→product edge is direct, so it keeps the `triggering` kind). |
@@ -1283,9 +1275,7 @@ All rules in alphabetical order (identifiers are group- and variant-prefixed).
 | [`paths:core:sbgn_pd:is_directly_transformed_to`](#rule-paths-core-sbgn_pd-is_directly_transformed_to) | `paths:core` | SBGN PD | all | The single reactant->product hop in the production graph: the upstream entity pool is an element of a reactant and the downstream pool an element of a product of the same process. |
 | [`paths:core:sbgn_pd:modulation_to_phenotype`](#rule-paths-core-sbgn_pd-modulation_to_phenotype) | `paths:core` | SBGN PD | all | A modulation arc whose target is a phenotype influences the phenotype itself (a phenotype process has no products; it is the activity). |
 | [`paths:core:sbgn_pd:modulation_to_product`](#rule-paths-core-sbgn_pd-modulation_to_product) | `paths:core` | SBGN PD | all | A modulation arc's entity-pool source influences each product of its target process, carrying the arc's kind. |
-| [`paths_complex_traversal:from_subunits`](#rule-paths_complex_traversal-from_subunits) | `paths_complex_traversal` |  | `normal-no-complex`, `keep-species-no-complex` | If an influence of a given kind propagates from a complex to a target, then it also propagates from each subunit of the complex to the target. |
-| [`paths_complex_traversal:into_subunits`](#rule-paths_complex_traversal-into_subunits) | `paths_complex_traversal` |  | `normal-no-complex`, `keep-species-no-complex` | If an influence of a given kind propagates from a source to a complex, then it also propagates from the source to each subunit of the complex. |
-| [`preparation:complex:celldesigner:carrier`](#rule-preparation-complex-celldesigner-carrier) | `preparation:complex` | CellDesigner | `normal`, `keep-species`, `keep-reactions` | Each species is its own activity carrier (no rerouting; a subunit endpoint is rerouted to its top-level complex by the `top_level` key, not by the carrier). |
+| [`preparation:complex:celldesigner:carrier`](#rule-preparation-complex-celldesigner-carrier) | `preparation:complex` | CellDesigner | `normal`, `keep-species`, `keep-reactions` | Each species is its own activity carrier (no rerouting; a subunit endpoint is rerouted to its top-level complex by the `topology:top_level` key, not by the carrier). |
 | [`preparation:complex:key`](#rule-preparation-complex-key) | `preparation:complex` |  | `normal`, `keep-species`, `keep-reactions` | A species with activity is keyed by the `keptSpeciesKey` of its top-level entity (itself when top-level; its outermost complex when a subunit). |
 | [`preparation:complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-complex-sbgn_pd-carrier_entity_pool) | `preparation:complex` | SBGN PD | `normal`, `keep-species`, `keep-reactions` | SBGN-PD: each entity pool is its own activity carrier. |
 | [`preparation:complex:sbgn_pd:carrier_phenotype`](#rule-preparation-complex-sbgn_pd-carrier_phenotype) | `preparation:complex` | SBGN PD | `normal`, `keep-species`, `keep-reactions` | SBGN-PD: each phenotype process is its own activity carrier (phenotypes are activities, not entity pools). |
@@ -1295,14 +1285,14 @@ All rules in alphabetical order (identifiers are group- and variant-prefixed).
 | [`preparation:no_complex:key_top_level`](#rule-preparation-no_complex-key_top_level) | `preparation:no_complex` |  | `normal-no-complex`, `keep-species-no-complex` | A non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`. |
 | [`preparation:no_complex:sbgn_pd:carrier_entity_pool`](#rule-preparation-no_complex-sbgn_pd-carrier_entity_pool) | `preparation:no_complex` | SBGN PD | `normal-no-complex`, `keep-species-no-complex` | SBGN-PD: each entity pool is its own activity carrier. |
 | [`preparation:no_complex:sbgn_pd:carrier_phenotype`](#rule-preparation-no_complex-sbgn_pd-carrier_phenotype) | `preparation:no_complex` | SBGN PD | `normal-no-complex`, `keep-species-no-complex` | SBGN-PD: each phenotype process is its own activity carrier. |
-| [`preparation:no_complex:sbgn_pd:carrier_subunit`](#rule-preparation-no_complex-sbgn_pd-carrier_subunit) | `preparation:no_complex` | SBGN PD | `normal-no-complex`, `keep-species-no-complex` | SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths_complex_traversal`). |
+| [`preparation:no_complex:sbgn_pd:carrier_subunit`](#rule-preparation-no_complex-sbgn_pd-carrier_subunit) | `preparation:no_complex` | SBGN PD | `normal-no-complex`, `keep-species-no-complex` | SBGN-PD: each subunit is its own activity carrier, so a promoted subunit can be an influence endpoint (paths reach it via `paths:complex_traversal`). |
 | [`preparation:no_complex:subunit_of_deleted_direct`](#rule-preparation-no_complex-subunit_of_deleted_direct) | `preparation:no_complex` |  | `normal-no-complex`, `keep-species-no-complex` | A direct subunit of a deleted complex is itself subunit-of-deleted. |
 | [`preparation:no_complex:subunit_of_deleted_transitive`](#rule-preparation-no_complex-subunit_of_deleted_transitive) | `preparation:no_complex` |  | `normal-no-complex`, `keep-species-no-complex` | Subunit-of-deleted is transitive through nested complexes. |
-| [`top_level:celldesigner:self`](#rule-top_level-celldesigner-self) | `top_level` | CellDesigner | `normal`, `keep-species`, `keep-reactions` | CellDesigner: a species that is not a subunit of any complex is its own top-level entity. |
-| [`top_level:recursive`](#rule-top_level-recursive) | `top_level` |  | `normal`, `keep-species`, `keep-reactions` | A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex. |
-| [`top_level:sbgn_pd:phenotype_self`](#rule-top_level-sbgn_pd-phenotype_self) | `top_level` | SBGN PD | `normal`, `keep-species`, `keep-reactions` | SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. |
-| [`top_level:sbgn_pd:self`](#rule-top_level-sbgn_pd-self) | `top_level` | SBGN PD | `normal`, `keep-species`, `keep-reactions` | SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity. |
-| [`topology:has_active_descendant_direct`](#rule-topology-has_active_descendant_direct) | `topology` |  | all | A complex has an active descendant if any direct subunit has activity. |
-| [`topology:has_active_descendant_transitive`](#rule-topology-has_active_descendant_transitive) | `topology` |  | all | The `hasActiveDescendantSubunit` relation is transitive through complex containment. |
-| [`topology:is_subunit`](#rule-topology-is_subunit) | `topology` |  | all | A species is a subunit if it appears on the right side of any `hasSubunit` relation. |
+| [`topology:core:has_active_descendant_direct`](#rule-topology-core-has_active_descendant_direct) | `topology:core` |  | all | A complex has an active descendant if any direct subunit has activity. |
+| [`topology:core:has_active_descendant_transitive`](#rule-topology-core-has_active_descendant_transitive) | `topology:core` |  | all | The `hasActiveDescendantSubunit` relation is transitive through complex containment. |
+| [`topology:core:is_subunit`](#rule-topology-core-is_subunit) | `topology:core` |  | all | A species is a subunit if it appears on the right side of any `hasSubunit` relation. |
+| [`topology:top_level:celldesigner:self`](#rule-topology-top_level-celldesigner-self) | `topology:top_level` | CellDesigner | `normal`, `keep-species`, `keep-reactions` | CellDesigner: a species that is not a subunit of any complex is its own top-level entity. |
+| [`topology:top_level:recursive`](#rule-topology-top_level-recursive) | `topology:top_level` |  | `normal`, `keep-species`, `keep-reactions` | A subunit resolves to the same top-level entity as its parent complex, recursively through nested complexes -- so a subunit at any depth resolves to its outermost complex. |
+| [`topology:top_level:sbgn_pd:phenotype_self`](#rule-topology-top_level-sbgn_pd-phenotype_self) | `topology:top_level` | SBGN PD | `normal`, `keep-species`, `keep-reactions` | SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. |
+| [`topology:top_level:sbgn_pd:self`](#rule-topology-top_level-sbgn_pd-self) | `topology:top_level` | SBGN PD | `normal`, `keep-species`, `keep-reactions` | SBGN-PD: an entity pool that is not a subunit of any complex is its own top-level entity. |
 

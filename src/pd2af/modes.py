@@ -19,7 +19,7 @@ object::
     MY_MODE = pd2af.TransformationMode(
         name="my-mode",
         docs="what this mode does, in one clause",
-        rule_group_references=("modulation_kind", "influence_output"),
+        rule_group_references=("influences:kind", "influences:output"),
         rule_group_definitions=MY_RULE_GROUPS,
     )
 
@@ -94,37 +94,29 @@ class TransformationMode:
         return ("dot",) if "dot" in available_layout_modes else ()
 
 
-_CORE = (
-    "activity:core",
-    "topology",
-    "modulation_kind",
-    "paths:core",
-    "influences_derivation",
-    "influence_output",
-    "gates",
-)
-_ACTIVITY_INFERENCE = (
-    "activity:phenotype",
-    "activity:active_marker",
-    "activity:modulation_source",
-    "activity:gate_input",
-)
-_INFLUENCE_INFERENCE = ("paths:chaining", "influences_consumption")
-_COMPLEX = ("top_level", "preparation:complex")
-_NO_COMPLEX = ("preparation:no_complex", "paths_complex_traversal")
-_KEEP_REACTIONS_INFERENCE = ("keep_reactions:activity", "keep_reactions:influences")
-
-
 _BUILTIN_TRANSFORMATION_MODES = (
     TransformationMode(
         name="normal",
         docs=(
             "merge forms of the same base species or entity pool into a single activity"
         ),
-        rule_group_references=_CORE
-        + _ACTIVITY_INFERENCE
-        + _INFLUENCE_INFERENCE
-        + _COMPLEX,
+        rule_group_references=(
+            "activity:core",
+            "activity:phenotype",
+            "activity:active_marker",
+            "activity:modulation_source",
+            "activity:gate_input",
+            "topology:core",
+            "topology:top_level",
+            "preparation:complex",
+            "paths:core",
+            "paths:chaining",
+            "influences:kind",
+            "influences:core",
+            "influences:consumption",
+            "influences:output",
+            "gates:core",
+        ),
         merges_proteoforms=True,
     ),
     TransformationMode(
@@ -134,19 +126,45 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "single activity; additionally, replace complexes with their "
             "active subunits if any, promoting them to top-level activities"
         ),
-        rule_group_references=_CORE
-        + _ACTIVITY_INFERENCE
-        + _INFLUENCE_INFERENCE
-        + _NO_COMPLEX,
+        rule_group_references=(
+            "activity:core",
+            "activity:phenotype",
+            "activity:active_marker",
+            "activity:modulation_source",
+            "activity:gate_input",
+            "topology:core",
+            "preparation:no_complex",
+            "paths:core",
+            "paths:chaining",
+            "paths:complex_traversal",
+            "influences:kind",
+            "influences:core",
+            "influences:consumption",
+            "influences:output",
+            "gates:core",
+        ),
         merges_proteoforms=True,
     ),
     TransformationMode(
         name="keep-species",
         docs="create one activity per distinct active species or entity pool",
-        rule_group_references=_CORE
-        + _ACTIVITY_INFERENCE
-        + _INFLUENCE_INFERENCE
-        + _COMPLEX,
+        rule_group_references=(
+            "activity:core",
+            "activity:phenotype",
+            "activity:active_marker",
+            "activity:modulation_source",
+            "activity:gate_input",
+            "topology:core",
+            "topology:top_level",
+            "preparation:complex",
+            "paths:core",
+            "paths:chaining",
+            "influences:kind",
+            "influences:core",
+            "influences:consumption",
+            "influences:output",
+            "gates:core",
+        ),
     ),
     TransformationMode(
         name="keep-species-no-complex",
@@ -155,10 +173,23 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "additionally, replace complexes with their active subunits if "
             "any, promoting them to top-level activities"
         ),
-        rule_group_references=_CORE
-        + _ACTIVITY_INFERENCE
-        + _INFLUENCE_INFERENCE
-        + _NO_COMPLEX,
+        rule_group_references=(
+            "activity:core",
+            "activity:phenotype",
+            "activity:active_marker",
+            "activity:modulation_source",
+            "activity:gate_input",
+            "topology:core",
+            "preparation:no_complex",
+            "paths:core",
+            "paths:chaining",
+            "paths:complex_traversal",
+            "influences:kind",
+            "influences:core",
+            "influences:consumption",
+            "influences:output",
+            "gates:core",
+        ),
     ),
     TransformationMode(
         name="keep-reactions",
@@ -167,7 +198,19 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "positive influence from each of its reactants to each of its "
             "products"
         ),
-        rule_group_references=_CORE + _COMPLEX + _KEEP_REACTIONS_INFERENCE,
+        rule_group_references=(
+            "activity:core",
+            "topology:core",
+            "topology:top_level",
+            "preparation:complex",
+            "paths:core",
+            "influences:kind",
+            "influences:core",
+            "influences:output",
+            "gates:core",
+            "keep_reactions:activity",
+            "keep_reactions:influences",
+        ),
         compatible_languages=frozenset({pd2af.languages.CELLDESIGNER}),
     ),
 )

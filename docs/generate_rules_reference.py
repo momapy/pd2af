@@ -100,8 +100,9 @@ def write_intro(page):
         "rule is language-agnostic (a *base* rule) or specific to an input "
         "language (a *variant* rule, for CellDesigner or SBGN PD). Rules are "
         "organized in groups, each representing a coherent functional unit — "
-        "the whole a `--exclude-group` can drop. Groups sharing an id prefix "
-        "(`activity:*`, `paths:*`) address one coarse concern.\n\n"
+        "the whole a `--exclude-group` can drop. Every group id reads "
+        "`<family>:<member>`, and the family is the coarse concern the "
+        "group addresses.\n\n"
     )
     page.write(
         "This page is generated from the live registry in `pd2af.rules`. It "

@@ -488,7 +488,7 @@ def _add_transform_parser(subparsers):
         help=(
             "drop a single rule by identifier (the fine scalpel for the "
             "whole-with-scalpel table groups, e.g. "
-            "`modulation_kind:celldesigner:catalysis`). Repeatable. Prefer "
+            "`influences:kind:celldesigner:catalysis`). Repeatable. Prefer "
             "`--exclude-group` for coherent behaviors."
         ),
     )

@@ -172,8 +172,8 @@ class TestKeepReactionsMode:
     def test_keeps_direct_modulation_influences(self):
         program = pd2af.rules.build_program("keep-reactions")
         # the modulation-arc rule and its kind table, plus the modifier->product
-        # rules, all come from `paths:core`/`modulation_kind`.
-        assert "hasModulationKind(MODULATION, triggers) :- triggering(MODULATION)." in program
+        # rules, all come from `paths:core`/`influences:kind`.
+        assert "hasInfluenceKind(MODULATION, triggers) :- triggering(MODULATION)." in program
         assert "hasSource(MODULATION, SOURCE_SPECIES)" in program
         assert "catalyzer(MODIFIER)" in program
 
@@ -187,7 +187,7 @@ class TestKeepReactionsMode:
         # the consumption/sparing rules are the only ones that make a reaction's
         # reactant the *target* of a modifier's influence.
         assert "hasReferredElement(REACTANT, TARGET_SPECIES)" not in program
-        assert "influences_consumption" not in _group_ids("keep-reactions")
+        assert "influences:consumption" not in _group_ids("keep-reactions")
 
     def test_keys_by_top_level_and_keeps_complexes(self):
         program = pd2af.rules.build_program("keep-reactions")
@@ -217,15 +217,15 @@ class TestInfluencesConsumptionGroup:
     def test_path_inference_modes_include_it(self, mode):
         program = pd2af.rules.build_program(mode, "celldesigner")
         assert "hasReferredElement(REACTANT, TARGET_SPECIES)" in program
-        assert "influences_consumption" in _group_ids(mode)
+        assert "influences:consumption" in _group_ids(mode)
 
     def test_keep_reactions_omits_it(self):
-        assert "influences_consumption" not in _group_ids("keep-reactions")
+        assert "influences:consumption" not in _group_ids("keep-reactions")
 
     def test_excluding_it_keeps_the_rest_of_the_derivation(self):
         full = pd2af.rules.build_program("keep-species", "celldesigner")
         pruned = pd2af.rules.build_program(
-            "keep-species", "celldesigner", exclude_groups=("influences_consumption",)
+            "keep-species", "celldesigner", exclude_groups=("influences:consumption",)
         )
         assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
         assert len(pruned.splitlines()) < len(full.splitlines())
@@ -311,14 +311,14 @@ class TestExcludeGroups:
 
     def test_disable_rule_drops_one_table_entry(self):
         catalysis = (
-            "hasModulationKind(MODULATION, positivelyInfluences) :- "
+            "hasInfluenceKind(MODULATION, positivelyInfluences) :- "
             "catalysis(MODULATION)."
         )
         full = pd2af.rules.build_program("keep-species", "celldesigner")
         pruned = pd2af.rules.build_program(
             "keep-species",
             "celldesigner",
-            exclude_rules=("modulation_kind:celldesigner:catalysis",),
+            exclude_rules=("influences:kind:celldesigner:catalysis",),
         )
         assert catalysis in full
         assert catalysis not in pruned
@@ -388,7 +388,7 @@ class TestModeExtensionPoint:
     ):
         contributed_group = aspcompose.RuleGroup(
             identifier="contributed:emit",
-            depends_on=frozenset({"influence_output"}),
+            depends_on=frozenset({"influences:output"}),
             docs="A throwaway group contributed by a test-only mode.",
             rules=(
                 aspcompose.Rule(
@@ -401,7 +401,7 @@ class TestModeExtensionPoint:
         contributed_mode = pd2af.modes.TransformationMode(
             name="contributed",
             docs="a test-only mode contributed through the entry point",
-            rule_group_references=("influence_output",),
+            rule_group_references=("influences:output",),
             rule_group_definitions=(contributed_group,),
         )
 
@@ -433,7 +433,7 @@ class TestModeExtensionPoint:
         contributed_mode = pd2af.modes.TransformationMode(
             name="dangling",
             docs="a test-only mode naming a group nothing registers",
-            rule_group_references=("influence_output", "no_such_group"),
+            rule_group_references=("influences:output", "no_such_group"),
         )
 
         class _FakeEntryPoint:
