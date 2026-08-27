@@ -1,0 +1,90 @@
+"""The parts of the model pass that are the same for either language.
+
+:mod:`pd2af.celldesigner.building_model` and :mod:`pd2af.sbgn.building_model`
+build their own compartments, species and influences, but the logical-operator
+pass is shared: the CellDesigner builder makes ``BooleanLogicGate`` objects and
+the SBGN-AF builder ``LogicalOperator`` objects, and otherwise the two do the
+same thing -- read the operator atoms, resolve each operator's inputs through
+``key_to_activity``, and add to the model those operators that actually source
+an influence. Each builder passes in the classes it wants and the model
+collection to add to.
+"""
+
+import pd2af.predicates
+from pd2af.utils import add_model_element_if_new, register_or_reuse
+
+
+def make_and_add_operators(
+    context, operator_type_to_class, operator_input_class, model_operators
+):
+    """Build an operator for every authored logical operator and add those that
+    actually source an influence to ``model_operators``.
+
+    Every operator is built into ``context.key_to_operator``, so the influence
+    pass can resolve an operator source. Only the operators that appear as an
+    influence source are added to the model and recorded in
+    ``context.operator_emissions`` for the layout pass: an operator whose target
+    is not an activity yields no influence and would otherwise be a dangling
+    node. The CellDesigner writer emits a gate only through its modulation, so
+    dropping it also keeps the output round-trip-safe.
+    """
+    inputs_by_operator = {}
+    for input_atom in context.operator_input_atoms:
+        inputs_by_operator.setdefault(input_atom.operator, []).append(
+            input_atom.input
+        )
+    used_operator_keys = {
+        atom.source
+        for atom in context.influence_atoms
+        if isinstance(atom.source, pd2af.predicates.logicalOperatorKey)
+    }
+    seen_operator_identities = set()
+    for atom in context.operator_atoms:
+        operator = _get_or_make_operator(
+            context,
+            atom.type_,
+            inputs_by_operator.get(atom.key, ()),
+            operator_type_to_class,
+            operator_input_class,
+        )
+        if operator is None:
+            continue
+        context.key_to_operator[atom.key] = operator
+        if atom.key not in used_operator_keys:
+            continue
+        if add_model_element_if_new(
+            model_operators, operator, seen_operator_identities
+        ):
+            input_operator = context.clingo_id_to_model_element[atom.key.gate]
+            context.operator_emissions.append((operator, input_operator))
+
+
+def _get_or_make_operator(
+    context,
+    operator_type,
+    input_keys,
+    operator_type_to_class,
+    operator_input_class,
+):
+    """Build (and intern) an operator of ``operator_type`` whose inputs resolve
+    through ``context.key_to_activity``. Returns ``None`` for an unknown token.
+
+    Each operator input and the operator itself are interned by content
+    (``register_or_reuse``), so content-equal operators collapse to one
+    canonical instance -- preserving the dedup-and-remap invariant for the
+    influences that reference them.
+    """
+    operator_class = operator_type_to_class.get(operator_type)
+    if operator_class is None:
+        return None
+    operator_inputs = []
+    for input_key in input_keys:
+        activity = context.key_to_activity.get(input_key)
+        if activity is None:
+            continue
+        operator_input = register_or_reuse(
+            operator_input_class(referred_element=activity), context.cache
+        )
+        operator_inputs.append(operator_input)
+    operator = operator_class(inputs=frozenset(operator_inputs))
+    return register_or_reuse(operator, context.cache)

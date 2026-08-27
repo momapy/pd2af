@@ -46,7 +46,7 @@ class BuilderContext:
     layout_model_mapping: object = None
 
     # --- Pass-1 -> Pass-2 handoff ---
-    species_emissions: list = dataclasses.field(default_factory=list)
+    activity_emissions: list = dataclasses.field(default_factory=list)
     input_model_element_to_canonical_model_element: dict = dataclasses.field(
         default_factory=dict
     )
@@ -59,15 +59,14 @@ class BuilderContext:
     subunit_to_top_level: dict = None
     activity_atoms_by_key_class: dict = dataclasses.field(default_factory=dict)
     influence_atoms: list = dataclasses.field(default_factory=list)
-    key_to_species: dict = dataclasses.field(default_factory=dict)
+    key_to_activity: dict = dataclasses.field(default_factory=dict)
 
-    # --- Logical-operator scratch (shared collection; per-language outputs) ---
+    # --- Logical-operator scratch ---
+    # The activity / operator key maps and emission lists hold the CellDesigner
+    # species and gates or the SBGN-AF activities and logical operators,
+    # depending on the language being built.
     operator_atoms: list = dataclasses.field(default_factory=list)
     operator_input_atoms: list = dataclasses.field(default_factory=list)
-    # CellDesigner: operator key -> BooleanLogicGate; emitted (gate, input_gate).
-    key_to_gate: dict = dataclasses.field(default_factory=dict)
-    gate_emissions: list = dataclasses.field(default_factory=list)
-    # SBGN-AF: operator key -> LogicalOperator; emitted (operator, input_operator).
     key_to_operator: dict = dataclasses.field(default_factory=dict)
     operator_emissions: list = dataclasses.field(default_factory=list)
 
@@ -78,8 +77,6 @@ class BuilderContext:
 
     # --- SBGN-AF pass scratch ---
     activity_atoms: list = dataclasses.field(default_factory=list)
-    key_to_activity: dict = dataclasses.field(default_factory=dict)
-    activity_emissions: list = dataclasses.field(default_factory=list)
     input_compartment_to_af_compartment: dict = dataclasses.field(
         default_factory=dict
     )
@@ -156,7 +153,7 @@ def build_map(
 
     return TransformerResult(
         obj=new_map,
-        provenance=make_provenance_from_context(context, language),
+        provenance=make_provenance_from_context(context),
     )
 
 
@@ -213,7 +210,7 @@ def record_provenance_for_subunit_trees(
         )
 
 
-def make_provenance_from_context(context, language):
+def make_provenance_from_context(context):
     """Build the output-element -> input-elements provenance mapping.
 
     Provenance answers "where did this output come from": it maps each output
@@ -241,13 +238,6 @@ def make_provenance_from_context(context, language):
     each output element to the ``frozenset`` of input elements it derives from,
     and whose ``.inverse`` (keyed by ``id(input_element)``) recovers the output.
     """
-    if language == pd2af.languages.SBGN_PD:
-        key_to_activity = context.key_to_activity
-        key_to_operator = context.key_to_operator
-    else:
-        key_to_activity = context.key_to_species
-        key_to_operator = context.key_to_gate
-
     output_element_to_input_elements = {}
 
     def record_pair(output_element, input_element):
@@ -267,9 +257,9 @@ def make_provenance_from_context(context, language):
             record_pair,
         )
 
-    for activity_key, output_element in key_to_activity.items():
+    for activity_key, output_element in context.key_to_activity.items():
         record_provenance(activity_key.species, output_element)
-    for operator_key, output_element in key_to_operator.items():
+    for operator_key, output_element in context.key_to_operator.items():
         record_provenance(operator_key.gate, output_element)
     for input_compartment, output_compartment in context.compartment_emissions:
         record_pair(output_compartment, input_compartment)

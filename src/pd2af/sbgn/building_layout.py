@@ -276,7 +276,7 @@ def _make_and_add_operator_layout(context, operator, input_operator):
         if not input_activity_layouts:
             continue
         input_layout = input_activity_layouts[0]
-        arc = _make_logic_arc(operator_layout, input_layout)
+        arc = _make_logic_arc(context, operator_layout, input_layout)
         context.layout.layout_elements.append(arc)
         logic_arcs.append(arc)
         input_layouts.append(input_layout)
@@ -354,15 +354,20 @@ def resolve_operator_arc_segments(arc, source_builder, target_builder):
     ]
 
 
-def _make_logic_arc(operator_layout, input_layout):
-    segment = _operator_connector_segment(
-        operator_layout, input_layout, is_logic_arc=True
-    )
+def _make_logic_arc(context, operator_layout, input_layout):
+    if context.layout_mode == "dot":
+        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+    else:
+        segments = (
+            _operator_connector_segment(
+                operator_layout, input_layout, is_logic_arc=True
+            ),
+        )
     return _builder(
         momapy.sbgn.af.LogicArcLayout,
         source=operator_layout,
         target=input_layout,
-        segments=(segment,),
+        segments=segments,
     )
 
 
@@ -381,18 +386,24 @@ def _make_and_add_influence_layout(context, influence):
     for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
         source_layouts, target_layouts, prefer_nearest
     ):
-        arc = _make_influence_arc(influence, source_layout, target_layout)
+        arc = _make_influence_arc(
+            context, influence, source_layout, target_layout
+        )
         context.layout.layout_elements.append(arc)
         context.layout_model_mapping.add_mapping(
             frozenset([arc, source_layout, target_layout]), influence, anchor=arc
         )
 
 
-def _make_influence_arc(influence, source_layout, target_layout):
+def _make_influence_arc(context, influence, source_layout, target_layout):
     arc_class = _INFLUENCE_CLASS_TO_LAYOUT_CLASS[type(influence)]
     # An operator-sourced influence leaves the operator's output connector; every
     # other influence runs plain border-to-border (untouched).
-    if momapy.builder.isinstance_or_builder(source_layout, _OPERATOR_LAYOUT_CLASSES):
+    if context.layout_mode == "dot":
+        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+    elif momapy.builder.isinstance_or_builder(
+        source_layout, _OPERATOR_LAYOUT_CLASSES
+    ):
         segments = (
             _operator_connector_segment(
                 source_layout, target_layout, is_logic_arc=False

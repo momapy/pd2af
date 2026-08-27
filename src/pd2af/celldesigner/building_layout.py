@@ -211,11 +211,14 @@ def make_synthetic_layout(species, index):
     return layout_class(position=position, label=label)
 
 
-def make_modulation_arc(modulation, source_layout, target_layout):
+def make_modulation_arc(context, modulation, source_layout, target_layout):
     arc_class = _MODULATION_CLASS_TO_LAYOUT_CLASS[type(modulation)]
-    segments = pd2af.utils.make_arc_segments_from_source_and_target(
-        source_layout, target_layout
-    )
+    if context.layout_mode == "dot":
+        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+    else:
+        segments = pd2af.utils.make_arc_segments_from_source_and_target(
+            source_layout, target_layout
+        )
     return arc_class(
         source=source_layout,
         target=target_layout,
@@ -238,15 +241,18 @@ def make_synthetic_gate_layout(gate, index):
     return layout_class(position=position)
 
 
-def make_logic_arc(gate_layout, input_layout):
+def make_logic_arc(context, gate_layout, input_layout):
     """Build a ``LogicArcLayout`` from a gate to one of its input species.
 
     The CellDesigner writer locates a gate's inputs by scanning for logic arcs
     whose ``source`` is the gate layout, so the arc runs gate -> input species
     (the CellDesigner convention), not input -> gate."""
-    segments = pd2af.utils.make_arc_segments_from_source_and_target(
-        gate_layout, input_layout
-    )
+    if context.layout_mode == "dot":
+        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+    else:
+        segments = pd2af.utils.make_arc_segments_from_source_and_target(
+            gate_layout, input_layout
+        )
     return momapy.celldesigner.LogicArcLayout(
         source=gate_layout,
         target=input_layout,
@@ -337,12 +343,12 @@ def make_and_add_layout(context):
     # foreground compartment layouts -- the insertion point for the overlay
     # background below.
     compartment_count = len(context.layout.layout_elements)
-    for _key_class, species, input_species in context.species_emissions:
+    for _key_class, species, input_species in context.activity_emissions:
         _make_and_add_species_layout(context, species, input_species)
     # Gates after species (their logic arcs target species layouts) and before
     # modulations (a gate-sourced modulation resolves its source through the
     # gate layout registered here).
-    for gate, input_gate in context.gate_emissions:
+    for gate, input_gate in context.operator_emissions:
         _make_and_add_gate_layout(context, gate, input_gate)
     for modulation in context.model.modulations:
         _make_and_add_modulation_layout(context, modulation)
@@ -479,7 +485,9 @@ def _make_and_add_gate_layout(context, gate, input_gate):
             )
             if not input_species_layouts:
                 continue
-            arc = make_logic_arc(gate_layout, input_species_layouts[0])
+            arc = make_logic_arc(
+                context, gate_layout, input_species_layouts[0]
+            )
             context.layout.layout_elements.append(arc)
 
 
@@ -502,7 +510,9 @@ def _make_and_add_modulation_layout(context, modulation):
     for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
         source_layouts, target_layouts, prefer_nearest
     ):
-        arc = make_modulation_arc(modulation, source_layout, target_layout)
+        arc = make_modulation_arc(
+            context, modulation, source_layout, target_layout
+        )
         context.layout.layout_elements.append(arc)
         add_modulation_mapping(
             context.layout_model_mapping,

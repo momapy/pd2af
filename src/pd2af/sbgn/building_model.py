@@ -26,6 +26,7 @@ import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
+import pd2af.building_model
 import pd2af.predicates
 import pd2af.sbgn.building_labels
 from pd2af.utils import add_model_element_if_new, register_or_reuse
@@ -98,7 +99,12 @@ def make_and_add_model(context, clingo_model):
     _build_subunit_compartment_map(context)
     _make_and_add_compartments(context)
     _make_and_add_activities(context)
-    _make_and_add_operators(context)
+    pd2af.building_model.make_and_add_operators(
+        context,
+        _OPERATOR_TYPE_TO_OPERATOR_CLASS,
+        momapy.sbgn.af.LogicalOperatorInput,
+        context.model.logical_operators,
+    )
     _make_and_add_influences(context)
 
 
@@ -246,65 +252,6 @@ def _make_activity(context, input_element, strip=False):
         units_of_information=frozenset([unit_of_information]),
     )
     return register_or_reuse(candidate, context.cache)
-
-
-def _make_and_add_operators(context):
-    """Build a ``LogicalOperator`` for every authored operator and add those
-    that actually source an influence to ``model.logical_operators``.
-
-    Mirrors the CellDesigner gate builder: every operator is built into
-    ``key_to_operator`` (so the influence pass can resolve an operator source),
-    but only operators that source an influence are added to the model and
-    recorded for the layout pass -- an operator whose target is not an activity
-    yields no influence and would otherwise be a dangling node."""
-    inputs_by_operator = {}
-    for input_atom in context.operator_input_atoms:
-        inputs_by_operator.setdefault(input_atom.operator, []).append(
-            input_atom.input
-        )
-    used_operator_keys = {
-        atom.source
-        for atom in context.influence_atoms
-        if isinstance(atom.source, pd2af.predicates.logicalOperatorKey)
-    }
-    seen_operator_identities = set()
-    for atom in context.operator_atoms:
-        operator = get_or_make_operator(
-            atom.type_, inputs_by_operator.get(atom.key, ()), context
-        )
-        if operator is None:
-            continue
-        context.key_to_operator[atom.key] = operator
-        if atom.key not in used_operator_keys:
-            continue
-        if add_model_element_if_new(
-            context.model.logical_operators, operator, seen_operator_identities
-        ):
-            input_operator = context.clingo_id_to_model_element[atom.key.gate]
-            context.operator_emissions.append((operator, input_operator))
-
-
-def get_or_make_operator(operator_type, input_keys, context):
-    """Build (and intern) an SBGN-AF ``LogicalOperator`` of ``operator_type``
-    whose inputs resolve through ``key_to_activity``. Returns ``None`` for an
-    unknown token. Each ``LogicalOperatorInput`` and the operator itself are
-    interned by content (``register_or_reuse``), so content-equal operators
-    collapse to one canonical instance."""
-    operator_class = _OPERATOR_TYPE_TO_OPERATOR_CLASS.get(operator_type)
-    if operator_class is None:
-        return None
-    operator_inputs = []
-    for input_key in input_keys:
-        activity = context.key_to_activity.get(input_key)
-        if activity is None:
-            continue
-        operator_input = register_or_reuse(
-            momapy.sbgn.af.LogicalOperatorInput(referred_element=activity),
-            context.cache,
-        )
-        operator_inputs.append(operator_input)
-    operator = operator_class(inputs=frozenset(operator_inputs))
-    return register_or_reuse(operator, context.cache)
 
 
 def _resolve_influence_source(context, source_key):
