@@ -314,16 +314,14 @@ def _build_groups_data():
     Excludable groups are the dependency-graph leaves `--exclude-group` can
     drop cleanly; mandatory groups are depended-on by another included group.
     """
-    return {
-        mode_name: {
+    data = {}
+    for mode_name in pd2af.modes.get_transformation_modes():
+        excludable, mandatory = pd2af.rules.get_excludable_groups(mode_name)
+        data[mode_name] = {
             "excludable": sorted(excludable),
             "mandatory": sorted(mandatory),
         }
-        for mode_name in pd2af.modes.get_transformation_modes()
-        for excludable, mandatory in (
-            pd2af.rules.get_excludable_groups(mode_name),
-        )
-    }
+    return data
 
 
 def _format_groups_tables(data):
