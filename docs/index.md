@@ -1,6 +1,6 @@
 # pd2af
 
-**pd2af** transforms a [CellDesigner](https://www.celldesigner.org/) process-description (PD) map into an activity-flow (AF) map.
+**pd2af** transforms a process-description (PD) map into an activity-flow (AF) map. It reads [CellDesigner](https://www.celldesigner.org/) and [SBGN-PD](https://www.sbgn.org) maps, and writes a CellDesigner map for CellDesigner input and an SBGN-AF map for SBGN-PD input.
 
 It is built on top of [momapy](https://github.com/adrienrougny/momapy) for map I/O and layout, and uses [clingo](https://potassco.org/clingo/) (via [clorm](https://github.com/potassco/clorm) and [aspcompose](https://github.com/adrienrougny/aspcompose)) to derive the AF model from the PD model with a set of declarative rules.
 
@@ -38,6 +38,7 @@ input has no geometry, so `layout_mode` is forced to `None`.
 pd2af transform my_map.xml -o my_map_af.xml
 pd2af transform my_map.xml -m keep-species -l plain -o my_map_af.xml
 pd2af list-modes
+pd2af list-groups
 ```
 
 See [CLI reference](cli.md) for all options.

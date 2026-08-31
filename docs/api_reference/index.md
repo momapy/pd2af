@@ -26,7 +26,9 @@ The pd2af public API is organized into the following modules.
 - [SBGN-AF model](sbgn_building_model.md): build the SBGN-AF model from clingo atoms
 - [SBGN-AF layout](sbgn_building_layout.md): build the SBGN-AF layout (plain / dot)
 - [SBGN-AF labels](sbgn_building_labels.md): build an SBGN-AF activity's label from an SBGN-PD entity pool
+- [Shared model pass](building_model.md): the parts of the model pass that are the same for either language
 
 ## Auxiliary
 
+- [Annotations](annotations.md): carry RDF annotations and notes from the input elements through the provenance mapping
 - [Utils](utils.md): miscellaneous utilities

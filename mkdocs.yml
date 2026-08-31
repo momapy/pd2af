@@ -27,6 +27,8 @@ nav:
     - SBGN-AF model: api_reference/sbgn_building_model.md
     - SBGN-AF layout: api_reference/sbgn_building_layout.md
     - SBGN-AF labels: api_reference/sbgn_building_labels.md
+    - Shared model pass: api_reference/building_model.md
+    - Annotations: api_reference/annotations.md
     - Utils: api_reference/utils.md
   - About: about.md
 theme:
