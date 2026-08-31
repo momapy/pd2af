@@ -38,12 +38,6 @@ _SPECIES_LAYER_ORDER = (
     pd2af.predicates.promotedSubunitKey,
 )
 
-# The typed influence predicates emitted into ``new(...)`` — exactly the
-# keys of ``predicate_to_model_element_class``, so the two stay in sync.
-_INFLUENCE_PREDICATE_CLASSES = tuple(
-    pd2af.predicates.predicate_to_model_element_class
-)
-
 # Operator-type token (``logicalOperator.type_``) -> CellDesigner gate class.
 # The NOT token is ``not_`` because bare ``not`` is a reserved clingo keyword.
 _OPERATOR_TYPE_TO_GATE_CLASS = {
@@ -269,7 +263,7 @@ def make_and_add_model(context, clingo_model):
         momapy.celldesigner.CellDesignerModel
     )()
     context.subunit_to_top_level = build_subunit_to_top_level(context.input_map)
-    _collect_ingredients(context, clingo_model)
+    pd2af.building_model.collect_atoms(context, clingo_model)
     _make_and_add_compartments(context)
     _make_and_add_templates(context)
     _make_and_add_species(context)
@@ -282,30 +276,22 @@ def make_and_add_model(context, clingo_model):
     _make_and_add_modulations(context)
 
 
-def _collect_ingredients(context, clingo_model):
-    context.activity_atoms_by_key_class = {
-        key_class: [] for key_class in _SPECIES_LAYER_ORDER
-    }
-    for atom in clingo_model.query(pd2af.predicates.new).all():
-        payload = atom.object_
-        if isinstance(payload, pd2af.predicates.activity):
-            context.activity_atoms_by_key_class[type(payload.key)].append(payload)
-        elif isinstance(payload, _INFLUENCE_PREDICATE_CLASSES):
-            context.influence_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.logicalOperator):
-            context.operator_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.logicalOperatorInput):
-            context.operator_input_atoms.append(payload)
+def _activity_atoms_in_layer_order(context):
+    """The activity atoms sorted by the layer their key class belongs to, so a
+    kept species is always registered before a promoted subunit."""
+    return sorted(
+        context.activity_atoms,
+        key=lambda atom: _SPECIES_LAYER_ORDER.index(type(atom.key)),
+    )
 
 
 def _make_and_add_compartments(context):
     immediate_compartments = set()
-    for key_class in _SPECIES_LAYER_ORDER:
-        for atom in context.activity_atoms_by_key_class[key_class]:
-            input_species = context.clingo_id_to_model_element[atom.key.species]
-            compartment = _compartment_for_input_species(context, input_species)
-            if compartment is not None:
-                immediate_compartments.add(compartment)
+    for atom in _activity_atoms_in_layer_order(context):
+        input_species = context.clingo_id_to_model_element[atom.key.species]
+        compartment = _compartment_for_input_species(context, input_species)
+        if compartment is not None:
+            immediate_compartments.add(compartment)
     for compartment in compartments_outermost_first(
         collect_ancestor_compartments(immediate_compartments)
     ):
@@ -332,21 +318,20 @@ def _make_and_add_templates(context):
     # stripped species built in the species pass finds its canonical template
     # already present (same `context.cache`); otherwise the input template is
     # registered verbatim. This runs before `_make_and_add_species`.
-    for key_class in _SPECIES_LAYER_ORDER:
-        for atom in context.activity_atoms_by_key_class[key_class]:
-            input_species = context.clingo_id_to_model_element[atom.key.species]
-            for input_template in _walk_templates(input_species):
-                if strip:
-                    canonical = get_or_make_stripped_template(
-                        input_template, context.cache
-                    )
-                else:
-                    canonical = register_or_reuse(input_template, context.cache)
-                add_model_element_if_new(
-                    context.model.species_templates,
-                    canonical,
-                    seen_template_identities,
+    for atom in _activity_atoms_in_layer_order(context):
+        input_species = context.clingo_id_to_model_element[atom.key.species]
+        for input_template in _walk_templates(input_species):
+            if strip:
+                canonical = get_or_make_stripped_template(
+                    input_template, context.cache
                 )
+            else:
+                canonical = register_or_reuse(input_template, context.cache)
+            add_model_element_if_new(
+                context.model.species_templates,
+                canonical,
+                seen_template_identities,
+            )
 
 
 def _walk_templates(species):
@@ -359,19 +344,18 @@ def _walk_templates(species):
 
 def _make_and_add_species(context):
     seen_species_identities = set()
-    for key_class in _SPECIES_LAYER_ORDER:
-        for atom in context.activity_atoms_by_key_class[key_class]:
-            species = _resolve_activity_key(context, atom.key)
-            context.key_to_activity[atom.key] = species
-            if add_model_element_if_new(
-                context.model.species, species, seen_species_identities
-            ):
-                input_species = context.clingo_id_to_model_element[
-                    atom.key.species
-                ]
-                context.activity_emissions.append(
-                    (key_class, species, input_species)
-                )
+    for atom in _activity_atoms_in_layer_order(context):
+        species = _resolve_activity_key(context, atom.key)
+        context.key_to_activity[atom.key] = species
+        if add_model_element_if_new(
+            context.model.species, species, seen_species_identities
+        ):
+            input_species = context.clingo_id_to_model_element[
+                atom.key.species
+            ]
+            context.activity_emissions.append(
+                (type(atom.key), species, input_species)
+            )
 
 
 def _resolve_activity_key(context, key):
@@ -401,23 +385,15 @@ def _resolve_activity_key(context, key):
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 
-def _resolve_influence_source(context, source_key):
-    """Resolve an influence ``source`` key to its model element: a logical
-    operator resolves through ``key_to_operator`` (``None`` if the gate was not
-    built, so the edge is skipped); any activity key resolves through
-    ``key_to_activity``."""
-    if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
-        return context.key_to_operator.get(source_key)
-    return context.key_to_activity[source_key]
-
-
 def _make_and_add_modulations(context):
     seen_modulation_identities = set()
     for atom in context.influence_atoms:
         modulation_class = pd2af.predicates.predicate_to_model_element_class[
             type(atom)
         ]
-        source = _resolve_influence_source(context, atom.source)
+        source = pd2af.building_model.resolve_influence_source(
+            context, atom.source
+        )
         if source is None:
             continue
         target = context.key_to_activity[atom.target]

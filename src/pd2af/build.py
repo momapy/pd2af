@@ -57,7 +57,7 @@ class BuilderContext:
     # --- Pass-1 scratch ---
     cache: dict = dataclasses.field(default_factory=dict)
     subunit_to_top_level: dict = None
-    activity_atoms_by_key_class: dict = dataclasses.field(default_factory=dict)
+    activity_atoms: list = dataclasses.field(default_factory=list)
     influence_atoms: list = dataclasses.field(default_factory=list)
     key_to_activity: dict = dataclasses.field(default_factory=dict)
 
@@ -76,7 +76,6 @@ class BuilderContext:
     synthetic_index: int = 0
 
     # --- SBGN-AF pass scratch ---
-    activity_atoms: list = dataclasses.field(default_factory=list)
     input_compartment_to_af_compartment: dict = dataclasses.field(
         default_factory=dict
     )

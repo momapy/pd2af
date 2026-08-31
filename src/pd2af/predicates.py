@@ -162,6 +162,19 @@ class new(clorm.Predicate):
     )
 
 
+# The typed influence predicates emitted into ``new(...)``.
+INFLUENCE_PREDICATES = (
+    positivelyInfluences,
+    negativelyInfluences,
+    modulates,
+    triggers,
+    unknownPositivelyInfluences,
+    unknownNegativelyInfluences,
+    unknownModulates,
+    unknownTriggers,
+)
+
+
 predicate_to_model_element_class = {
     positivelyInfluences: momapy.celldesigner.PositiveInfluence,
     negativelyInfluences: momapy.celldesigner.NegativeInfluence,

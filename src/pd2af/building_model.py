@@ -1,9 +1,10 @@
 """The parts of the model pass that are the same for either language.
 
 :mod:`pd2af.celldesigner.building_model` and :mod:`pd2af.sbgn.building_model`
-build their own compartments, species and influences, but the logical-operator
-pass is shared: the CellDesigner builder makes ``BooleanLogicGate`` objects and
-the SBGN-AF builder ``LogicalOperator`` objects, and otherwise the two do the
+build their own compartments, species and influences, but read the clingo atoms
+and resolve an influence source the same way. The logical-operator pass is
+shared too: the CellDesigner builder makes ``BooleanLogicGate`` objects and the
+SBGN-AF builder ``LogicalOperator`` objects, and otherwise the two do the
 same thing -- read the operator atoms, resolve each operator's inputs through
 ``key_to_activity``, and add to the model those operators that actually source
 an influence. Each builder passes in the classes it wants and the model
@@ -12,6 +13,31 @@ collection to add to.
 
 import pd2af.predicates
 from pd2af.utils import add_model_element_if_new, register_or_reuse
+
+
+def collect_atoms(context, clingo_model):
+    """Sort the ``new(...)`` atoms into the context scratch lists by payload
+    type: activities, influences, logical operators and operator inputs."""
+    for atom in clingo_model.query(pd2af.predicates.new).all():
+        payload = atom.object_
+        if isinstance(payload, pd2af.predicates.activity):
+            context.activity_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.INFLUENCE_PREDICATES):
+            context.influence_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.logicalOperator):
+            context.operator_atoms.append(payload)
+        elif isinstance(payload, pd2af.predicates.logicalOperatorInput):
+            context.operator_input_atoms.append(payload)
+
+
+def resolve_influence_source(context, source_key):
+    """Resolve an influence ``source`` key to its model element: a logical
+    operator resolves through ``key_to_operator``, any activity key through
+    ``key_to_activity``. ``None`` when the gate or the activity was not built,
+    so the caller skips the edge."""
+    if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
+        return context.key_to_operator.get(source_key)
+    return context.key_to_activity.get(source_key)
 
 
 def make_and_add_operators(

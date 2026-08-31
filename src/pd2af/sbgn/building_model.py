@@ -78,8 +78,6 @@ _INFLUENCE_PREDICATE_TO_AF_CLASS = {
     pd2af.predicates.unknownModulates: momapy.sbgn.af.UnknownInfluence,
 }
 
-_INFLUENCE_PREDICATE_CLASSES = tuple(_INFLUENCE_PREDICATE_TO_AF_CLASS)
-
 # Operator-type token (``logicalOperator.type_``) -> SBGN-AF operator class.
 # The NOT token is ``not_`` because bare ``not`` is a reserved clingo keyword.
 # SBGN-PD authors only AND/OR/NOT operators (no unknown/delay), so the table
@@ -95,7 +93,7 @@ def make_and_add_model(context, clingo_model):
     context.model = momapy.builder.get_or_make_builder_cls(
         momapy.sbgn.af.SBGNAFModel
     )()
-    _collect_atoms(context, clingo_model)
+    pd2af.building_model.collect_atoms(context, clingo_model)
     _build_subunit_compartment_map(context)
     _make_and_add_compartments(context)
     _make_and_add_activities(context)
@@ -126,20 +124,6 @@ def _build_subunit_compartment_map(context):
 
     for entity in context.input_map.model.entity_pools:
         walk(entity, None)
-
-
-def _collect_atoms(context, clingo_model):
-    context.activity_atoms = []
-    for atom in clingo_model.query(pd2af.predicates.new).all():
-        payload = atom.object_
-        if isinstance(payload, pd2af.predicates.activity):
-            context.activity_atoms.append(payload)
-        elif isinstance(payload, _INFLUENCE_PREDICATE_CLASSES):
-            context.influence_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.logicalOperator):
-            context.operator_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.logicalOperatorInput):
-            context.operator_input_atoms.append(payload)
 
 
 def _input_element_for_key(context, key):
@@ -254,19 +238,12 @@ def _make_activity(context, input_element, strip=False):
     return register_or_reuse(candidate, context.cache)
 
 
-def _resolve_influence_source(context, source_key):
-    """Resolve an influence ``source`` key to its model element: a logical
-    operator resolves through ``key_to_operator`` (``None`` if not built); any
-    activity key resolves through ``key_to_activity`` (``None`` if not emitted)."""
-    if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
-        return context.key_to_operator.get(source_key)
-    return context.key_to_activity.get(source_key)
-
-
 def _make_and_add_influences(context):
     seen_influence_identities = set()
     for atom in context.influence_atoms:
-        source = _resolve_influence_source(context, atom.source)
+        source = pd2af.building_model.resolve_influence_source(
+            context, atom.source
+        )
         target = context.key_to_activity.get(atom.target)
         if source is None or target is None:
             continue
