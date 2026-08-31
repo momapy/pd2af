@@ -350,19 +350,23 @@ def _add_transform_parser(subparsers):
         "transform",
         help="transform a process-description map into an activity-flow map",
         description=(
-            "Transform a CellDesigner process-description map into an "
-            "activity-flow map. Writes the map to stdout as a momapy pickle "
-            "(preserves layout styling) so it can be piped into "
+            "Transform a process-description map (CellDesigner or SBGN-PD) "
+            "into an activity-flow map. Writes the map to stdout as a momapy "
+            "pickle (preserves layout styling) so it can be piped into "
             "`momapy visualize`. With -o, the writer is chosen from the "
             "output file extension (.xml/.sbml -> CellDesigner XML, "
-            ".pickle/.pkl -> pickle; defaults to pickle)."
+            ".sbgn/.sbgnml -> SBGN-ML, .pickle/.pkl -> pickle; defaults to "
+            "pickle)."
         ),
     )
     parser.add_argument(
         "input_file",
         nargs="?",
         default=None,
-        help="input CellDesigner XML file (reads from stdin if omitted)",
+        help=(
+            "input process-description map, CellDesigner XML or SBGN-ML "
+            "(reads from stdin if omitted)"
+        ),
     )
     parser.add_argument(
         "-m",
@@ -548,8 +552,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="pd2af",
         description=(
-            "Transform a CellDesigner process-description map into an "
-            "activity-flow map."
+            "Transform a process-description map (CellDesigner or SBGN-PD) "
+            "into an activity-flow map."
         ),
     )
     parser.add_argument(
