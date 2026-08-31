@@ -108,6 +108,18 @@ def build_map(
         map_builder_class = momapy.builder.get_or_make_builder_cls(
             momapy.sbgn.af.SBGNAFMap
         )
+        # SBGN-AF logical operators have input/output connectors: rank their
+        # logic-arc inputs upstream (reversed_arc_classes) and re-attach the
+        # operator arcs to the connector tips after graphviz repositions
+        # (operator_arc_resolver). Both hooks are no-ops on operator-free maps,
+        # so non-operator SBGN output is unchanged.
+        auto_layout_arguments = {
+            "compartment_layout_classes": (momapy.sbgn.af.CompartmentLayout,),
+            "reversed_arc_classes": (momapy.sbgn.af.LogicArcLayout,),
+            "operator_arc_resolver": (
+                pd2af.sbgn.building_layout.resolve_operator_arc_segments
+            ),
+        }
     else:
         pd2af.celldesigner.building_model.make_and_add_model(context, clingo_model)
         if layout_mode is not None:
@@ -115,6 +127,7 @@ def build_map(
         map_builder_class = momapy.builder.get_or_make_builder_cls(
             momapy.celldesigner.CellDesignerMap
         )
+        auto_layout_arguments = {}
 
     map_builder = map_builder_class(
         model=context.model,
@@ -127,22 +140,7 @@ def build_map(
     # compartment-layout classes differ per language (see
     # pd2af.utils.make_auto_layout).
     if layout_mode == "dot":
-        if language == pd2af.languages.CELLDESIGNER:
-            new_map = pd2af.utils.make_auto_layout(new_map)
-        elif language == pd2af.languages.SBGN_PD:
-            # SBGN-AF logical operators have input/output connectors: rank their
-            # logic-arc inputs upstream (reversed_arc_classes) and re-attach the
-            # operator arcs to the connector tips after graphviz repositions
-            # (operator_arc_resolver). Both hooks are no-ops on operator-free
-            # maps, so non-operator SBGN output is unchanged.
-            new_map = pd2af.utils.make_auto_layout(
-                new_map,
-                compartment_layout_classes=(momapy.sbgn.af.CompartmentLayout,),
-                reversed_arc_classes=(momapy.sbgn.af.LogicArcLayout,),
-                operator_arc_resolver=(
-                    pd2af.sbgn.building_layout.resolve_operator_arc_segments
-                ),
-            )
+        new_map = pd2af.utils.make_auto_layout(new_map, **auto_layout_arguments)
 
     # Imported here (not at module top) to break the core -> build import cycle.
     from pd2af.core import TransformerResult

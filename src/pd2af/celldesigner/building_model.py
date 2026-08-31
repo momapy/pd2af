@@ -221,21 +221,6 @@ def collect_ancestor_compartments(compartments):
     return expanded
 
 
-def collect_templates_from_species(species_iterable):
-    collected = set()
-
-    def visit(species):
-        template = getattr(species, "template", None)
-        if template is not None:
-            collected.add(template)
-        for subunit in getattr(species, "subunits", ()) or ():
-            visit(subunit)
-
-    for species in species_iterable:
-        visit(species)
-    return collected
-
-
 # ---------------------------------------------------------------------------
 # Pass 1 -- model construction
 # ---------------------------------------------------------------------------

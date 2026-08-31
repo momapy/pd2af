@@ -33,10 +33,10 @@ def has_dot_binary():
 
 def modulation_set(model):
     return {
-        (type(m).__name__, m.source.name, m.target.name)
-        for m in model.modulations
+        (type(modulation).__name__, modulation.source.name, modulation.target.name)
+        for modulation in model.modulations
     }
 
 
 def species_names(model):
-    return sorted(s.name for s in model.species)
+    return sorted(species.name for species in model.species)

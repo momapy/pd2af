@@ -9,6 +9,7 @@ import textwrap
 import momapy.io.core
 
 import pd2af
+import pd2af.core
 import pd2af.languages
 import pd2af.layout_modes
 import pd2af.modes
@@ -19,26 +20,9 @@ _LAYOUT_CHOICES = tuple(pd2af.layout_modes.LAYOUT_MODES) + (
     pd2af.layout_modes.AUTO,
 )
 
-_INFLUENCE_PAIRING_CHOICES = ("cross", "nearest")
-
 _LAYOUT_MODE_INFO = pd2af.layout_modes.LAYOUT_MODES | {
     pd2af.layout_modes.AUTO: pd2af.layout_modes.AUTO_DESCRIPTION
 }
-
-
-def _unsupported_layout_modes_for_language(language):
-    """Concrete layout modes the given input language rejects.
-
-    Derived from pd2af.layout_modes: SBGN-AF output (SBGN-PD input) does not
-    support the `overlay` dimming; CellDesigner output supports every layout
-    mode.
-    """
-    supported = pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
-    return tuple(
-        layout_mode
-        for layout_mode in pd2af.layout_modes.LAYOUT_MODES
-        if layout_mode not in supported
-    )
 
 
 def _compatible_language_names_for_mode(mode):
@@ -80,7 +64,8 @@ def _compatible_language_names_for_layout_mode(layout_mode):
     return [
         properties["display_name"]
         for language, properties in pd2af.languages.LANGUAGES.items()
-        if layout_mode not in _unsupported_layout_modes_for_language(language)
+        if layout_mode == pd2af.layout_modes.AUTO
+        or layout_mode in pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
     ]
 
 _EXTENSION_TO_WRITER = {
@@ -406,7 +391,7 @@ def _add_transform_parser(subparsers):
     parser.add_argument(
         "-p",
         "--influence-pairing",
-        choices=_INFLUENCE_PAIRING_CHOICES,
+        choices=pd2af.core.INFLUENCE_PAIRINGS,
         default="cross",
         help=(
             "how to draw an influence whose source or target maps to several "

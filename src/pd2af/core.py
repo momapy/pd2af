@@ -47,7 +47,7 @@ class TransformerResult:
     element_to_notes: dict | None = None
 
 
-_INFLUENCE_PAIRINGS = frozenset({"cross", "nearest"})
+INFLUENCE_PAIRINGS = ("cross", "nearest")
 
 
 def _normalize_layout_mode(layout_mode):
@@ -125,9 +125,9 @@ def transform(
             + ", ".join(sorted(transformation_mode.compatible_languages))
         )
     _validate_layout_mode(layout_mode, transformation_mode, language)
-    if influence_pairing not in _INFLUENCE_PAIRINGS:
+    if influence_pairing not in INFLUENCE_PAIRINGS:
         raise ValueError(
-            f"influence_pairing must be one of {sorted(_INFLUENCE_PAIRINGS)}, "
+            f"influence_pairing must be one of {list(INFLUENCE_PAIRINGS)}, "
             f"got {influence_pairing!r}"
         )
     clingo_model, clingo_id_to_model_element = pd2af.solver.solve(
