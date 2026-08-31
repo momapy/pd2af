@@ -77,9 +77,7 @@ def make_and_add_operators(
     """
     inputs_by_operator = {}
     for input_atom in context.operator_input_atoms:
-        inputs_by_operator.setdefault(input_atom.operator, []).append(
-            input_atom.input
-        )
+        inputs_by_operator.setdefault(input_atom.operator, []).append(input_atom.input)
     used_operator_keys = {
         atom.source
         for atom in context.influence_atoms

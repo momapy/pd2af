@@ -16,9 +16,7 @@ import pd2af.modes
 import pd2af.rules
 
 
-_LAYOUT_CHOICES = tuple(pd2af.layout_modes.LAYOUT_MODES) + (
-    pd2af.layout_modes.AUTO,
-)
+_LAYOUT_CHOICES = tuple(pd2af.layout_modes.LAYOUT_MODES) + (pd2af.layout_modes.AUTO,)
 
 _LAYOUT_MODE_INFO = pd2af.layout_modes.LAYOUT_MODES | {
     pd2af.layout_modes.AUTO: pd2af.layout_modes.AUTO_DESCRIPTION
@@ -67,6 +65,7 @@ def _compatible_language_names_for_layout_mode(layout_mode):
         if layout_mode == pd2af.layout_modes.AUTO
         or layout_mode in pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
     ]
+
 
 _EXTENSION_TO_WRITER = {
     ".xml": "celldesigner",
@@ -315,10 +314,7 @@ def _format_groups_tables(data):
     for mode, groups in data.items():
         rows = [[group, "excludable"] for group in groups["excludable"]]
         rows += [[group, "mandatory"] for group in groups["mandatory"]]
-        sections.append(
-            f"Mode `{mode}`:\n"
-            + _render_table(["group", "status"], rows)
-        )
+        sections.append(f"Mode `{mode}`:\n" + _render_table(["group", "status"], rows))
     return "\n\n".join(sections)
 
 

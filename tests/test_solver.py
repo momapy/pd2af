@@ -60,9 +60,7 @@ class TestSolve:
         for species in example_cd_map.model.species:
             assert species.id_ in mapped_species_ids
 
-    def test_solve_keep_species_finds_five_activity_atoms(
-        self, solved_keep_species
-    ):
+    def test_solve_keep_species_finds_five_activity_atoms(self, solved_keep_species):
         # B, D, E, F, G. Active subunit C of complex D no longer gets its own
         # activity -- it resolves to D's top-level `keptSpeciesKey(D)`, the same
         # key D itself carries, so it adds no distinct activity atom.
@@ -70,9 +68,7 @@ class TestSolve:
         atoms = _activity_atoms(clingo_model)
         assert len(atoms) == 5
 
-    def test_solve_keep_species_finds_four_influence_atoms(
-        self, solved_keep_species
-    ):
+    def test_solve_keep_species_finds_four_influence_atoms(self, solved_keep_species):
         clingo_model, _ = solved_keep_species
         atoms = _influence_atoms(clingo_model)
         assert len(atoms) == 4
@@ -84,9 +80,7 @@ class TestSolve:
             example_cd_map, mode="keep-species-no-complex"
         )
         atoms = _activity_atoms(clingo_model)
-        names = sorted(
-            id_to_model_element[atom.key.species].name for atom in atoms
-        )
+        names = sorted(id_to_model_element[atom.key.species].name for atom in atoms)
         assert "D" not in names
         assert "C" in names
 
@@ -140,12 +134,8 @@ def _species(name, active=False):
 def _reaction(reactant, product, modifiers=()):
     return momapy.celldesigner.Reaction(
         reversible=False,
-        reactants=frozenset(
-            {momapy.celldesigner.Reactant(referred_element=reactant)}
-        ),
-        products=frozenset(
-            {momapy.celldesigner.Product(referred_element=product)}
-        ),
+        reactants=frozenset({momapy.celldesigner.Reactant(referred_element=reactant)}),
+        products=frozenset({momapy.celldesigner.Product(referred_element=product)}),
         modifiers=frozenset(modifiers),
     )
 
@@ -254,9 +244,7 @@ class TestSetInactive:
         assert "B" not in names
         assert len(atoms) == baseline_count - 1
 
-    def test_set_inactive_conflicting_with_set_active_raises(
-        self, example_cd_map
-    ):
+    def test_set_inactive_conflicting_with_set_active_raises(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.solver.solve(
                 example_cd_map,
@@ -279,9 +267,7 @@ class TestSetAllActive:
     per-id `set_inactive` still carves out exceptions and both global toggles
     are mutually exclusive."""
 
-    def test_set_all_active_activates_every_top_level_species(
-        self, example_cd_map
-    ):
+    def test_set_all_active_activates_every_top_level_species(self, example_cd_map):
         clingo_model, id_to_model_element = pd2af.solver.solve(
             example_cd_map, mode="keep-species", set_all_active=True
         )

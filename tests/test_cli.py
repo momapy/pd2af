@@ -120,9 +120,7 @@ class TestCliMainOutputFile:
         assert "D" not in names
 
     @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
-    def test_merged_modes_with_plain_layout_raise(
-        self, example_map_path, mode
-    ):
+    def test_merged_modes_with_plain_layout_raise(self, example_map_path, mode):
         with pytest.raises(ValueError):
             pd2af.cli.main(["transform", example_map_path, "-m", mode, "-l", "plain"])
 
@@ -135,7 +133,16 @@ class TestCliMainOutputFile:
     ):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
-            ["transform", example_map_path, "-m", mode, "-l", "plain", "-o", str(out_path)]
+            [
+                "transform",
+                example_map_path,
+                "-m",
+                mode,
+                "-l",
+                "plain",
+                "-o",
+                str(out_path),
+            ]
         )
         assert out_path.exists()
 
@@ -169,9 +176,7 @@ class TestActiveFlag:
         assert args.set_active is None
 
     def test_active_flag_is_repeatable_and_accumulates(self):
-        args = _parse_transform_args(
-            ["transform", "map.xml", "-a", "s1", "-a", "s3"]
-        )
+        args = _parse_transform_args(["transform", "map.xml", "-a", "s1", "-a", "s3"])
         assert args.set_active == ["s1", "s3"]
 
     def test_active_flag_marks_species_active(self, tmp_path, example_map_path):
@@ -202,14 +207,10 @@ class TestInactiveFlag:
         assert args.set_inactive is None
 
     def test_inactive_flag_is_repeatable_and_accumulates(self):
-        args = _parse_transform_args(
-            ["transform", "map.xml", "-i", "s1", "-i", "s3"]
-        )
+        args = _parse_transform_args(["transform", "map.xml", "-i", "s1", "-i", "s3"])
         assert args.set_inactive == ["s1", "s3"]
 
-    def test_inactive_flag_suppresses_species(
-        self, tmp_path, example_map_path
-    ):
+    def test_inactive_flag_suppresses_species(self, tmp_path, example_map_path):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
             [
@@ -251,9 +252,7 @@ class TestGlobalActivityFlags:
         with pytest.raises(SystemExit):
             _parse_transform_args(["transform", "map.xml", "-A", "-I"])
 
-    def test_set_all_active_marks_every_species(
-        self, tmp_path, example_map_path
-    ):
+    def test_set_all_active_marks_every_species(self, tmp_path, example_map_path):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
             [
@@ -273,9 +272,7 @@ class TestGlobalActivityFlags:
         # Species A (id `s1`) is not an activity by default; -A surfaces it.
         assert "A" in names
 
-    def test_set_all_inactive_drops_every_species(
-        self, tmp_path, example_map_path
-    ):
+    def test_set_all_inactive_drops_every_species(self, tmp_path, example_map_path):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
             [

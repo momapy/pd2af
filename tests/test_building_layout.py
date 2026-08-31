@@ -31,7 +31,9 @@ class TestModulationLayoutMap:
         # Cross-module invariant: every model class an output influence
         # predicate maps to must have an arc layout class to draw it.
         output_classes = pd2af.predicates.predicate_to_model_element_class.values()
-        layout_map = pd2af.celldesigner.building_layout._MODULATION_CLASS_TO_LAYOUT_CLASS
+        layout_map = (
+            pd2af.celldesigner.building_layout._MODULATION_CLASS_TO_LAYOUT_CLASS
+        )
         for model_class in output_classes:
             assert model_class in layout_map, model_class
 
@@ -136,9 +138,7 @@ class TestSelfLoopFan:
         assert pd2af.utils._make_self_loop_angles(0, 1) == (120.0, 60.0)
 
     def test_parallel_self_loops_are_spread_around_the_node(self):
-        angles = [
-            pd2af.utils._make_self_loop_angles(index, 3) for index in range(3)
-        ]
+        angles = [pd2af.utils._make_self_loop_angles(index, 3) for index in range(3)]
         assert len(set(angles)) == 3
         # Each loop keeps the same span; only its center moves.
         for start_angle, end_angle in angles:

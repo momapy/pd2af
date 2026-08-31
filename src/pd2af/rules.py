@@ -535,9 +535,9 @@ _PATHS_CORE = RuleGroup(
     variants={
         SBGN_PD: _PATHS_CORE_SBGN_PD,
         CELLDESIGNER: (
-        Rule(
-            identifier="paths:core:celldesigner:catalyzer_to_product",
-            text=dedent("""\
+            Rule(
+                identifier="paths:core:celldesigner:catalyzer_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -545,11 +545,11 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by a catalyzer of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:physical_stimulator_to_product",
-            text=dedent("""\
+                docs="If a species is referred to by a catalyzer of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:physical_stimulator_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -557,11 +557,11 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:trigger_to_product",
-            text=dedent("""\
+                docs="If a species is referred to by a physical stimulator of a reaction and another species is referred to by a product of that reaction, then there is a positive path from the first to the second.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:trigger_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, triggers) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -569,20 +569,20 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by a trigger of a reaction and another species is referred to by a product of that reaction, then there is a triggering path from the first to the second (a trigger→product edge is direct, so it keeps the `triggering` kind).",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:modulation_arc_influence",
-            text=dedent("""\
+                docs="If a species is referred to by a trigger of a reaction and another species is referred to by a product of that reaction, then there is a triggering path from the first to the second (a trigger→product edge is direct, so it keeps the `triggering` kind).",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:modulation_arc_influence",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, INFLUENCE_KIND) :-
                     hasInfluenceKind(MODULATION, INFLUENCE_KIND),
                     hasSource(MODULATION, SOURCE_SPECIES),
                     hasTarget(MODULATION, TARGET_SPECIES)."""),
-            docs="A modulation arc influences its target with the arc's kind (`hasInfluenceKind`, from the `influences:kind` group). This covers every arc type -- catalysis/physical stimulation/positive influence give `positive`, triggering gives `triggering`, inhibition/negative influence give `negative`, a bare modulation gives `modulation`, and the `unknown*` twins give the `unknown_*` kinds. The reaction modifier->product rules and the transitive/cycle rules remain separate.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:inhibitor_to_product",
-            text=dedent("""\
+                docs="A modulation arc influences its target with the arc's kind (`hasInfluenceKind`, from the `influences:kind` group). This covers every arc type -- catalysis/physical stimulation/positive influence give `positive`, triggering gives `triggering`, inhibition/negative influence give `negative`, a bare modulation gives `modulation`, and the `unknown*` twins give the `unknown_*` kinds. The reaction modifier->product rules and the transitive/cycle rules remain separate.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:inhibitor_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -590,11 +590,11 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by an inhibitor of a reaction and another species is referred to by a product of that reaction, then there is a negative path from the first to the second.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:modulator_to_product",
-            text=dedent("""\
+                docs="If a species is referred to by an inhibitor of a reaction and another species is referred to by a product of that reaction, then there is a negative path from the first to the second.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:modulator_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, modulates) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -605,11 +605,11 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by a *bare* modulator of a reaction (a generic MODULATION modifier — not a physical stimulator, inhibitor or trigger; catalyzers are physical stimulators) and another species is referred to by a product of that reaction, then there is a modulation path from the first to the second.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:unknown_catalyzer_to_product",
-            text=dedent("""\
+                docs="If a species is referred to by a *bare* modulator of a reaction (a generic MODULATION modifier — not a physical stimulator, inhibitor or trigger; catalyzers are physical stimulators) and another species is referred to by a product of that reaction, then there is a modulation path from the first to the second.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:unknown_catalyzer_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownPositivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -617,11 +617,11 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by an unknown catalyzer of a reaction and another species is referred to by a product of that reaction, then there is an unknown-positive path from the first to the second.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:unknown_inhibitor_to_product",
-            text=dedent("""\
+                docs="If a species is referred to by an unknown catalyzer of a reaction and another species is referred to by a product of that reaction, then there is an unknown-positive path from the first to the second.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:unknown_inhibitor_to_product",
+                text=dedent("""\
                 propagatesInfluence(SOURCE_SPECIES, TARGET_SPECIES, unknownNegativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER),
@@ -629,19 +629,19 @@ _PATHS_CORE = RuleGroup(
                     hasReferredElement(MODIFIER, SOURCE_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, TARGET_SPECIES)."""),
-            docs="If a species is referred to by an unknown inhibitor of a reaction and another species is referred to by a product of that reaction, then there is an unknown-negative path from the first to the second.",
-        ),
-        Rule(
-            identifier="paths:core:celldesigner:is_directly_transformed_to",
-            text=dedent("""\
+                docs="If a species is referred to by an unknown inhibitor of a reaction and another species is referred to by a product of that reaction, then there is an unknown-negative path from the first to the second.",
+            ),
+            Rule(
+                identifier="paths:core:celldesigner:is_directly_transformed_to",
+                text=dedent("""\
                 isDirectlyTransformedTo(UPSTREAM_SPECIES, DOWNSTREAM_SPECIES) :-
                     reaction(REACTION),
                     hasReactant(REACTION, REACTANT),
                     hasReferredElement(REACTANT, UPSTREAM_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, DOWNSTREAM_SPECIES)."""),
-            docs="The single reactant->product hop in the production graph: the upstream species is referred to by a reactant and the downstream species by a product of the same reaction. Passive voice (the reaction does the transforming, not the species) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
-        ),
+                docs="The single reactant->product hop in the production graph: the upstream species is referred to by a reactant and the downstream species by a product of the same reaction. Passive voice (the reaction does the transforming, not the species) keeps it language-neutral. Feeds the shared `isTransformedTo`/`isCyclicallyTransformedTo` cycle relations that gate transitive path extension; carries no influence kind itself.",
+            ),
         ),
     },
 )
@@ -877,9 +877,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
     variants={
         SBGN_PD: (),
         CELLDESIGNER: (
-        Rule(
-            identifier="influences:consumption:celldesigner:catalyzer_consumes_reactant",
-            text=dedent("""\
+            Rule(
+                identifier="influences:consumption:celldesigner:catalyzer_consumes_reactant",
+                text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), catalyzer(MODIFIER),
@@ -890,11 +890,11 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
                     hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-            docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
-        ),
-        Rule(
-            identifier="influences:consumption:celldesigner:physical_stimulator_consumes_reactant",
-            text=dedent("""\
+                docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
+            ),
+            Rule(
+                identifier="influences:consumption:celldesigner:physical_stimulator_consumes_reactant",
+                text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), physicalStimulator(MODIFIER),
@@ -905,11 +905,11 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
                     hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-            docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption).",
-        ),
-        Rule(
-            identifier="influences:consumption:celldesigner:trigger_consumes_reactant",
-            text=dedent("""\
+                docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption).",
+            ),
+            Rule(
+                identifier="influences:consumption:celldesigner:trigger_consumes_reactant",
+                text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), trigger(MODIFIER),
@@ -920,11 +920,11 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
                     hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-            docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship).",
-        ),
-        Rule(
-            identifier="influences:consumption:celldesigner:inhibitor_spares_reactant",
-            text=dedent("""\
+                docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship).",
+            ),
+            Rule(
+                identifier="influences:consumption:celldesigner:inhibitor_spares_reactant",
+                text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), inhibitor(MODIFIER),
@@ -935,11 +935,11 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
                     hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-            docs="An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing).",
-        ),
-        Rule(
-            identifier="influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant",
-            text=dedent("""\
+                docs="An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing).",
+            ),
+            Rule(
+                identifier="influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant",
+                text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, unknownNegativelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownCatalyzer(MODIFIER),
@@ -950,11 +950,11 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
                     hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-            docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain).",
-        ),
-        Rule(
-            identifier="influences:consumption:celldesigner:unknown_inhibitor_spares_reactant",
-            text=dedent("""\
+                docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain).",
+            ),
+            Rule(
+                identifier="influences:consumption:celldesigner:unknown_inhibitor_spares_reactant",
+                text=dedent("""\
                 influences(SOURCE_KEY, TARGET_KEY, unknownPositivelyInfluences) :-
                     reaction(REACTION),
                     hasModifier(REACTION, MODIFIER), unknownInhibitor(MODIFIER),
@@ -965,8 +965,8 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
                     hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-            docs="An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain).",
-        ),
+                docs="An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain).",
+            ),
         ),
     },
 )
@@ -1216,9 +1216,7 @@ def build_registry(modes=None) -> RuleRegistry:
     mode_by_contributed_group_id: dict[str, str] = {}
     for mode in modes:
         for group in mode.rule_group_definitions:
-            already_contributed_by = mode_by_contributed_group_id.get(
-                group.identifier
-            )
+            already_contributed_by = mode_by_contributed_group_id.get(group.identifier)
             if already_contributed_by is not None:
                 raise RuntimeError(
                     f"transformation modes {already_contributed_by!r} and "
@@ -1329,9 +1327,7 @@ def build_program(
         resolved_ids = {rule.identifier for rule in resolved}
         unknown = sorted(set(exclude_rules) - resolved_ids)
         if unknown:
-            raise ValueError(
-                "unknown rule id(s): " + ", ".join(unknown)
-            )
+            raise ValueError("unknown rule id(s): " + ", ".join(unknown))
         excluded = set(exclude_rules)
         resolved = [rule for rule in resolved if rule.identifier not in excluded]
     return "\n".join(rule.text for rule in resolved)

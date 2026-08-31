@@ -235,8 +235,7 @@ def make_synthetic_gate_layout(gate, index):
     layout_class = _GATE_CLASS_TO_LAYOUT_CLASS.get(type(gate))
     if layout_class is None:
         raise ValueError(
-            f"no default layout class registered for gate type "
-            f"{type(gate).__name__}"
+            f"no default layout class registered for gate type {type(gate).__name__}"
         )
     position = momapy.geometry.Point(float(index), 0.0)
     return layout_class(position=position)
@@ -396,9 +395,7 @@ def _make_and_add_species_layout(context, species, input_species):
             context.layout.layout_elements.extend(input_layouts)
             for input_layout in input_layouts:
                 add_mappings_for_layout_and_descendants(context, input_layout)
-            context.model_element_to_layout_elements[id(species)] = tuple(
-                input_layouts
-            )
+            context.model_element_to_layout_elements[id(species)] = tuple(input_layouts)
     elif context.layout_mode == "dot":
         synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
         context.synthetic_index += 1
@@ -446,34 +443,26 @@ def _make_and_add_gate_layout(context, gate, input_gate):
             )
             if not input_species_layouts:
                 continue
-            arc = make_logic_arc(
-                context, gate_layout, input_species_layouts[0]
-            )
+            arc = make_logic_arc(context, gate_layout, input_species_layouts[0])
             context.layout.layout_elements.append(arc)
 
 
 def _make_and_add_modulation_layout(context, modulation):
-    source_layouts = context.model_element_to_layout_elements.get(
-        id(modulation.source)
-    )
-    target_layouts = context.model_element_to_layout_elements.get(
-        id(modulation.target)
-    )
+    source_layouts = context.model_element_to_layout_elements.get(id(modulation.source))
+    target_layouts = context.model_element_to_layout_elements.get(id(modulation.target))
     if not source_layouts or not target_layouts:
         return
     # "nearest" collapses the N*M fan-out to the single closest pair, but only
     # where positions are real (plain/overlay); in dot they are throwaway
     # placeholders that graphviz overwrites, so the cross product is kept.
-    prefer_nearest = (
-        context.influence_pairing == "nearest"
-        and context.layout_mode in ("plain", "overlay")
+    prefer_nearest = context.influence_pairing == "nearest" and context.layout_mode in (
+        "plain",
+        "overlay",
     )
     for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
         source_layouts, target_layouts, prefer_nearest
     ):
-        arc = make_modulation_arc(
-            context, modulation, source_layout, target_layout
-        )
+        arc = make_modulation_arc(context, modulation, source_layout, target_layout)
         context.layout.layout_elements.append(arc)
         add_modulation_mapping(
             context.layout_model_mapping,

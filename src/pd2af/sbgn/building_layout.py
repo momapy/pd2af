@@ -107,9 +107,7 @@ def make_and_add_layout(context):
 def _get_input_layouts(context, input_element):
     """Return the input map's layout elements for a model element, as a tuple
     (empty when the element has none). A cloned entity pool maps to several."""
-    input_layouts = context.input_map.layout_model_mapping.get_mapping(
-        input_element
-    )
+    input_layouts = context.input_map.layout_model_mapping.get_mapping(input_element)
     return tuple(input_layouts) if input_layouts else ()
 
 
@@ -135,10 +133,8 @@ def _make_and_add_compartment_layout(context, compartment):
             width=input_layout.width,
             height=input_layout.height,
         )
-    compartment_layout.label = (
-        momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-            compartment.label, compartment_layout.position
-        )
+    compartment_layout.label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+        compartment.label, compartment_layout.position
     )
     context.layout.layout_elements.append(compartment_layout)
     context.layout_model_mapping.add_mapping(compartment_layout, compartment)
@@ -169,10 +165,8 @@ def _make_and_add_activity_layout(context, activity, input_element):
     activity_layouts = []
     for position in positions:
         activity_layout = _builder(activity_layout_class, position=position)
-        activity_layout.label = (
-            momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-                activity.label, position
-            )
+        activity_layout.label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+            activity.label, position
         )
         context.layout.layout_elements.append(activity_layout)
         context.layout_model_mapping.add_mapping(activity_layout, activity)
@@ -199,20 +193,20 @@ def _make_and_add_unit_of_information_layout(
     north_west = activity_layout.north_west()
     unit_layout = _builder(
         layout_class,
-        position=momapy.geometry.Point(north_west.x + _UNIT_OF_INFORMATION_X_OFFSET, north_west.y),
+        position=momapy.geometry.Point(
+            north_west.x + _UNIT_OF_INFORMATION_X_OFFSET, north_west.y
+        ),
     )
     # In the merged modes the entity's unit-of-information block is carried on
     # the glyph (e.g. ``[ct:mRNA]``) rather than inlined in the activity label;
     # render it so it is written out and round-trips. Bare glyphs stay bare.
     if unit_of_information.label:
-        unit_layout.label = (
-            momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-                unit_of_information.label,
-                unit_layout.position,
-                # Match the smaller auxiliary-unit font the momapy sbgn reader
-                # uses for units of information (not the default node font).
-                font_size=momapy.sbgn.layout.DEFAULT_AUXILIARY_UNIT_FONT_SIZE,
-            )
+        unit_layout.label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+            unit_of_information.label,
+            unit_layout.position,
+            # Match the smaller auxiliary-unit font the momapy sbgn reader
+            # uses for units of information (not the default node font).
+            font_size=momapy.sbgn.layout.DEFAULT_AUXILIARY_UNIT_FONT_SIZE,
         )
     activity_layout.layout_elements.append(unit_layout)
     context.layout_model_mapping.add_mapping(unit_layout, unit_of_information)
@@ -246,9 +240,7 @@ def _make_and_add_operator_layout(context, operator, input_operator):
         input_glyph = _input_operator_glyph(context, input_operator)
         if input_glyph is None:
             return
-        operator_layout = _builder(
-            operator_layout_class, position=input_glyph.position
-        )
+        operator_layout = _builder(operator_layout_class, position=input_glyph.position)
         # plain: inherit the curated input operator's connector geometry, so the
         # arcs meet the same connectors (e.g. a vertical operator with ports
         # up/down) the input map drew.
@@ -349,9 +341,7 @@ def resolve_operator_arc_segments(arc, source_builder, target_builder):
     is_logic_arc = momapy.builder.isinstance_or_builder(
         arc, momapy.sbgn.af.LogicArcLayout
     )
-    return [
-        _operator_connector_segment(source_builder, target_builder, is_logic_arc)
-    ]
+    return [_operator_connector_segment(source_builder, target_builder, is_logic_arc)]
 
 
 def _make_logic_arc(context, operator_layout, input_layout):
@@ -372,12 +362,8 @@ def _make_logic_arc(context, operator_layout, input_layout):
 
 
 def _make_and_add_influence_layout(context, influence):
-    source_layouts = context.model_element_to_layout_elements.get(
-        id(influence.source)
-    )
-    target_layouts = context.model_element_to_layout_elements.get(
-        id(influence.target)
-    )
+    source_layouts = context.model_element_to_layout_elements.get(id(influence.source))
+    target_layouts = context.model_element_to_layout_elements.get(id(influence.target))
     if not source_layouts or not target_layouts:
         return
     prefer_nearest = (
@@ -386,9 +372,7 @@ def _make_and_add_influence_layout(context, influence):
     for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
         source_layouts, target_layouts, prefer_nearest
     ):
-        arc = _make_influence_arc(
-            context, influence, source_layout, target_layout
-        )
+        arc = _make_influence_arc(context, influence, source_layout, target_layout)
         context.layout.layout_elements.append(arc)
         context.layout_model_mapping.add_mapping(
             frozenset([arc, source_layout, target_layout]), influence, anchor=arc
@@ -401,9 +385,7 @@ def _make_influence_arc(context, influence, source_layout, target_layout):
     # other influence runs plain border-to-border (untouched).
     if context.layout_mode == "dot":
         segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
-    elif momapy.builder.isinstance_or_builder(
-        source_layout, _OPERATOR_LAYOUT_CLASSES
-    ):
+    elif momapy.builder.isinstance_or_builder(source_layout, _OPERATOR_LAYOUT_CLASSES):
         segments = (
             _operator_connector_segment(
                 source_layout, target_layout, is_logic_arc=False

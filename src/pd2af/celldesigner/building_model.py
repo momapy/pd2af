@@ -168,9 +168,7 @@ def get_or_make_stripped_species(
     candidate = dataclasses.replace(input_species, **fields)
     canonical = register_or_reuse(candidate, cache)
     if canonical is not input_species:
-        input_model_element_to_canonical_model_element[id(input_species)] = (
-            canonical
-        )
+        input_model_element_to_canonical_model_element[id(input_species)] = canonical
     return canonical
 
 
@@ -212,8 +210,7 @@ def collect_ancestor_compartments(compartments):
         next_frontier = set(
             compartment.outside
             for compartment in frontier
-            if compartment.outside is not None
-            and compartment.outside not in expanded
+            if compartment.outside is not None and compartment.outside not in expanded
         )
         if not next_frontier:
             break
@@ -275,9 +272,7 @@ def _make_and_add_compartments(context):
 def _compartment_for_input_species(context, input_species):
     if getattr(input_species, "compartment", None) is not None:
         return input_species.compartment
-    return get_parent_complex_compartment(
-        input_species, context.subunit_to_top_level
-    )
+    return get_parent_complex_compartment(input_species, context.subunit_to_top_level)
 
 
 def _make_and_add_templates(context):
@@ -293,9 +288,7 @@ def _make_and_add_templates(context):
         input_species = context.clingo_id_to_model_element[atom.key.species]
         for input_template in _walk_templates(input_species):
             if strip:
-                canonical = get_or_make_stripped_template(
-                    input_template, context.cache
-                )
+                canonical = get_or_make_stripped_template(input_template, context.cache)
             else:
                 canonical = register_or_reuse(input_template, context.cache)
             add_model_element_if_new(
@@ -321,12 +314,8 @@ def _make_and_add_species(context):
         if add_model_element_if_new(
             context.model.species, species, seen_species_identities
         ):
-            input_species = context.clingo_id_to_model_element[
-                atom.key.species
-            ]
-            context.activity_emissions.append(
-                (type(atom.key), species, input_species)
-            )
+            input_species = context.clingo_id_to_model_element[atom.key.species]
+            context.activity_emissions.append((type(atom.key), species, input_species))
 
 
 def _resolve_activity_key(context, key):
@@ -359,12 +348,8 @@ def _resolve_activity_key(context, key):
 def _make_and_add_modulations(context):
     seen_modulation_identities = set()
     for atom in context.influence_atoms:
-        modulation_class = pd2af.predicates.predicate_to_model_element_class[
-            type(atom)
-        ]
-        source = pd2af.building_model.resolve_influence_source(
-            context, atom.source
-        )
+        modulation_class = pd2af.predicates.predicate_to_model_element_class[type(atom)]
+        source = pd2af.building_model.resolve_influence_source(context, atom.source)
         if source is None:
             continue
         target = context.key_to_activity[atom.target]

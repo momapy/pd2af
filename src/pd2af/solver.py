@@ -77,9 +77,7 @@ def _build_id_to_generated_constant(clingo_id_to_model_element):
     }
 
 
-def _resolve_ids_to_generated_constants(
-    ids, id_to_generated_constant, option_name
-):
+def _resolve_ids_to_generated_constants(ids, id_to_generated_constant, option_name):
     """Validate `ids` name known species / entity pools and return their constants.
 
     Raises `ValueError` (naming `option_name`, e.g. `--set-active`) if any id is
@@ -87,9 +85,7 @@ def _resolve_ids_to_generated_constants(
     bare into a fact.
     """
     unknown_ids = [
-        identifier
-        for identifier in ids
-        if identifier not in id_to_generated_constant
+        identifier for identifier in ids if identifier not in id_to_generated_constant
     ]
     if unknown_ids:
         raise ValueError(
@@ -129,9 +125,7 @@ def _add_activity_override_facts(
     set_active = set_active or []
     set_inactive = set_inactive or []
     if set_all_active and set_all_inactive:
-        raise ValueError(
-            "cannot pass both --set-all-active and --set-all-inactive"
-        )
+        raise ValueError("cannot pass both --set-all-active and --set-all-inactive")
     conflicting_ids = set(set_active) & set(set_inactive)
     if conflicting_ids:
         raise ValueError(

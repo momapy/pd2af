@@ -59,10 +59,18 @@ class TestBuildProgram:
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
 
     def test_path_inference_modes_carry_kind_through_composes_to(self):
-        for mode in ("normal", "normal-no-complex", "keep-species", "keep-species-no-complex"):
+        for mode in (
+            "normal",
+            "normal-no-complex",
+            "keep-species",
+            "keep-species-no-complex",
+        ):
             program = pd2af.rules.build_program(mode)
             assert "composesTo(triggers, positivelyInfluences)" in program
-            assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" in program
+            assert (
+                "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)"
+                in program
+            )
 
     def test_normal_no_complex_variants_promote_active_subunits(self):
         for mode in ("normal-no-complex", "keep-species-no-complex"):
@@ -173,14 +181,20 @@ class TestKeepReactionsMode:
         program = pd2af.rules.build_program("keep-reactions")
         # the modulation-arc rule and its kind table, plus the modifier->product
         # rules, all come from `paths:core`/`influences:kind`.
-        assert "hasInfluenceKind(MODULATION, triggers) :- triggering(MODULATION)." in program
+        assert (
+            "hasInfluenceKind(MODULATION, triggers) :- triggering(MODULATION)."
+            in program
+        )
         assert "hasSource(MODULATION, SOURCE_SPECIES)" in program
         assert "catalyzer(MODIFIER)" in program
 
     def test_omits_multi_hop_chaining(self):
         program = pd2af.rules.build_program("keep-reactions")
         assert "not isCyclicallyTransformedTo" not in program
-        assert "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)" not in program
+        assert (
+            "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)"
+            not in program
+        )
 
     def test_omits_consumption_and_sparing(self):
         program = pd2af.rules.build_program("keep-reactions")
@@ -242,21 +256,19 @@ class TestMergedModesSbgnPdVariant:
         assert "new_species_from_template" not in program
         assert "isMergeableEntity" not in program
         assert (
-            "hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL)." in program
+            "hasActivityCarrier(ENTITY_POOL, ENTITY_POOL) :- entityPool(ENTITY_POOL)."
+            in program
         )
         # The CellDesigner species carrier must NOT leak into the SBGN-PD program
         # (its absence is exactly the carrier bug this variant fixes).
         assert (
-            "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)."
-            not in program
+            "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." not in program
         )
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_celldesigner_variant_uses_species_carrier(self, mode):
         program = pd2af.rules.build_program(mode, language="celldesigner")
-        assert (
-            "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
-        )
+        assert "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
         assert "isMergeableEntity" not in program
         assert "new_species_from_template" not in program
 
@@ -383,9 +395,7 @@ class TestModeExtensionPoint:
     built-in one: its `rule_group_references` name registered groups and its
     `rule_group_definitions` are registered alongside them."""
 
-    def test_contributed_mode_composes_references_and_definitions(
-        self, monkeypatch
-    ):
+    def test_contributed_mode_composes_references_and_definitions(self, monkeypatch):
         contributed_group = aspcompose.RuleGroup(
             identifier="contributed:emit",
             depends_on=frozenset({"influences:output"}),
@@ -427,9 +437,7 @@ class TestModeExtensionPoint:
         finally:
             pd2af.modes.get_transformation_modes.cache_clear()
 
-    def test_dangling_group_reference_names_the_mode_and_the_group(
-        self, monkeypatch
-    ):
+    def test_dangling_group_reference_names_the_mode_and_the_group(self, monkeypatch):
         contributed_mode = pd2af.modes.TransformationMode(
             name="dangling",
             docs="a test-only mode naming a group nothing registers",

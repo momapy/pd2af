@@ -12,9 +12,7 @@ import pd2af.languages
 # The concrete layout modes -> their one-line CLI description, in display order.
 LAYOUT_MODES = {
     "plain": "reuse original positions",
-    "overlay": (
-        "reuse full original layout with unmapped layout elements dimmed"
-    ),
+    "overlay": ("reuse full original layout with unmapped layout elements dimmed"),
     "dot": "graphviz `dot` auto-layout (requires `dot` on PATH)",
 }
 

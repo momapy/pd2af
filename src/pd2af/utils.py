@@ -190,12 +190,8 @@ def highlight_layout_elements(layout_elements, layout):
     layout_element_selector = make_selector(
         momapy.styling.ClassSelector("LayoutElement")
     )
-    active_border_selector = make_selector(
-        _ClassNameSuffixSelector("ActiveLayout")
-    )
-    text_layout_selector = make_selector(
-        momapy.styling.TypeSelector("TextLayout")
-    )
+    active_border_selector = make_selector(_ClassNameSuffixSelector("ActiveLayout"))
+    text_layout_selector = make_selector(momapy.styling.TypeSelector("TextLayout"))
     production_layout_selector = make_selector(
         momapy.styling.TypeSelector("ProductionLayout")
     )
@@ -285,9 +281,7 @@ def _translate_layout_element(layout_element, translation_x, translation_y):
         layout_element.position.y + translation_y,
     )
     for sub_layout_element in layout_element.children():
-        _translate_layout_element(
-            sub_layout_element, translation_x, translation_y
-        )
+        _translate_layout_element(sub_layout_element, translation_x, translation_y)
 
 
 def _get_coordinates_from_pydot_node(dot_node):
@@ -388,9 +382,7 @@ def _build_dot_graph(
             # cluster -- so resolve defensively.
             compartment = getattr(model_element, "compartment", None)
             if compartment is not None:
-                compartment_dot_cluster = compartment_to_dot_cluster.get(
-                    compartment
-                )
+                compartment_dot_cluster = compartment_to_dot_cluster.get(compartment)
                 if compartment_dot_cluster is not None:
                     compartment_dot_cluster.add_node(dot_node)
                 else:
@@ -438,10 +430,8 @@ def _apply_dot_cluster_bounding_boxes_to_compartments(
     positions consumed elsewhere. An empty cluster has no `bb`; its compartment
     keeps its built geometry."""
     for dot_subgraph in dot_graph.get_subgraphs():
-        compartment_layout_element = (
-            dot_cluster_name_to_compartment_layout_element.get(
-                dot_subgraph.get_name().strip('"')
-            )
+        compartment_layout_element = dot_cluster_name_to_compartment_layout_element.get(
+            dot_subgraph.get_name().strip('"')
         )
         if compartment_layout_element is not None:
             bounding_box = None
@@ -586,9 +576,7 @@ def _make_offset_segments(
     delta_y = frame_end_center.y - frame_start_center.y
     length = math.hypot(delta_x, delta_y)
     if offset == 0 or length == 0:
-        return _make_straight_segments(
-            source_layout_element, target_layout_element
-        )
+        return _make_straight_segments(source_layout_element, target_layout_element)
     normal_x = -delta_y / length
     normal_y = delta_x / length
     middle_x = (frame_start_center.x + frame_end_center.x) / 2
@@ -609,12 +597,8 @@ def _make_straight_segments(source_layout_element, target_layout_element):
     """Segments for an arc drawn straight -- the only arc between its two nodes,
     or the middle one of an odd group: a single segment between the two node
     borders."""
-    start_point = source_layout_element.own_border(
-        target_layout_element.center()
-    )
-    end_point = target_layout_element.own_border(
-        source_layout_element.center()
-    )
+    start_point = source_layout_element.own_border(target_layout_element.center())
+    end_point = target_layout_element.own_border(source_layout_element.center())
     return [momapy.geometry.Segment(start_point, end_point)]
 
 
@@ -723,19 +707,13 @@ def _rebuild_arc_geometry(
         first_node_id, second_node_id = node_pair
         if first_node_id == second_node_id:
             for index, placement in enumerate(placements):
-                start_angle, end_angle = _make_self_loop_angles(
-                    index, len(placements)
-                )
+                start_angle, end_angle = _make_self_loop_angles(index, len(placements))
                 placement.arc.segments = _make_self_loop_segments(
                     placement.source_layout_element, start_angle, end_angle
                 )
             continue
-        frame_start_center = id_to_new_layout_element_builder[
-            first_node_id
-        ].center()
-        frame_end_center = id_to_new_layout_element_builder[
-            second_node_id
-        ].center()
+        frame_start_center = id_to_new_layout_element_builder[first_node_id].center()
+        frame_end_center = id_to_new_layout_element_builder[second_node_id].center()
         offsets = _make_offset_ladder(len(placements))
         for offset, placement in zip(offsets, placements):
             placement.arc.segments = _make_offset_segments(

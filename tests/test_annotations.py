@@ -39,9 +39,7 @@ class TestCarryAnnotationsThroughProvenance:
         provenance = momapy.utils.FrozenIdentityMultiDict(
             {output: [input_one, input_two]}
         )
-        annotation_one, annotation_two = _annotation("urn:one"), _annotation(
-            "urn:two"
-        )
+        annotation_one, annotation_two = _annotation("urn:one"), _annotation("urn:two")
         note_one, note_two = "<body>one</body>", "<body>two</body>"
         output_annotations, output_notes = carry_annotations_through_provenance(
             provenance,
@@ -54,18 +52,12 @@ class TestCarryAnnotationsThroughProvenance:
                 input_two: frozenset([note_two]),
             },
         )
-        assert output_annotations[output] == frozenset(
-            [annotation_one, annotation_two]
-        )
+        assert output_annotations[output] == frozenset([annotation_one, annotation_two])
         assert output_notes[output] == frozenset([note_one, note_two])
 
     def test_empty_and_none_inputs_return_empty(self):
-        provenance = momapy.utils.FrozenIdentityMultiDict(
-            {object(): [object()]}
-        )
-        assert carry_annotations_through_provenance(
-            provenance, None, None
-        ) == ({}, {})
+        provenance = momapy.utils.FrozenIdentityMultiDict({object(): [object()]})
+        assert carry_annotations_through_provenance(provenance, None, None) == ({}, {})
         assert carry_annotations_through_provenance(None, {}, {}) == ({}, {})
 
     def test_map_level_metadata_rekeyed_onto_output_map(self):
@@ -128,9 +120,7 @@ class TestSubunitAnnotationCarry:
                 subunit
             ] <= result.element_to_annotations.get(subunit, frozenset())
         # and the output subunits are genuine provenance keys
-        assert any(
-            subunit in result.provenance for subunit in surviving_subunits
-        )
+        assert any(subunit in result.provenance for subunit in surviving_subunits)
 
     def test_round_trip_preserves_included_species_annotations(
         self, annotated_reader_result, tmp_path

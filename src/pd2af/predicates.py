@@ -11,6 +11,7 @@ class keptSpeciesKey(clorm.Predicate):
     solver looks it up in ``id_to_model_element`` to recover the
     ``Species`` object.
     """
+
     species: clorm.ConstantStr
 
 
@@ -21,6 +22,7 @@ class promotedSubunitKey(clorm.Predicate):
     The single argument is the synthetic ASP ID of the subunit species.
     Emitted by ``normal-no-complex`` and ``keep-species-no-complex`` modes.
     """
+
     species: clorm.ConstantStr
 
 
@@ -37,6 +39,7 @@ class logicalOperatorKey(clorm.Predicate):
     object. An operator is only ever an influence *source*, never a
     target, so it widens ``_INFLUENCE_SOURCE`` but not the activity key.
     """
+
     gate: clorm.ConstantStr
 
 
@@ -53,6 +56,7 @@ class activity(clorm.Predicate):
     carries the activity's identity — one of the two activity-key
     wrappers.
     """
+
     key: _ACTIVITY_KEY
 
 
@@ -65,12 +69,14 @@ class activity(clorm.Predicate):
 
 class positivelyInfluences(clorm.Predicate):
     """A positive-influence edge (source activates target)."""
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class negativelyInfluences(clorm.Predicate):
     """A negative-influence edge (source inhibits target)."""
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
@@ -79,6 +85,7 @@ class modulates(clorm.Predicate):
     """A modulation edge: source influences target with an effect of
     unknown sign.
     """
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
@@ -87,30 +94,35 @@ class triggers(clorm.Predicate):
     """A triggering edge (necessary stimulation): source is required for
     target.
     """
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownPositivelyInfluences(clorm.Predicate):
     """A positive-influence edge whose existence is uncertain."""
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownNegativelyInfluences(clorm.Predicate):
     """A negative-influence edge whose existence is uncertain."""
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownModulates(clorm.Predicate):
     """A modulation edge whose existence is uncertain."""
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class unknownTriggers(clorm.Predicate):
     """A triggering edge whose existence is uncertain."""
+
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
@@ -131,6 +143,7 @@ class logicalOperator(clorm.Predicate):
     KIND-token idiom and avoids same-name collisions with the input
     ontology's per-type operator functors.
     """
+
     key: logicalOperatorKey
     type_: clorm.ConstantStr
 
@@ -139,6 +152,7 @@ class logicalOperatorInput(clorm.Predicate):
     """An input edge of a logical operator: one activity feeding the
     operator. Always wrapped by ``new(...)`` in rule heads.
     """
+
     operator: logicalOperatorKey
     input: _ACTIVITY_KEY
 
@@ -147,6 +161,7 @@ class new(clorm.Predicate):
     """Top-level marker: this fact belongs to the *new* AF map being
     constructed (as opposed to facts about the input PD map).
     """
+
     object_: (
         activity
         | positivelyInfluences

@@ -60,9 +60,7 @@ _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
 
 # An unrecognised entity class falls back to an unspecified-entity unit of
 # information rather than failing the whole transformation.
-_FALLBACK_UNIT_OF_INFORMATION_CLASS = (
-    momapy.sbgn.af.UnspecifiedEntityUnitOfInformation
-)
+_FALLBACK_UNIT_OF_INFORMATION_CLASS = momapy.sbgn.af.UnspecifiedEntityUnitOfInformation
 
 # Influence predicate -> AF influence class. SBGN-PD only ever emits the four
 # left-hand kinds (it has no "unknown" modulation twins), but the unknown
@@ -90,9 +88,7 @@ _OPERATOR_TYPE_TO_OPERATOR_CLASS = {
 
 
 def make_and_add_model(context, clingo_model):
-    context.model = momapy.builder.get_or_make_builder_cls(
-        momapy.sbgn.af.SBGNAFModel
-    )()
+    context.model = momapy.builder.get_or_make_builder_cls(momapy.sbgn.af.SBGNAFModel)()
     pd2af.building_model.collect_atoms(context, clingo_model)
     context.subunit_to_top_level = pd2af.building_model.build_subunit_to_top_level(
         context.input_map.model.entity_pools
@@ -144,15 +140,11 @@ def _make_and_add_compartments(context):
 
 
 def _get_or_make_compartment(context, input_compartment):
-    canonical = context.input_compartment_to_af_compartment.get(
-        id(input_compartment)
-    )
+    canonical = context.input_compartment_to_af_compartment.get(id(input_compartment))
     if canonical is None:
         candidate = momapy.sbgn.af.Compartment(label=input_compartment.label)
         canonical = register_or_reuse(candidate, context.cache)
-        context.input_compartment_to_af_compartment[id(input_compartment)] = (
-            canonical
-        )
+        context.input_compartment_to_af_compartment[id(input_compartment)] = canonical
     # Reverse index so the layout pass can recover the input compartment (and
     # thus its glyph) from the canonical AF compartment. Keyed by id(canonical):
     # if several input compartments dedup to one AF compartment by label, the
@@ -197,9 +189,7 @@ def _make_activity(context, input_element, strip=False):
         type(input_element), _FALLBACK_UNIT_OF_INFORMATION_CLASS
     )
     unit_of_information_label = (
-        pd2af.sbgn.building_labels.make_units_of_information_label(
-            input_element
-        )
+        pd2af.sbgn.building_labels.make_units_of_information_label(input_element)
         if strip
         else None
     )
@@ -225,9 +215,7 @@ def _make_activity(context, input_element, strip=False):
 def _make_and_add_influences(context):
     seen_influence_identities = set()
     for atom in context.influence_atoms:
-        source = pd2af.building_model.resolve_influence_source(
-            context, atom.source
-        )
+        source = pd2af.building_model.resolve_influence_source(context, atom.source)
         target = context.key_to_activity.get(atom.target)
         if source is None or target is None:
             continue
