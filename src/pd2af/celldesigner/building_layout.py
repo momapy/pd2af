@@ -164,7 +164,7 @@ def make_decoration_stripped_layout(input_layout, original_to_stripped):
     non-stripping path; a subtree that needs no change is returned unchanged
     (shared with the input). ``original_to_stripped`` lets the caller map the
     surviving glyphs back to their model elements
-    (:func:`add_mappings_for_stripped_layout`)."""
+    (:func:`add_mappings_for_layout_and_descendants`)."""
     children = getattr(input_layout, "layout_elements", ()) or ()
     stripped_children = []
     changed = False
@@ -261,52 +261,32 @@ def make_logic_arc(context, gate_layout, input_layout):
 
 
 def add_mappings_for_layout_and_descendants(
-    input_layout_model_mapping,
-    layout_element,
-    mapping_builder,
-    input_model_element_to_canonical_model_element=None,
+    context, input_layout, original_to_stripped=None
 ):
-    elements = [layout_element] + list(layout_element.descendants())
-    for element in elements:
-        if element in input_layout_model_mapping:
-            model_value = input_layout_model_mapping[element]
-            if input_model_element_to_canonical_model_element is not None:
-                model_value = input_model_element_to_canonical_model_element.get(
-                    id(model_value), model_value
-                )
-            mapping_builder.add_mapping(element, model_value)
+    """Map an input glyph and its descendants to their model elements.
 
-
-def add_mappings_for_stripped_layout(
-    input_layout_model_mapping,
-    input_layout,
-    original_to_stripped,
-    mapping_builder,
-    input_model_element_to_canonical_model_element=None,
-):
-    """Map a decoration-stripped glyph's surviving elements to their model
-    elements.
-
-    Counterpart of ``add_mappings_for_layout_and_descendants`` for the stripped
-    clones of ``make_decoration_stripped_layout``: a stripped sub-glyph may be a
-    fresh ``dataclasses.replace`` copy that is not a key in
-    ``input_layout_model_mapping`` (keyed by the input frozen objects), so we walk
-    the input originals and follow each to its stripped counterpart via
-    ``original_to_stripped``. Dropped decoration glyphs are absent from that map,
-    so they never get mapped -- and being absent from the layout, never render.
+    With ``original_to_stripped``, the glyphs actually placed are the stripped
+    clones of :func:`make_decoration_stripped_layout`: a clone may be a fresh
+    ``dataclasses.replace`` copy that is not a key of the input layout-model
+    mapping (keyed by the input frozen objects), so we walk the input originals
+    and follow each to its stripped counterpart. Dropped decoration glyphs are
+    absent from that map, so they never get mapped -- and being absent from the
+    layout, never render.
     """
-    originals = [input_layout] + list(input_layout.descendants())
-    for original in originals:
-        stripped = original_to_stripped.get(id(original))
-        if stripped is None:
+    input_layout_model_mapping = context.input_map.layout_model_mapping
+    for original in [input_layout] + list(input_layout.descendants()):
+        placed = original
+        if original_to_stripped is not None:
+            placed = original_to_stripped.get(id(original))
+            if placed is None:
+                continue
+        if original not in input_layout_model_mapping:
             continue
-        if original in input_layout_model_mapping:
-            model_value = input_layout_model_mapping[original]
-            if input_model_element_to_canonical_model_element is not None:
-                model_value = input_model_element_to_canonical_model_element.get(
-                    id(model_value), model_value
-                )
-            mapping_builder.add_mapping(stripped, model_value)
+        model_value = input_layout_model_mapping[original]
+        model_value = context.input_model_element_to_canonical_model_element.get(
+            id(model_value), model_value
+        )
+        context.layout_model_mapping.add_mapping(placed, model_value)
 
 
 def add_modulation_mapping(
@@ -372,14 +352,7 @@ def _make_and_add_compartment_layout(context, compartment):
         return
     context.layout.layout_elements.extend(input_layouts)
     for input_layout in input_layouts:
-        add_mappings_for_layout_and_descendants(
-            context.input_map.layout_model_mapping,
-            input_layout,
-            context.layout_model_mapping,
-            input_model_element_to_canonical_model_element=(
-                context.input_model_element_to_canonical_model_element
-            ),
-        )
+        add_mappings_for_layout_and_descendants(context, input_layout)
 
 
 def _add_decoration_stripped_species_layouts(context, species, input_layouts):
@@ -389,14 +362,8 @@ def _add_decoration_stripped_species_layouts(context, species, input_layouts):
     for input_layout in input_layouts:
         original_to_stripped = {}
         stripped = make_decoration_stripped_layout(input_layout, original_to_stripped)
-        add_mappings_for_stripped_layout(
-            context.input_map.layout_model_mapping,
-            input_layout,
-            original_to_stripped,
-            context.layout_model_mapping,
-            input_model_element_to_canonical_model_element=(
-                context.input_model_element_to_canonical_model_element
-            ),
+        add_mappings_for_layout_and_descendants(
+            context, input_layout, original_to_stripped
         )
         stripped_layouts.append(stripped)
     context.layout.layout_elements.extend(stripped_layouts)
@@ -427,14 +394,7 @@ def _make_and_add_species_layout(context, species, input_species):
         else:
             context.layout.layout_elements.extend(input_layouts)
             for input_layout in input_layouts:
-                add_mappings_for_layout_and_descendants(
-                    context.input_map.layout_model_mapping,
-                    input_layout,
-                    context.layout_model_mapping,
-                    input_model_element_to_canonical_model_element=(
-                        context.input_model_element_to_canonical_model_element
-                    ),
-                )
+                add_mappings_for_layout_and_descendants(context, input_layout)
             context.model_element_to_layout_elements[id(species)] = tuple(
                 input_layouts
             )
