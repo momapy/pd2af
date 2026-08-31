@@ -1,3 +1,5 @@
+"""The public :func:`transform` entry point and its result type."""
+
 import dataclasses
 import typing
 
@@ -99,6 +101,42 @@ def transform(
     element_to_annotations=None,
     element_to_notes=None,
 ):
+    """Transform a process-description map or model into an activity-flow one.
+
+    Args:
+        map_or_model: The input CellDesigner or SBGN-PD map, or a bare model of
+            either language. A bare model has no geometry, so ``layout_mode``
+            must be ``"auto"`` or ``None`` and no layout is built.
+        mode: Name of the transformation mode; see
+            :func:`pd2af.modes.get_transformation_modes`.
+        layout_mode: How to lay the output out: ``"dot"`` (graphviz),
+            ``"plain"`` (reuse the original positions), ``"overlay"`` (reuse the
+            full original layout, dimming what is not in the model), ``None``
+            (no layout), or ``"auto"`` to pick from the input.
+        influence_pairing: How to draw an influence whose source or target maps
+            to several glyphs: ``"cross"`` (one arc per pair) or ``"nearest"``
+            (a single arc between the closest pair).
+        set_active: Ids of elements to surface as activities whatever the map's
+            structural signals say.
+        set_inactive: Ids of elements to suppress, overriding the automatic
+            activity discovery. Wins over ``set_all_active``; an id passed to
+            both ``set_active`` and ``set_inactive`` is an error.
+        set_all_active: Make every top-level species / entity pool an activity,
+            subunits excluded.
+        set_all_inactive: Suppress activity for every element, subunits
+            included.
+        exclude_groups: Identifiers of rule groups to drop from the program.
+        exclude_rules: Identifiers of individual rules to drop.
+        element_to_annotations: The reader's ``element -> annotations``
+            side-table, to be carried onto the output elements.
+        element_to_notes: The reader's ``element -> notes`` side-table, to be
+            carried onto the output elements.
+
+    Returns:
+        A :class:`TransformerResult` holding the output map (or model, for
+        model input), the provenance mapping, and the carried annotation and
+        note side-tables.
+    """
     transformation_mode = pd2af.modes.get_transformation_mode(mode)
     layout_mode = _normalize_layout_mode(layout_mode)
     is_model_input = isinstance(map_or_model, momapy.core.model.Model)

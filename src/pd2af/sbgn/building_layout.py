@@ -81,6 +81,7 @@ def _builder(layout_class, **kwargs):
 
 
 def make_and_add_layout(context):
+    """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
     if context.layout_mode not in ("plain", "dot"):
         raise NotImplementedError(
             "SBGN-AF output supports the 'plain' and 'dot' layout modes "
@@ -105,8 +106,10 @@ def make_and_add_layout(context):
 
 
 def _get_input_layouts(context, input_element):
-    """Return the input map's layout elements for a model element, as a tuple
-    (empty when the element has none). A cloned entity pool maps to several."""
+    """Return the input map's layout elements for a model element, as a tuple.
+
+    Empty when the element has none; a cloned entity pool maps to several.
+    """
     input_layouts = context.input_map.layout_model_mapping.get_mapping(input_element)
     return tuple(input_layouts) if input_layouts else ()
 
@@ -222,7 +225,8 @@ def _make_and_add_operator_layout(context, operator, input_operator):
     of {glyph, logic arcs, input activity layouts} anchored on the glyph -- the
     catalogue the SBGN-AF writer expects -- and is registered in
     ``model_element_to_layout_elements`` so the influence pass can resolve an
-    operator-sourced influence."""
+    operator-sourced influence.
+    """
     operator_layout_class = _OPERATOR_CLASS_TO_LAYOUT_CLASS.get(type(operator))
     if operator_layout_class is None:
         return
@@ -280,8 +284,11 @@ def _make_and_add_operator_layout(context, operator, input_operator):
 
 
 def _input_operator_glyph(context, input_operator):
-    """Return the input SBGN-PD operator's glyph layout (the node anchoring its
-    frozenset mapping), or ``None`` when the input operator has no layout."""
+    """Return the input SBGN-PD operator's glyph layout, or ``None``.
+
+    The glyph is the node anchoring the operator's frozenset mapping; ``None``
+    when the input operator has no layout.
+    """
     mapping = context.input_map.layout_model_mapping.get_mapping(input_operator)
     if not mapping:
         return None
@@ -299,15 +306,17 @@ def _input_operator_glyph(context, input_operator):
 
 
 def _operator_connector_segment(operator_layout, other_layout, is_logic_arc):
-    """Segment between a logical operator and one of its arc endpoints, attached
-    to the operator's *connector tip* rather than its circle border.
+    """Segment between a logical operator and one of its arc endpoints.
+
+    It attaches to the operator's *connector tip* rather than its circle border.
 
     A logic arc (operator -> input) meets the **input** connector; an influence
     arc (operator -> target) leaves the **output** connector -- the opposite
     side. Which physical side that is depends on the operator's ``left_to_right``
     (and ``direction``), mirroring momapy's own connector selection in
     ``momapy.sbgn.utils.set_arcs_to_borders``. The operator is the arc's source
-    in both cases, so its connector tip is the segment's start point."""
+    in both cases, so its connector tip is the segment's start point.
+    """
     if is_logic_arc:
         tip = (
             operator_layout.left_connector_tip()
@@ -327,13 +336,14 @@ def _operator_connector_segment(operator_layout, other_layout, is_logic_arc):
 
 
 def resolve_operator_arc_segments(arc, source_builder, target_builder):
-    """Per-arc hook for :func:`pd2af.utils.make_auto_layout`'s arc-geometry
-    step: when ``arc`` is sourced by an operator glyph, return its
-    connector-attached segments recomputed from the graphviz-repositioned
-    geometry; otherwise return ``None`` so the caller keeps its normal border
-    geometry. This reuses the same connector helper as plain-mode arc creation,
-    so the auto snap is folded into the recompute that already iterates every
-    arc."""
+    """Per-arc hook for :func:`pd2af.utils.make_auto_layout`'s arc-geometry step.
+
+    When ``arc`` is sourced by an operator glyph, return its connector-attached
+    segments recomputed from the graphviz-repositioned geometry; otherwise
+    return ``None`` so the caller keeps its normal border geometry. This reuses
+    the same connector helper as plain-mode arc creation, so the auto snap is
+    folded into the recompute that already iterates every arc.
+    """
     if not momapy.builder.isinstance_or_builder(
         source_builder, _OPERATOR_LAYOUT_CLASSES
     ):

@@ -14,6 +14,8 @@ import pd2af.modes
 
 @dataclasses.dataclass
 class BuilderContext:
+    """The slots the model pass fills and the layout pass reads back."""
+
     # --- inputs ---
     input_map: object
     layout_mode: str | None

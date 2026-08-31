@@ -90,6 +90,7 @@ _MODULATION_CLASS_TO_LAYOUT_CLASS = {
 
 
 def new_layout_and_mapping_builders():
+    """A fresh, empty (layout builder, layout-model mapping builder) pair."""
     layout_builder_class = momapy.builder.get_or_make_builder_cls(
         momapy.core.layout.Layout
     )
@@ -102,10 +103,11 @@ def new_layout_and_mapping_builders():
 def clone_layout_pruning_foreground(
     input_layout_element, foreground_ids, object_to_builder
 ):
-    """Clone an input layout element as a builder for use as dimmed
-    background, omitting any descendant subtree whose input original is in
-    ``foreground_ids`` (already drawn in the foreground). Returns ``None``
-    when the element itself belongs to the foreground.
+    """Clone an input layout element as a builder, to serve as dimmed background.
+
+    Any descendant subtree whose input original is in ``foreground_ids``
+    (already drawn in the foreground) is omitted, and ``None`` is returned when
+    the element itself belongs to the foreground.
 
     Clones share ``object_to_builder`` so structure shared across the input
     layout stays shared once cloned, and they are builders -- not the input
@@ -148,9 +150,10 @@ def _prune_foreground_from_clone(
 
 
 def make_decoration_stripped_layout(input_layout, original_to_stripped):
-    """Return a frozen copy of ``input_layout`` stripped of every PTM-decoration
-    and active-border sub-glyph, at any depth, recording
-    ``id(original) -> stripped`` for every kept element.
+    """Return a frozen copy of ``input_layout`` stripped of its decoration glyphs.
+
+    Every PTM-decoration and active-border sub-glyph is dropped, at any depth,
+    and ``id(original) -> stripped`` recorded for every kept element.
 
     The merged proteoform modes (normal/normal-no-complex) strip the model's
     species of their decorations; this drops the matching layout glyphs
@@ -165,7 +168,8 @@ def make_decoration_stripped_layout(input_layout, original_to_stripped):
     non-stripping path; a subtree that needs no change is returned unchanged
     (shared with the input). ``original_to_stripped`` lets the caller map the
     surviving glyphs back to their model elements
-    (:func:`add_mappings_for_layout_and_descendants`)."""
+    (:func:`add_mappings_for_layout_and_descendants`).
+    """
     children = getattr(input_layout, "layout_elements", ()) or ()
     stripped_children = []
     changed = False
@@ -213,6 +217,11 @@ def make_synthetic_layout(species, index):
 
 
 def make_modulation_arc(context, modulation, source_layout, target_layout):
+    """Build the arc layout for ``modulation`` between two node layouts.
+
+    In the ``dot`` mode the segments are placeholders that graphviz overwrites;
+    otherwise they are computed from the two layouts' real geometry.
+    """
     arc_class = _MODULATION_CLASS_TO_LAYOUT_CLASS[type(modulation)]
     if context.layout_mode == "dot":
         segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
@@ -228,10 +237,12 @@ def make_modulation_arc(context, modulation, source_layout, target_layout):
 
 
 def make_synthetic_gate_layout(gate, index):
-    """Build a placeholder gate node for ``gate`` (the ``dot`` mode, when the
-    input gate has no curated layout). ``index`` seeds the position so two
-    content-equal synthetic gates stay content-distinct;
-    ``make_auto_layout`` repositions every node before render."""
+    """Build a placeholder gate node for ``gate``.
+
+    Used by the ``dot`` mode when the input gate has no curated layout.
+    ``index`` seeds the position so two content-equal synthetic gates stay
+    content-distinct; ``make_auto_layout`` repositions every node before render.
+    """
     layout_class = _GATE_CLASS_TO_LAYOUT_CLASS.get(type(gate))
     if layout_class is None:
         raise ValueError(
@@ -246,7 +257,8 @@ def make_logic_arc(context, gate_layout, input_layout):
 
     The CellDesigner writer locates a gate's inputs by scanning for logic arcs
     whose ``source`` is the gate layout, so the arc runs gate -> input species
-    (the CellDesigner convention), not input -> gate."""
+    (the CellDesigner convention), not input -> gate.
+    """
     if context.layout_mode == "dot":
         segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
     else:
@@ -292,6 +304,12 @@ def add_mappings_for_layout_and_descendants(
 def add_modulation_mapping(
     mapping_builder, arc, source_layout, target_layout, modulation
 ):
+    """Map the arc, together with its two endpoint clusters, to ``modulation``.
+
+    An endpoint that is already part of a cluster (a species drawn as several
+    glyphs) contributes that whole cluster, so the mapping stays consistent with
+    the one the endpoint's own layout was registered under.
+    """
     source_key = mapping_builder._singleton_to_key.get(source_layout)
     source_cluster = (
         source_key if source_key is not None else frozenset([source_layout])
@@ -313,6 +331,7 @@ def add_modulation_mapping(
 
 
 def make_and_add_layout(context):
+    """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
     context.layout, context.layout_model_mapping = new_layout_and_mapping_builders()
 
     for compartment in pd2af.celldesigner.building_model.compartments_outermost_first(
@@ -356,8 +375,11 @@ def _make_and_add_compartment_layout(context, compartment):
 
 
 def _add_decoration_stripped_species_layouts(context, species, input_layouts):
-    """Place decoration-pruned clones of ``input_layouts`` for ``species`` and
-    map their surviving glyphs to the model (the merged proteoform modes)."""
+    """Place decoration-pruned clones of ``input_layouts`` for ``species``.
+
+    Their surviving glyphs are mapped to the model (the merged proteoform
+    modes).
+    """
     stripped_layouts = []
     for input_layout in input_layouts:
         original_to_stripped = {}
@@ -405,16 +427,16 @@ def _make_and_add_species_layout(context, species, input_species):
 
 
 def _make_and_add_gate_layout(context, gate, input_gate):
-    """Place a gate glyph and its logic arcs, mirroring
-    :func:`_make_and_add_species_layout`.
+    """Place a gate glyph and its logic arcs.
 
-    The gate glyph is the curated input gate layout when one exists
+    Mirrors :func:`_make_and_add_species_layout`. The gate glyph is the curated input gate layout when one exists
     (plain/overlay, and dot when the input had one), otherwise a synthetic
     node (dot). It is mapped to the gate and registered in
     ``model_element_to_layout_elements`` so the modulation pass can resolve a
     gate-sourced modulation. One ``LogicArcLayout`` is drawn from each gate
     glyph to each input species' layout (gate -> input, the CellDesigner
-    writer's convention)."""
+    writer's convention).
+    """
     input_layouts = (
         context.input_map.layout_model_mapping.get_mapping(input_gate)
         if input_gate is not None
@@ -474,8 +496,9 @@ def _make_and_add_modulation_layout(context, modulation):
 
 
 def _add_dimmed_background(context, foreground, insert_index):
-    """Clone the input layout's remaining glyphs into ``context.layout`` as
-    unmapped background, for the dimmer to grey out.
+    """Clone the input layout's remaining glyphs into ``context.layout``.
+
+    They go in as unmapped background, for the dimmer to grey out.
 
     ``foreground`` is the set of layout elements built by the plain path
     above (input objects shared with the input map). Any input subtree

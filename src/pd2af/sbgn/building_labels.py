@@ -60,10 +60,11 @@ def _make_unit_of_information_token(unit_of_information):
 
 
 def make_units_of_information_label(entity_pool_or_subunit):
-    """Return the unit-of-information glyph label ``uoi1|uoi2|...`` for an
-    SBGN-PD ``entity_pool_or_subunit`` -- tokens ``prefix:value`` (or ``value``
-    with no prefix), sorted, joined by ``|`` -- or ``None`` when it carries no
-    units of information.
+    """Return the unit-of-information glyph label for an SBGN-PD element.
+
+    The label is ``uoi1|uoi2|...`` -- tokens ``prefix:value`` (or ``value`` with
+    no prefix), sorted, joined by ``|`` -- or ``None`` when
+    ``entity_pool_or_subunit`` carries no units of information.
 
     The merged ``normal`` / ``normal-no-complex`` modes move this off the activity
     *label* and onto the AF activity's typed unit-of-information glyph (see
@@ -85,8 +86,9 @@ def make_label(
     include_state_variables=True,
     include_units_of_information=True,
 ):
-    """Return the SBGN-AF activity label for an SBGN-PD
-    ``entity_pool_or_subunit``, per the rules in the module docstring.
+    """Return the SBGN-AF activity label for an SBGN-PD entity pool or subunit.
+
+    The rules are those given in the module docstring.
 
     When ``include_state_variables`` is ``False`` the state-variable block is
     omitted so that distinct proteoforms (same type/name/units, different state)

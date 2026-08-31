@@ -40,6 +40,7 @@ def build_map(
     *,
     mode: pd2af.modes.TransformationMode,
 ):
+    """Run the model and layout passes and return ``(new_map, provenance)``."""
     context = pd2af.context.BuilderContext(
         input_map=map_,
         layout_mode=layout_mode,
@@ -98,9 +99,9 @@ def record_provenance_for_subunit_trees(
     input_model_element_to_canonical_model_element,
     record_pair,
 ):
-    """Pair the subunits of an ``(output_species, input_species)`` pair and
-    record each pairing, recursing to arbitrary depth for nested complexes.
+    """Pair the subunits of an ``(output_species, input_species)`` pair.
 
+    Each pairing is recorded, recursing to arbitrary depth for nested complexes.
     Subunits are never activity keys -- the ASP ``topLevel`` relation resolves a
     subunit at any depth to its outermost complex -- so they reach provenance
     only through this walk. Pairing cannot be positional (``subunits`` is a

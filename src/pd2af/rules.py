@@ -72,9 +72,12 @@ from pd2af.languages import CELLDESIGNER, SBGN_PD
 
 
 def _activity_feature(name, *, base=(), variants=None, docs=""):
-    """One activity feature-group: a structural reason that derives a
-    `hasActivityCandidate`, excludable independently, depending on
-    `activity:core` (its candidate is only meaningful through the bridge)."""
+    """One activity feature-group: a structural reason deriving a candidate.
+
+    It derives a `hasActivityCandidate`, is excludable independently, and
+    depends on `activity:core` (its candidate is only meaningful through the
+    bridge).
+    """
     return RuleGroup(
         identifier=f"activity:{name}",
         depends_on=frozenset({"activity:core"}),
@@ -1297,8 +1300,7 @@ def build_program(
     exclude_groups: tuple[str, ...] = (),
     exclude_rules: tuple[str, ...] = (),
 ) -> str:
-    """Return the composed ASP program text for the named transformation mode
-    and input ``language``.
+    """Return the composed ASP program text for a mode and an input language.
 
     The mode names the groups its program is made of; the input language is an
     aspcompose *variant*. Language-agnostic rules live in each group's

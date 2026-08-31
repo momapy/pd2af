@@ -1,3 +1,5 @@
+"""The ``pd2af`` command-line interface."""
+
 import argparse
 import importlib.metadata
 import json
@@ -526,6 +528,7 @@ def _add_list_groups_parser(subparsers):
 
 
 def main(argv=None):
+    """Parse ``argv`` (``sys.argv`` by default) and run the named subcommand."""
     if argv is None:
         argv = sys.argv[1:]
     else:

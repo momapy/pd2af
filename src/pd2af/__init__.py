@@ -1,3 +1,5 @@
+"""Transform a process-description map into an activity-flow map."""
+
 from pd2af.core import transform, TransformerResult
 from pd2af.modes import (
     TransformationMode,

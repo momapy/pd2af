@@ -1,11 +1,12 @@
+"""The clorm predicates the ASP program is written against."""
+
 import clorm
 
 import momapy.celldesigner
 
 
 class keptSpeciesKey(clorm.Predicate):
-    """Activity-key wrapper: the AF activity reuses an input PD species
-    by identity.
+    """Activity-key wrapper: the AF activity reuses an input PD species by identity.
 
     The single argument is the original CellDesigner species ID. The
     solver looks it up in ``id_to_model_element`` to recover the
@@ -16,10 +17,10 @@ class keptSpeciesKey(clorm.Predicate):
 
 
 class promotedSubunitKey(clorm.Predicate):
-    """Activity-key wrapper: a PD subunit of a dissolved complex is
-    promoted to a top-level activity (added to ``model.species``).
+    """Activity-key wrapper: a PD subunit of a dissolved complex is promoted.
 
-    The single argument is the synthetic ASP ID of the subunit species.
+    The subunit becomes a top-level activity, added to ``model.species``. The
+    single argument is the synthetic ASP ID of the subunit species.
     Emitted by ``normal-no-complex`` and ``keep-species-no-complex`` modes.
     """
 
@@ -30,10 +31,10 @@ _ACTIVITY_KEY = keptSpeciesKey | promotedSubunitKey
 
 
 class logicalOperatorKey(clorm.Predicate):
-    """Activity-source wrapper: the AF influence is sourced by a logical
-    operator (AND / OR / NOT / unknown) authored in the input PD map.
+    """Activity-source wrapper: the AF influence is sourced by a logical operator.
 
-    The single argument is the original gate ID -- a CellDesigner
+    The operator (AND / OR / NOT / unknown) is authored in the input PD map. The
+    single argument is the original gate ID -- a CellDesigner
     ``BooleanLogicGate`` or an SBGN-PD ``LogicalOperator``. The solver
     looks it up in ``clingo_id_to_model_element`` to recover the gate
     object. An operator is only ever an influence *source*, never a
@@ -82,18 +83,14 @@ class negativelyInfluences(clorm.Predicate):
 
 
 class modulates(clorm.Predicate):
-    """A modulation edge: source influences target with an effect of
-    unknown sign.
-    """
+    """A modulation edge: source influences target with an effect of unknown sign."""
 
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
 
 
 class triggers(clorm.Predicate):
-    """A triggering edge (necessary stimulation): source is required for
-    target.
-    """
+    """A triggering edge (necessary stimulation): source is required for target."""
 
     source: _INFLUENCE_SOURCE
     target: _ACTIVITY_KEY
@@ -149,8 +146,9 @@ class logicalOperator(clorm.Predicate):
 
 
 class logicalOperatorInput(clorm.Predicate):
-    """An input edge of a logical operator: one activity feeding the
-    operator. Always wrapped by ``new(...)`` in rule heads.
+    """An input edge of a logical operator: one activity feeding it.
+
+    Always wrapped by ``new(...)`` in rule heads.
     """
 
     operator: logicalOperatorKey
@@ -158,8 +156,9 @@ class logicalOperatorInput(clorm.Predicate):
 
 
 class new(clorm.Predicate):
-    """Top-level marker: this fact belongs to the *new* AF map being
-    constructed (as opposed to facts about the input PD map).
+    """Top-level marker: this fact belongs to the *new* AF map being constructed.
+
+    As opposed to facts about the input PD map.
     """
 
     object_: (

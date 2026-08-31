@@ -167,6 +167,11 @@ def solve(
     exclude_groups=(),
     exclude_rules=(),
 ):
+    """Solve the ASP program for ``map_`` in ``mode``.
+
+    Returns the single clingo model of derived atoms together with the
+    ``clingo_id -> model_element`` map the build pass resolves keys through.
+    """
     clingo_id_to_model_element = {}
     language = pd2af.languages.get_language_from_map_or_model(map_)
     control = _make_control(

@@ -16,8 +16,11 @@ from pd2af.utils import add_model_element_if_new, register_or_reuse
 
 
 def collect_atoms(context, clingo_model):
-    """Sort the ``new(...)`` atoms into the context scratch lists by payload
-    type: activities, influences, logical operators and operator inputs."""
+    """Sort the ``new(...)`` atoms into the context scratch lists by payload type.
+
+    Activities, influences, logical operators and operator inputs each get their
+    own list.
+    """
     for atom in clingo_model.query(pd2af.predicates.new).all():
         payload = atom.object_
         if isinstance(payload, pd2af.predicates.activity):
@@ -31,19 +34,21 @@ def collect_atoms(context, clingo_model):
 
 
 def resolve_influence_source(context, source_key):
-    """Resolve an influence ``source`` key to its model element: a logical
-    operator resolves through ``key_to_operator``, any activity key through
-    ``key_to_activity``. ``None`` when the gate or the activity was not built,
-    so the caller skips the edge."""
+    """Resolve an influence ``source`` key to its model element.
+
+    A logical operator resolves through ``key_to_operator``, any activity key
+    through ``key_to_activity``. ``None`` when the gate or the activity was not
+    built, so the caller skips the edge.
+    """
     if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
         return context.key_to_operator.get(source_key)
     return context.key_to_activity.get(source_key)
 
 
 def build_subunit_to_top_level(top_level_elements):
-    """Map ``id(subunit)`` -> the top-level element it belongs to, for every
-    subunit of ``top_level_elements`` at any depth.
+    """Map ``id(subunit)`` -> the top-level element it belongs to.
 
+    Every subunit of ``top_level_elements`` is covered, at any depth.
     A subunit is a structural component, never an independent activity, so both
     builders attribute it to its outermost element: the CellDesigner builder
     takes the top-level species' compartment, the SBGN-AF builder the top-level
@@ -64,8 +69,10 @@ def build_subunit_to_top_level(top_level_elements):
 def make_and_add_operators(
     context, operator_type_to_class, operator_input_class, model_operators
 ):
-    """Build an operator for every authored logical operator and add those that
-    actually source an influence to ``model_operators``.
+    """Build every authored logical operator, adding the used ones to the model.
+
+    An operator reaches ``model_operators`` only when it actually sources an
+    influence.
 
     Every operator is built into ``context.key_to_operator``, so the influence
     pass can resolve an operator source. Only the operators that appear as an
@@ -111,8 +118,10 @@ def _get_or_make_operator(
     operator_type_to_class,
     operator_input_class,
 ):
-    """Build (and intern) an operator of ``operator_type`` whose inputs resolve
-    through ``context.key_to_activity``. Returns ``None`` for an unknown token.
+    """Build (and intern) an operator of ``operator_type``.
+
+    Its inputs resolve through ``context.key_to_activity``; an unknown token
+    yields ``None``.
 
     Each operator input and the operator itself are interned by content
     (``register_or_reuse``), so content-equal operators collapse to one

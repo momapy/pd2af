@@ -88,6 +88,7 @@ _OPERATOR_TYPE_TO_OPERATOR_CLASS = {
 
 
 def make_and_add_model(context, clingo_model):
+    """Build ``context.model`` from the clingo atoms (pass 1)."""
     context.model = momapy.builder.get_or_make_builder_cls(momapy.sbgn.af.SBGNAFModel)()
     pd2af.building_model.collect_atoms(context, clingo_model)
     context.subunit_to_top_level = pd2af.building_model.build_subunit_to_top_level(
@@ -105,10 +106,12 @@ def make_and_add_model(context, clingo_model):
 
 
 def _compartment_for_input_element(context, input_element):
-    """The compartment an element belongs to. SBGN-PD subunit classes have no
-    ``compartment`` field, so a subunit inherits its top-level entity pool's:
-    otherwise a promoted subunit activity would get ``compartment=None`` and
-    never merge with a top-level twin."""
+    """The compartment an element belongs to.
+
+    SBGN-PD subunit classes have no ``compartment`` field, so a subunit inherits
+    its top-level entity pool's: otherwise a promoted subunit activity would get
+    ``compartment=None`` and never merge with a top-level twin.
+    """
     compartment = getattr(input_element, "compartment", None)
     if compartment is not None:
         return compartment
@@ -181,7 +184,8 @@ def _make_activity(context, input_element, strip=False):
     units still keep activities distinct: ``UnitOfInformation.label`` is part of
     its content, so the dedup granularity is unchanged, only relocated.
     ``strip=False`` keeps the full label and a bare typed glyph, so distinct
-    proteoforms stay distinct (keep-species behaviour)."""
+    proteoforms stay distinct (keep-species behaviour).
+    """
     if isinstance(input_element, momapy.sbgn.pd.Phenotype):
         candidate = momapy.sbgn.af.Phenotype(label=input_element.label)
         return register_or_reuse(candidate, context.cache)

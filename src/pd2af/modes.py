@@ -82,8 +82,7 @@ class TransformationMode:
         )
 
     def compatible_layout_modes(self, language):
-        """The concrete layout modes valid for this mode on input of the
-        given language.
+        """The concrete layout modes valid for this mode on the given input language.
 
         Merged activities are synthesized from several input species, so they
         have no original geometry for `plain`/`overlay` to reuse.

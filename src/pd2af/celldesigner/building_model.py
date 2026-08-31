@@ -51,6 +51,7 @@ _OPERATOR_TYPE_TO_GATE_CLASS = {
 
 def get_or_make_kept_species_key_or_subunit(input_species, cache):
     """Canonical species for a ``keptSpeciesKey`` key (non-merged modes).
+
     The input species is the canonical instance — register it so later
     content-equal candidates collapse onto it.
     """
@@ -63,8 +64,9 @@ def get_or_make_promoted_subunit_key_species(
     cache,
     input_model_element_to_canonical_model_element,
 ):
-    """Canonical species for a ``promotedSubunitKey`` key. CellDesigner
-    subunits carry ``compartment=None`` (inherited from the parent
+    """Canonical species for a ``promotedSubunitKey`` key.
+
+    CellDesigner subunits carry ``compartment=None`` (inherited from the parent
     complex); when promoted to top-level they need the parent's
     compartment, otherwise the writer substitutes a synthetic ``default``
     compartment that the reader picks up, breaking content-eq on
@@ -98,9 +100,10 @@ def get_or_make_promoted_subunit_key_species(
 
 
 def get_or_make_stripped_template(input_template, cache):
-    """Strip proteoform decorations from ``input_template`` and intern
-    by content. Two distinct input templates that strip to the same
-    content yield a single canonical stripped template.
+    """Strip proteoform decorations from ``input_template`` and intern by content.
+
+    Two distinct input templates that strip to the same content yield a single
+    canonical stripped template.
 
     Kept templates must already be registered in the cache (per pipeline
     step (3), kept templates are collected before stripped ones are
@@ -127,8 +130,9 @@ def get_or_make_stripped_species(
     cache,
     input_model_element_to_canonical_model_element,
 ):
-    """Return a decoration-free canonical species for ``input_species`` (the
-    merged modes ``normal``/``normal-no-complex``). Clears every post-translational
+    """Return a decoration-free canonical species for ``input_species``.
+
+    Used by the merged modes (``normal``/``normal-no-complex``). Clears every post-translational
     decoration -- ``active`` (-> False), ``homomultimer`` (-> 1),
     ``modifications``, ``structural_states``, and, via a stripped template,
     ``modification_residues``/``regions`` -- sets the effective ``compartment``,
@@ -179,8 +183,9 @@ def get_or_make_modulation(modulation_class, source, target, cache):
 
 
 def get_parent_complex_compartment(subunit, subunit_to_top_level):
-    """Resolve a subunit's effective compartment by walking to its
-    containing top-level species. Subunits typically have no
+    """Resolve a subunit's effective compartment.
+
+    Walks to its containing top-level species: subunits typically have no
     ``compartment`` attribute of their own.
     """
     if getattr(subunit, "compartment", None) is not None:
@@ -190,6 +195,8 @@ def get_parent_complex_compartment(subunit, subunit_to_top_level):
 
 
 def compartments_outermost_first(compartments):
+    """``compartments`` sorted by nesting depth, so a container precedes its content."""
+
     def depth(compartment):
         result = 0
         seen = set()
@@ -204,6 +211,7 @@ def compartments_outermost_first(compartments):
 
 
 def collect_ancestor_compartments(compartments):
+    """``compartments`` plus every compartment they are nested in, transitively."""
     expanded = set(compartments)
     frontier = expanded
     while True:
@@ -225,6 +233,7 @@ def collect_ancestor_compartments(compartments):
 
 
 def make_and_add_model(context, clingo_model):
+    """Build ``context.model`` from the clingo atoms (pass 1)."""
     context.model = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
     )()
@@ -245,8 +254,10 @@ def make_and_add_model(context, clingo_model):
 
 
 def _activity_atoms_in_layer_order(context):
-    """The activity atoms sorted by the layer their key class belongs to, so a
-    kept species is always registered before a promoted subunit."""
+    """The activity atoms sorted by the layer their key class belongs to.
+
+    A kept species is thus always registered before a promoted subunit.
+    """
     return sorted(
         context.activity_atoms,
         key=lambda atom: _SPECIES_LAYER_ORDER.index(type(atom.key)),
@@ -319,11 +330,13 @@ def _make_and_add_species(context):
 
 
 def _resolve_activity_key(context, key):
-    """Resolve an activity key to its output species. In the merged modes
-    (``normal``/``normal-no-complex``) every species is stripped of its PTM decorations
+    """Resolve an activity key to its output species.
+
+    In the merged modes (``normal``/``normal-no-complex``) every species is stripped of its PTM decorations
     (recursively, including subunits) so content-equal proteoforms collapse;
     otherwise the input species is reused by identity (``keptSpeciesKey``) or
-    promoted with a corrected compartment (``promotedSubunitKey``)."""
+    promoted with a corrected compartment (``promotedSubunitKey``).
+    """
     input_species = context.clingo_id_to_model_element[key.species]
     if context.mode.merges_proteoforms:
         compartment = _compartment_for_input_species(context, input_species)

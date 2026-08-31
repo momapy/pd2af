@@ -1,3 +1,5 @@
+"""Layout helpers shared by both language builders: styling, arcs and dot."""
+
 import dataclasses
 import itertools
 import math
@@ -14,9 +16,10 @@ import pydot
 
 
 def register_or_reuse(element, cache):
-    """Intern ``element`` by content in ``cache``. First-registered wins:
-    if a content-equal element is already cached, return it; otherwise
-    record ``element`` as the canonical instance and return it.
+    """Intern ``element`` by content in ``cache``.
+
+    First-registered wins: if a content-equal element is already cached, return
+    it; otherwise record ``element`` as the canonical instance and return it.
     """
     existing = cache.get(element)
     if existing is not None:
@@ -26,8 +29,9 @@ def register_or_reuse(element, cache):
 
 
 def add_model_element_if_new(collection, model_element, seen_identities):
-    """Append ``model_element`` to ``collection`` unless an object with the
-    same identity was already appended (tracked in ``seen_identities``).
+    """Append ``model_element`` to ``collection`` unless it was already appended.
+
+    Identities already added are tracked in ``seen_identities``.
 
     ``model_element`` is assumed to already be the canonical instance (e.g. the
     result of :func:`register_or_reuse`); this only guards against adding the
@@ -47,7 +51,8 @@ class _NotInIdSetSelector(momapy.styling.Selector):
 
     Replaces a NotSelector wrapping one IdSelector per kept element: that
     construction made selection O(N) per visited element and quadratic over
-    the whole layout. A frozenset lookup keeps it O(1)."""
+    the whole layout. A frozenset lookup keeps it O(1).
+    """
 
     keep_ids: frozenset
 
@@ -58,12 +63,12 @@ class _NotInIdSetSelector(momapy.styling.Selector):
 
 @dataclasses.dataclass(frozen=True)
 class _ClassNameSuffixSelector(momapy.styling.Selector):
-    """Selects elements whose class name (ignoring a trailing 'Builder')
-    ends with `suffix`.
+    """Selects elements whose class name ends with `suffix`.
 
-    Used to target CellDesigner active-border layouts (`*ActiveLayout`). The
+    A trailing 'Builder' is ignored. Used to target CellDesigner active-border layouts (`*ActiveLayout`). The
     'Builder' strip mirrors `TypeSelector`: `apply_style_sheet` visits the
-    layout as builders (e.g. `GenericProteinActiveLayoutBuilder`)."""
+    layout as builders (e.g. `GenericProteinActiveLayoutBuilder`).
+    """
 
     suffix: str
 
@@ -92,8 +97,7 @@ _DOT_CLUSTER_SEP = 40.0
 
 
 def nearest_layout_pair(source_layouts, target_layouts):
-    """Return the (source_layout, target_layout) pair whose ``.position``s are
-    closest in Euclidean distance.
+    """Return the (source_layout, target_layout) pair closest in Euclidean distance.
 
     ``min`` over ``itertools.product`` is deterministic: on a distance tie it
     keeps the first pair in product order (source-major), so the choice mirrors
@@ -108,8 +112,7 @@ def nearest_layout_pair(source_layouts, target_layouts):
 
 
 def influence_layout_pairs(source_layouts, target_layouts, prefer_nearest):
-    """Return the (source_layout, target_layout) pairs to draw an influence /
-    modulation arc between.
+    """Return the (source_layout, target_layout) pairs an arc is drawn between.
 
     By default the full ``source x target`` cross product. ``prefer_nearest``
     (``-p nearest``) collapses the fan-out to the single closest pair, but only
@@ -142,9 +145,11 @@ PLACEHOLDER_ARC_SEGMENTS = (
 
 def make_arc_segments_from_source_and_target(source_layout, target_layout):
     """Segments for a modulation / influence arc connecting two node layouts.
+
     A self-loop (source is target) bows out into a visible loop via
     :func:`_make_self_loop_segments`; otherwise it is drawn straight by
-    :func:`_make_straight_segments`. Returns a list of segments."""
+    :func:`_make_straight_segments`. Returns a list of segments.
+    """
     if source_layout is target_layout:
         start_angle, end_angle = _make_self_loop_angles(0, 1)
         return _make_self_loop_segments(source_layout, start_angle, end_angle)
@@ -152,9 +157,11 @@ def make_arc_segments_from_source_and_target(source_layout, target_layout):
 
 
 def harmonize_root_layout(layout_builder):
-    """Set the root layout's fill to white and fit it tightly around its
-    children. Applied uniformly across all layout modes so the rendered
-    canvas has consistent background and padding."""
+    """Set the root layout's fill to white and fit it around its children.
+
+    Applied uniformly across all layout modes so the rendered canvas has
+    consistent background and padding.
+    """
     layout_builder.fill = momapy.coloring.white
     if not layout_builder.layout_elements:
         # An empty output map (e.g. every activity suppressed via
@@ -177,6 +184,12 @@ def harmonize_root_layout(layout_builder):
 
 
 def highlight_layout_elements(layout_elements, layout):
+    """Dim everything in ``layout`` that is not part of ``layout_elements``.
+
+    The overlay mode's greying pass: a style sheet selects every element whose
+    id is outside the kept set and washes it out, leaving the foreground drawn
+    at full strength.
+    """
     keep_ids = set()
     for layout_element in layout_elements:
         keep_ids.add(layout_element.id_)
@@ -308,17 +321,19 @@ def _build_dot_graph(
     compartment_layout_classes,
     reversed_arc_classes=(),
 ):
-    """Build the pydot graph from the built layout: compartments become dot
-    clusters, Node layout elements become dot nodes (placed in their
-    compartment's cluster when there is one), and Arc layout elements become
-    dot edges. Returns the graph plus the bookkeeping the repositioning and
-    arc-geometry phases need.
+    """Build the pydot graph from the built layout.
+
+    Compartments become dot clusters, Node layout elements become dot nodes
+    (placed in their compartment's cluster when there is one), and Arc layout
+    elements become dot edges. Returns the graph plus the bookkeeping the
+    repositioning and arc-geometry phases need.
 
     ``reversed_arc_classes``: arc layout classes whose dot edge is added with
     source and target **swapped**, so graphviz ranks the arc's target upstream
     of its source. The layout arc object is unchanged; only the ranking flips.
     Used for SBGN logic arcs (stored operator -> input) so an operator's inputs
-    rank above it and its output target below it."""
+    rank above it and its output target below it.
+    """
     dot_graph = pydot.Dot(graph_type="digraph")
     compartment_to_dot_cluster = {}
     # dot cluster name -> compartment layout element, so the repositioning phase
@@ -420,15 +435,17 @@ def _build_dot_graph(
 def _apply_dot_cluster_bounding_boxes_to_compartments(
     dot_graph, dot_cluster_name_to_compartment_layout_element
 ):
-    """Copy each dot cluster's computed bounding box onto its compartment layout
-    element. dot lays clusters out already nested and non-overlapping; we use its
-    `bb` directly rather than refitting compartments around their members.
+    """Copy each dot cluster's bounding box onto its compartment layout element.
+
+    dot lays clusters out already nested and non-overlapping; we use its `bb`
+    directly rather than refitting compartments around their members.
 
     pydot exposes a cluster's `bb` only through a synthetic node named ``graph``
     inside the subgraph (``subgraph.get("bb")`` returns ``None``). `bb` is
     ``llx,lly,urx,ury`` in points -- the same coordinate space as the node
     positions consumed elsewhere. An empty cluster has no `bb`; its compartment
-    keeps its built geometry."""
+    keeps its built geometry.
+    """
     for dot_subgraph in dot_graph.get_subgraphs():
         compartment_layout_element = dot_cluster_name_to_compartment_layout_element.get(
             dot_subgraph.get_name().strip('"')
@@ -460,10 +477,13 @@ def _apply_dot_cluster_bounding_boxes_to_compartments(
 def _reposition_from_dot(
     dot_graph, id_to_layout_element, dot_cluster_name_to_compartment_layout_element
 ):
-    """Run graphviz `dot`, then translate every layout element to the position
-    dot computed for it, and size each compartment to its dot cluster bounding
-    box. Returns id -> layout element builder (including nested descendants) so
-    the arc-geometry phase can resolve endpoints."""
+    """Run graphviz `dot` and apply the geometry it computes to the layout.
+
+    Every layout element is translated to the position dot computed for it, and
+    each compartment sized to its dot cluster bounding box. Returns id -> layout
+    element builder (including nested descendants) so the arc-geometry phase can
+    resolve endpoints.
+    """
     dot = dot_graph.create_dot(prog="dot").decode("utf-8")
     dot_graph = pydot.graph_from_dot_data(dot)[0]
     _apply_dot_cluster_bounding_boxes_to_compartments(
@@ -498,9 +518,12 @@ def _reposition_from_dot(
 
 
 def _make_self_loop_angles(index, count):
-    """The (start, end) border angles of the ``index``-th of ``count`` parallel
-    self-loops on one node: the loops are spread evenly around the node, each
-    spanning :data:`_SELF_LOOP_SPAN` degrees, the first one on top."""
+    """The (start, end) border angles of one of several parallel self-loops.
+
+    The ``count`` loops on a node are spread evenly around it, each spanning
+    :data:`_SELF_LOOP_SPAN` degrees, the first one on top; this returns the
+    ``index``-th.
+    """
     center_angle = (_SELF_LOOP_CENTER_ANGLE + index * 360 / count) % 360
     return (
         (center_angle + _SELF_LOOP_SPAN / 2) % 360,
@@ -509,12 +532,14 @@ def _make_self_loop_angles(index, count):
 
 
 def _make_self_loop_segments(layout_element, start_angle, end_angle):
-    """Segments for an arc whose source and target resolve to the same node: a
-    loop leaving the border at ``start_angle`` and returning at ``end_angle``,
+    """Segments for an arc whose source and target resolve to the same node.
+
+    The loop leaves the border at ``start_angle`` and returns at ``end_angle``,
     bowing out through two control points, expressed as a polyline so the
     CellDesigner writer can recover them as edit points (it only sees segment
     endpoints). Without this, a single Bezier collapses to start/end on the same
-    node and the reader's modulation-geometry call hits a None border."""
+    node and the reader's modulation-geometry call hits a None border.
+    """
     start_point = layout_element.own_angle(start_angle)
     end_point = layout_element.own_angle(end_angle)
     center = layout_element.center()
@@ -540,10 +565,12 @@ def _make_self_loop_segments(layout_element, start_angle, end_angle):
 
 
 def _make_offset_ladder(count):
-    """The perpendicular offsets spreading ``count`` arcs that connect the same
-    two nodes: a ladder symmetric about the straight line joining them, in steps
-    of :data:`_BEZIER_OFFSET`. An odd count puts one arc on the line (offset 0);
-    an even count straddles it, so no arc is drawn straight."""
+    """The perpendicular offsets spreading ``count`` arcs between the same two nodes.
+
+    They form a ladder symmetric about the straight line joining the nodes, in
+    steps of :data:`_BEZIER_OFFSET`. An odd count puts one arc on the line
+    (offset 0); an even count straddles it, so no arc is drawn straight.
+    """
     if count % 2 == 1:
         return [(index - count // 2) * _BEZIER_OFFSET for index in range(count)]
     half_count = count // 2
@@ -562,8 +589,9 @@ def _make_offset_segments(
     frame_end_center,
     offset,
 ):
-    """Segments for one arc of a group of arcs connecting the same two nodes: a
-    curve bowing ``offset`` points off the straight line through a single
+    """Segments for one arc of a group connecting the same two nodes.
+
+    The curve bows ``offset`` points off the straight line through a single
     control point, serialized as a polyline so the writer keeps that control
     point (see the self-loop note).
 
@@ -571,7 +599,8 @@ def _make_offset_segments(
     ``frame_start_center`` to ``frame_end_center``, the centers of the two nodes
     in sorted-id order -- and not from the arc's own direction, so the sign of
     ``offset`` names the same side of the line for every arc of the group
-    whichever way it points. A zero offset is a straight segment."""
+    whichever way it points. A zero offset is a straight segment.
+    """
     delta_x = frame_end_center.x - frame_start_center.x
     delta_y = frame_end_center.y - frame_start_center.y
     length = math.hypot(delta_x, delta_y)
@@ -594,9 +623,11 @@ def _make_offset_segments(
 
 
 def _make_straight_segments(source_layout_element, target_layout_element):
-    """Segments for an arc drawn straight -- the only arc between its two nodes,
-    or the middle one of an odd group: a single segment between the two node
-    borders."""
+    """Segments for an arc drawn straight: one segment between the node borders.
+
+    Used for the only arc between its two nodes, or the middle one of an odd
+    group.
+    """
     start_point = source_layout_element.own_border(target_layout_element.center())
     end_point = target_layout_element.own_border(source_layout_element.center())
     return [momapy.geometry.Segment(start_point, end_point)]
@@ -604,9 +635,11 @@ def _make_straight_segments(source_layout_element, target_layout_element):
 
 @dataclasses.dataclass
 class _ArcPlacement:
-    """One arc of a node-pair group, with everything the geometry needs: the arc
-    itself, the layout elements its endpoints resolve to (a subunit when the arc
-    attaches to one) and the top-level nodes those sit in."""
+    """One arc of a node-pair group, with everything the geometry needs.
+
+    That is the arc itself, the layout elements its endpoints resolve to (a
+    subunit when the arc attaches to one) and the top-level nodes those sit in.
+    """
 
     arc: object
     source_layout_element: object
@@ -621,11 +654,13 @@ def _group_arcs_by_node_pair(
     descendant_id_to_top_level_id,
     operator_arc_resolver=None,
 ):
-    """Group the layout's arcs by the *unordered* pair of top-level nodes they
-    connect, so both directions between two nodes land in one group. Returns
+    """Group the layout's arcs by the *unordered* pair of nodes they connect.
+
+    Both directions between two nodes thus land in one group. Returns
     ``{(smaller_id, greater_id): [placement, ...]}``, each group ordered
     deterministically. Arcs the ``operator_arc_resolver`` claims get their
-    segments set here and are left out of the groups."""
+    segments set here and are left out of the groups.
+    """
     arcs_by_node_pair = {}
     for layout_element_builder in new_layout_builder.layout_elements:
         if not momapy.builder.isinstance_or_builder(
@@ -696,7 +731,8 @@ def _rebuild_arc_geometry(
     returns segments they are used as-is (and the arc skips the default
     dispatch). It lets a caller attach an arc to special geometry -- e.g. an
     SBGN operator's connector tips -- without this generic routine knowing about
-    those classes. ``None`` returned (or no callback) keeps the default."""
+    those classes. ``None`` returned (or no callback) keeps the default.
+    """
     arcs_by_node_pair = _group_arcs_by_node_pair(
         new_layout_builder,
         id_to_new_layout_element_builder,
@@ -745,7 +781,8 @@ def make_auto_layout(
     classes for ranking only (see :func:`_build_dot_graph`);
     ``operator_arc_resolver`` overrides the rebuilt segments of selected arcs
     (see :func:`_rebuild_arc_geometry`). Both default to inert, so callers
-    that pass neither (e.g. CellDesigner) are unaffected."""
+    that pass neither (e.g. CellDesigner) are unaffected.
+    """
     new_map_builder = momapy.builder.builder_from_object(cd_map)
     new_layout_builder = new_map_builder.layout
     (
