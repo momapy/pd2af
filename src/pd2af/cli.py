@@ -479,7 +479,7 @@ def _add_transform_parser(subparsers):
         ),
     )
     parser.add_argument(
-        "--disable-rule",
+        "--exclude-rule",
         action="append",
         default=None,
         metavar="RULE",

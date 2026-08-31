@@ -309,7 +309,7 @@ class TestExcludeGroups:
                 "keep-species", "celldesigner", exclude_groups=("does:not:exist",)
             )
 
-    def test_disable_rule_drops_one_table_entry(self):
+    def test_exclude_rule_drops_one_table_entry(self):
         catalysis = (
             "hasInfluenceKind(MODULATION, positivelyInfluences) :- "
             "catalysis(MODULATION)."
@@ -323,7 +323,7 @@ class TestExcludeGroups:
         assert catalysis in full
         assert catalysis not in pruned
 
-    def test_disable_unknown_rule_raises(self):
+    def test_exclude_unknown_rule_raises(self):
         with pytest.raises(ValueError):
             pd2af.rules.build_program(
                 "keep-species", "celldesigner", exclude_rules=("no:such:rule",)

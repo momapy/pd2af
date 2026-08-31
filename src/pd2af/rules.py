@@ -1330,7 +1330,7 @@ def build_program(
         unknown = sorted(set(exclude_rules) - resolved_ids)
         if unknown:
             raise ValueError(
-                "unknown rule id(s) for --disable-rule: " + ", ".join(unknown)
+                "unknown rule id(s): " + ", ".join(unknown)
             )
         excluded = set(exclude_rules)
         resolved = [rule for rule in resolved if rule.identifier not in excluded]
