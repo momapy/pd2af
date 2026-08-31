@@ -1,4 +1,5 @@
 import argparse
+import importlib.metadata
 import json
 import os
 import sys
@@ -551,6 +552,11 @@ def main(argv=None):
             "activity-flow map."
         ),
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=importlib.metadata.version("pd2af"),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_transform_parser(subparsers)
     _add_list_modes_parser(subparsers)
@@ -559,7 +565,8 @@ def main(argv=None):
     # subcommand or a help flag, so `pd2af map.xml` works like
     # `pd2af transform map.xml`.
     if not argv or (
-        argv[0] not in subparsers.choices and argv[0] not in ("-h", "--help")
+        argv[0] not in subparsers.choices
+        and argv[0] not in ("-h", "--help", "--version")
     ):
         argv = ["transform", *argv]
     args = parser.parse_args(argv)
