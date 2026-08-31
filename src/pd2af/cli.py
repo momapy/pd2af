@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import textwrap
+import typing
 
 import momapy.io.core
 
@@ -25,7 +26,9 @@ _LAYOUT_MODE_INFO = pd2af.layout_modes.LAYOUT_MODES | {
 }
 
 
-def _compatible_language_names_for_mode(mode):
+def _compatible_language_names_for_mode(
+    mode: pd2af.modes.TransformationMode,
+) -> list[str]:
     """Display names of the input languages a transformation mode applies to."""
     return [
         properties["display_name"]
@@ -34,7 +37,9 @@ def _compatible_language_names_for_mode(mode):
     ]
 
 
-def _compatible_layout_mode_names_for_mode(mode):
+def _compatible_layout_mode_names_for_mode(
+    mode: pd2af.modes.TransformationMode,
+) -> list[str]:
     """The layout modes a transformation mode offers on *some* input language.
 
     The per-language answer is the mode's own
@@ -53,7 +58,7 @@ def _compatible_layout_mode_names_for_mode(mode):
     ]
 
 
-def _compatible_language_names_for_layout_mode(layout_mode):
+def _compatible_language_names_for_layout_mode(layout_mode: str) -> list[str]:
     """Display names of the input languages whose output supports a layout mode.
 
     Derived from pd2af.layout_modes: SBGN-AF output (SBGN-PD input) does not
@@ -79,12 +84,12 @@ _EXTENSION_TO_WRITER = {
 }
 
 
-def _writer_for_output(output_path):
+def _writer_for_output(output_path: str) -> str:
     ext = os.path.splitext(output_path)[1].lower()
     return _EXTENSION_TO_WRITER.get(ext, "pickle")
 
 
-def _write_map_to_stdout(cd_map):
+def _write_map_to_stdout(cd_map: typing.Any) -> None:
     with tempfile.NamedTemporaryFile(suffix=".pickle", delete=False) as tmp:
         tmp_path = tmp.name
     try:
@@ -95,7 +100,7 @@ def _write_map_to_stdout(cd_map):
         os.unlink(tmp_path)
 
 
-def _read_input_map(input_file):
+def _read_input_map(input_file: str | None) -> typing.Any:
     """Read the input map from a file path, or from stdin if `input_file` is None.
 
     `momapy.io.core.read` needs a file path (for content-based format
@@ -120,7 +125,7 @@ def _read_input_map(input_file):
         os.unlink(tmp_path)
 
 
-def _run(args):
+def _run(args: argparse.Namespace) -> None:
     reader_result = _read_input_map(args.input_file)
     input_map = reader_result.obj
     transform_result = pd2af.transform(
@@ -154,7 +159,7 @@ def _run(args):
         )
 
 
-def _build_modes_data():
+def _build_modes_data() -> dict:
     """Assemble the structured `list-modes` payload from the source-of-truth.
 
     The payload mirrors the rendered tables exactly: one entry per table row,
@@ -185,7 +190,11 @@ def _build_modes_data():
     }
 
 
-def _render_table(headers, rows, max_widths=None):
+def _render_table(
+    headers: list[str],
+    rows: list[list[str]],
+    max_widths: dict[int, int] | None = None,
+) -> str:
     """Render an ASCII grid table, wrapping cells whose column has a max width.
 
     `max_widths` maps a column index to the width at which that column's cells
@@ -215,7 +224,7 @@ def _render_table(headers, rows, max_widths=None):
 
     separator = "+" + "+".join("-" * (width + 2) for width in column_widths) + "+"
 
-    def render_physical_row(cells):
+    def render_physical_row(cells: list[str]) -> str:
         return (
             "| "
             + " | ".join(
@@ -243,7 +252,12 @@ def _render_table(headers, rows, max_widths=None):
     return "\n".join(lines)
 
 
-def _render_modes_table(title, columns, rows, max_widths=None):
+def _render_modes_table(
+    title: str,
+    columns: list[tuple[str, str]],
+    rows: list[dict],
+    max_widths: dict[int, int] | None = None,
+) -> str:
     """Render one titled `list-modes` table from payload rows.
 
     `columns` is a list of (header, key) pairs naming each column and the row
@@ -261,7 +275,7 @@ def _render_modes_table(title, columns, rows, max_widths=None):
     return title + "\n" + _render_table(headers, table_rows, max_widths=max_widths)
 
 
-def _format_modes_tables(data):
+def _format_modes_tables(data: dict) -> str:
     sections = [
         _render_modes_table(
             "Transformation modes (--transformation-mode, -m):",
@@ -287,7 +301,7 @@ def _format_modes_tables(data):
     return "\n\n".join(sections)
 
 
-def _list_modes(args):
+def _list_modes(args: argparse.Namespace) -> None:
     data = _build_modes_data()
     if args.json:
         print(json.dumps(data, indent=2))
@@ -295,7 +309,7 @@ def _list_modes(args):
         print(_format_modes_tables(data))
 
 
-def _build_groups_data():
+def _build_groups_data() -> dict:
     """Per-mode excludable / mandatory rule groups, from the live registry.
 
     Excludable groups are the dependency-graph leaves `--exclude-group` can
@@ -311,7 +325,7 @@ def _build_groups_data():
     return data
 
 
-def _format_groups_tables(data):
+def _format_groups_tables(data: dict) -> str:
     sections = []
     for mode, groups in data.items():
         rows = [[group, "excludable"] for group in groups["excludable"]]
@@ -320,7 +334,7 @@ def _format_groups_tables(data):
     return "\n\n".join(sections)
 
 
-def _list_groups(args):
+def _list_groups(args: argparse.Namespace) -> None:
     data = _build_groups_data()
     if args.json:
         print(json.dumps(data, indent=2))
@@ -328,7 +342,7 @@ def _list_groups(args):
         print(_format_groups_tables(data))
 
 
-def _add_transform_parser(subparsers):
+def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
         "transform",
         help="transform a process-description map into an activity-flow map",
@@ -492,7 +506,7 @@ def _add_transform_parser(subparsers):
     parser.set_defaults(func=_run)
 
 
-def _add_list_modes_parser(subparsers):
+def _add_list_modes_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
         "list-modes",
         help="list transformation modes, layout modes, and compatibilities",
@@ -509,7 +523,7 @@ def _add_list_modes_parser(subparsers):
     parser.set_defaults(func=_list_modes)
 
 
-def _add_list_groups_parser(subparsers):
+def _add_list_groups_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
         "list-groups",
         help="list, per mode, the excludable and mandatory rule groups",
@@ -527,7 +541,7 @@ def _add_list_groups_parser(subparsers):
     parser.set_defaults(func=_list_groups)
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> None:
     """Parse ``argv`` (``sys.argv`` by default) and run the named subcommand."""
     if argv is None:
         argv = sys.argv[1:]

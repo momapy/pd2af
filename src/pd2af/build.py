@@ -16,6 +16,9 @@ it with the provenance mapping. :func:`pd2af.core.transform` -- its only caller
 -- builds the public :class:`pd2af.core.TransformerResult` from that pair.
 """
 
+import collections.abc
+import typing
+
 import momapy.builder
 import momapy.celldesigner
 import momapy.sbgn.af
@@ -32,14 +35,14 @@ import pd2af.utils
 
 
 def build_map(
-    map_,
-    layout_mode,
-    clingo_model,
-    clingo_id_to_model_element,
-    influence_pairing="cross",
+    map_: typing.Any,
+    layout_mode: str | None,
+    clingo_model: typing.Any,
+    clingo_id_to_model_element: dict,
+    influence_pairing: str = "cross",
     *,
     mode: pd2af.modes.TransformationMode,
-):
+) -> tuple[typing.Any, momapy.utils.FrozenIdentityMultiDict]:
     """Run the model and layout passes and return ``(new_map, provenance)``."""
     context = pd2af.context.BuilderContext(
         input_map=map_,
@@ -94,11 +97,11 @@ def build_map(
 
 
 def record_provenance_for_subunit_trees(
-    output_species,
-    input_species,
-    input_model_element_to_canonical_model_element,
-    record_pair,
-):
+    output_species: typing.Any,
+    input_species: typing.Any,
+    input_model_element_to_canonical_model_element: dict,
+    record_pair: collections.abc.Callable[[typing.Any, typing.Any], None],
+) -> None:
     """Pair the subunits of an ``(output_species, input_species)`` pair.
 
     Each pairing is recorded, recursing to arbitrary depth for nested complexes.
@@ -146,7 +149,9 @@ def record_provenance_for_subunit_trees(
         )
 
 
-def make_provenance_from_context(context):
+def make_provenance_from_context(
+    context: pd2af.context.BuilderContext,
+) -> momapy.utils.FrozenIdentityMultiDict:
     """Build the output-element -> input-elements provenance mapping.
 
     Provenance answers "where did this output come from": it maps each output
@@ -176,12 +181,12 @@ def make_provenance_from_context(context):
     """
     output_element_to_input_elements = {}
 
-    def record_pair(output_element, input_element):
+    def record_pair(output_element: typing.Any, input_element: typing.Any) -> None:
         output_element_to_input_elements.setdefault(output_element, set()).add(
             input_element
         )
 
-    def record_provenance(clingo_id, output_element):
+    def record_provenance(clingo_id: str, output_element: typing.Any) -> None:
         if output_element is None:
             return
         input_element = context.clingo_id_to_model_element[clingo_id]

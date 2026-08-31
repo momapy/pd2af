@@ -36,8 +36,10 @@ Rules:
 There are no spaces between elements.
 """
 
+import typing
 
-def _make_state_variable_token(state_variable):
+
+def _make_state_variable_token(state_variable: typing.Any) -> str:
     if state_variable.variable is not None:
         if state_variable.value:
             return f"{state_variable.value}@{state_variable.variable}"
@@ -45,7 +47,7 @@ def _make_state_variable_token(state_variable):
     return state_variable.value or ""
 
 
-def _make_state_variable_sort_key(state_variable):
+def _make_state_variable_sort_key(state_variable: typing.Any) -> tuple:
     return (
         state_variable.order if state_variable.order is not None else 0,
         state_variable.value or "",
@@ -53,13 +55,13 @@ def _make_state_variable_sort_key(state_variable):
     )
 
 
-def _make_unit_of_information_token(unit_of_information):
+def _make_unit_of_information_token(unit_of_information: typing.Any) -> str:
     if unit_of_information.prefix:
         return f"{unit_of_information.prefix}:{unit_of_information.value}"
     return unit_of_information.value
 
 
-def make_units_of_information_label(entity_pool_or_subunit):
+def make_units_of_information_label(entity_pool_or_subunit: typing.Any) -> str | None:
     """Return the unit-of-information glyph label for an SBGN-PD element.
 
     The label is ``uoi1|uoi2|...`` -- tokens ``prefix:value`` (or ``value`` with
@@ -82,10 +84,10 @@ def make_units_of_information_label(entity_pool_or_subunit):
 
 
 def make_label(
-    entity_pool_or_subunit,
-    include_state_variables=True,
-    include_units_of_information=True,
-):
+    entity_pool_or_subunit: typing.Any,
+    include_state_variables: bool = True,
+    include_units_of_information: bool = True,
+) -> str:
     """Return the SBGN-AF activity label for an SBGN-PD entity pool or subunit.
 
     The rules are those given in the module docstring.

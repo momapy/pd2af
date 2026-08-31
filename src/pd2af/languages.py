@@ -19,6 +19,8 @@ live in :mod:`pd2af.layout_modes`, which imports this module (never the
 reverse).
 """
 
+import typing
+
 import momapy.celldesigner
 import momapy.sbgn.pd
 
@@ -49,7 +51,7 @@ LANGUAGES = {
 }
 
 
-def get_language_from_map_or_model(map_or_model):
+def get_language_from_map_or_model(map_or_model: typing.Any) -> str:
     """Infer the input language token from an input map's or model's type.
 
     Matching is by ``isinstance`` rather than exact type: momapy's builder

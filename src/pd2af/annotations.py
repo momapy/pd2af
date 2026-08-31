@@ -10,14 +10,18 @@ it derives from -- unioning the annotations/notes of every merged source onto
 their shared output element.
 """
 
+import typing
+
+import momapy.utils
+
 
 def carry_annotations_through_provenance(
-    provenance,
-    input_element_to_annotations,
-    input_element_to_notes,
-    input_map=None,
-    output_map=None,
-):
+    provenance: momapy.utils.FrozenIdentityMultiDict,
+    input_element_to_annotations: dict | None,
+    input_element_to_notes: dict | None,
+    input_map: typing.Any = None,
+    output_map: typing.Any = None,
+) -> tuple[dict, dict]:
     """Re-key input annotation/note side-tables onto the output elements.
 
     Args:
@@ -47,7 +51,9 @@ def carry_annotations_through_provenance(
     output_element_to_annotations = {}
     output_element_to_notes = {}
 
-    def union_metadata_onto_output(output_element, input_element):
+    def union_metadata_onto_output(
+        output_element: typing.Any, input_element: typing.Any
+    ) -> None:
         annotations = input_element_to_annotations.get(input_element)
         if annotations:
             output_element_to_annotations[output_element] = (

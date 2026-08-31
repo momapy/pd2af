@@ -34,6 +34,7 @@ is a positive influence (``keep_reactions:influences``). It keeps the single-hop
 modulation influences of ``paths:core`` and drops the inference layers.
 """
 
+import collections.abc
 from textwrap import dedent
 
 from aspcompose import (
@@ -71,7 +72,13 @@ from pd2af.languages import CELLDESIGNER, SBGN_PD
 # behavior and leaves the rest of the program intact.
 
 
-def _activity_feature(name, *, base=(), variants=None, docs=""):
+def _activity_feature(
+    name: str,
+    *,
+    base: tuple[Rule, ...] = (),
+    variants: dict[str, tuple[Rule, ...]] | None = None,
+    docs: str = "",
+) -> RuleGroup:
     """One activity feature-group: a structural reason deriving a candidate.
 
     It derives a `hasActivityCandidate`, is excludable independently, and
@@ -1202,7 +1209,9 @@ _BUILTIN_GROUPS = (
 )
 
 
-def build_registry(modes=None) -> RuleRegistry:
+def build_registry(
+    modes: collections.abc.Iterable["pd2af.modes.TransformationMode"] | None = None,
+) -> RuleRegistry:
     """Register the built-in rule groups plus every group the modes define.
 
     ``modes`` is an iterable of :class:`pd2af.modes.TransformationMode`,

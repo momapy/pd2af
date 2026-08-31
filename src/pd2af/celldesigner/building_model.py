@@ -22,11 +22,13 @@ the layout pass.
 """
 
 import dataclasses
+import typing
 
 import momapy.builder
 import momapy.celldesigner
 
 import pd2af.building_model
+import pd2af.context
 import pd2af.predicates
 from pd2af.utils import add_model_element_if_new, register_or_reuse
 
@@ -49,7 +51,9 @@ _OPERATOR_TYPE_TO_GATE_CLASS = {
 }
 
 
-def get_or_make_kept_species_key_or_subunit(input_species, cache):
+def get_or_make_kept_species_key_or_subunit(
+    input_species: typing.Any, cache: dict
+) -> typing.Any:
     """Canonical species for a ``keptSpeciesKey`` key (non-merged modes).
 
     The input species is the canonical instance — register it so later
@@ -59,11 +63,11 @@ def get_or_make_kept_species_key_or_subunit(input_species, cache):
 
 
 def get_or_make_promoted_subunit_key_species(
-    input_subunit,
-    subunit_to_top_level,
-    cache,
-    input_model_element_to_canonical_model_element,
-):
+    input_subunit: typing.Any,
+    subunit_to_top_level: dict[int, typing.Any],
+    cache: dict,
+    input_model_element_to_canonical_model_element: dict,
+) -> typing.Any:
     """Canonical species for a ``promotedSubunitKey`` key.
 
     CellDesigner subunits carry ``compartment=None`` (inherited from the parent
@@ -99,7 +103,9 @@ def get_or_make_promoted_subunit_key_species(
     return canonical_species
 
 
-def get_or_make_stripped_template(input_template, cache):
+def get_or_make_stripped_template(
+    input_template: typing.Any, cache: dict
+) -> typing.Any:
     """Strip proteoform decorations from ``input_template`` and intern by content.
 
     Two distinct input templates that strip to the same content yield a single
@@ -125,11 +131,11 @@ def get_or_make_stripped_template(input_template, cache):
 
 
 def get_or_make_stripped_species(
-    input_species,
-    compartment,
-    cache,
-    input_model_element_to_canonical_model_element,
-):
+    input_species: typing.Any,
+    compartment: typing.Any,
+    cache: dict,
+    input_model_element_to_canonical_model_element: dict,
+) -> typing.Any:
     """Return a decoration-free canonical species for ``input_species``.
 
     Used by the merged modes (``normal``/``normal-no-complex``). Clears every post-translational
@@ -176,13 +182,17 @@ def get_or_make_stripped_species(
     return canonical
 
 
-def get_or_make_modulation(modulation_class, source, target, cache):
+def get_or_make_modulation(
+    modulation_class: type, source: typing.Any, target: typing.Any, cache: dict
+) -> typing.Any:
     """Build a modulation and intern by content."""
     candidate = modulation_class(source=source, target=target)
     return register_or_reuse(candidate, cache)
 
 
-def get_parent_complex_compartment(subunit, subunit_to_top_level):
+def get_parent_complex_compartment(
+    subunit: typing.Any, subunit_to_top_level: dict[int, typing.Any]
+) -> typing.Any:
     """Resolve a subunit's effective compartment.
 
     Walks to its containing top-level species: subunits typically have no
@@ -194,10 +204,10 @@ def get_parent_complex_compartment(subunit, subunit_to_top_level):
     return getattr(top_level, "compartment", None)
 
 
-def compartments_outermost_first(compartments):
+def compartments_outermost_first(compartments: typing.Any) -> typing.Any:
     """``compartments`` sorted by nesting depth, so a container precedes its content."""
 
-    def depth(compartment):
+    def depth(compartment: typing.Any) -> typing.Any:
         result = 0
         seen = set()
         current = compartment.outside
@@ -210,7 +220,7 @@ def compartments_outermost_first(compartments):
     return sorted(compartments, key=depth)
 
 
-def collect_ancestor_compartments(compartments):
+def collect_ancestor_compartments(compartments: typing.Any) -> typing.Any:
     """``compartments`` plus every compartment they are nested in, transitively."""
     expanded = set(compartments)
     frontier = expanded
@@ -232,7 +242,7 @@ def collect_ancestor_compartments(compartments):
 # ---------------------------------------------------------------------------
 
 
-def make_and_add_model(context, clingo_model):
+def make_and_add_model(context: pd2af.context.BuilderContext, clingo_model: typing.Any):
     """Build ``context.model`` from the clingo atoms (pass 1)."""
     context.model = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
@@ -253,7 +263,7 @@ def make_and_add_model(context, clingo_model):
     _make_and_add_modulations(context)
 
 
-def _activity_atoms_in_layer_order(context):
+def _activity_atoms_in_layer_order(context: pd2af.context.BuilderContext) -> typing.Any:
     """The activity atoms sorted by the layer their key class belongs to.
 
     A kept species is thus always registered before a promoted subunit.
@@ -264,7 +274,7 @@ def _activity_atoms_in_layer_order(context):
     )
 
 
-def _make_and_add_compartments(context):
+def _make_and_add_compartments(context: pd2af.context.BuilderContext):
     immediate_compartments = set()
     for atom in _activity_atoms_in_layer_order(context):
         input_species = context.clingo_id_to_model_element[atom.key.species]
@@ -280,13 +290,15 @@ def _make_and_add_compartments(context):
         context.compartment_emissions.append((compartment, compartment))
 
 
-def _compartment_for_input_species(context, input_species):
+def _compartment_for_input_species(
+    context: pd2af.context.BuilderContext, input_species: typing.Any
+) -> typing.Any:
     if getattr(input_species, "compartment", None) is not None:
         return input_species.compartment
     return get_parent_complex_compartment(input_species, context.subunit_to_top_level)
 
 
-def _make_and_add_templates(context):
+def _make_and_add_templates(context: pd2af.context.BuilderContext):
     strip = context.mode.merges_proteoforms
     seen_template_identities = set()
 
@@ -309,7 +321,7 @@ def _make_and_add_templates(context):
             )
 
 
-def _walk_templates(species):
+def _walk_templates(species: typing.Any):
     template = getattr(species, "template", None)
     if template is not None:
         yield template
@@ -317,7 +329,7 @@ def _walk_templates(species):
         yield from _walk_templates(subunit)
 
 
-def _make_and_add_species(context):
+def _make_and_add_species(context: pd2af.context.BuilderContext):
     seen_species_identities = set()
     for atom in _activity_atoms_in_layer_order(context):
         species = _resolve_activity_key(context, atom.key)
@@ -329,7 +341,9 @@ def _make_and_add_species(context):
             context.activity_emissions.append((type(atom.key), species, input_species))
 
 
-def _resolve_activity_key(context, key):
+def _resolve_activity_key(
+    context: pd2af.context.BuilderContext, key: typing.Any
+) -> typing.Any:
     """Resolve an activity key to its output species.
 
     In the merged modes (``normal``/``normal-no-complex``) every species is stripped of its PTM decorations
@@ -358,7 +372,7 @@ def _resolve_activity_key(context, key):
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 
-def _make_and_add_modulations(context):
+def _make_and_add_modulations(context: pd2af.context.BuilderContext):
     seen_modulation_identities = set()
     for atom in context.influence_atoms:
         modulation_class = pd2af.predicates.predicate_to_model_element_class[type(atom)]

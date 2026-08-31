@@ -12,6 +12,7 @@ the model pass.
 """
 
 import dataclasses
+import typing
 
 import momapy.builder
 import momapy.celldesigner
@@ -20,6 +21,7 @@ import momapy.core.mapping
 import momapy.geometry
 
 import pd2af.celldesigner.building_model
+import pd2af.context
 import pd2af.utils
 
 
@@ -89,7 +91,7 @@ _MODULATION_CLASS_TO_LAYOUT_CLASS = {
 }
 
 
-def new_layout_and_mapping_builders():
+def new_layout_and_mapping_builders() -> typing.Any:
     """A fresh, empty (layout builder, layout-model mapping builder) pair."""
     layout_builder_class = momapy.builder.get_or_make_builder_cls(
         momapy.core.layout.Layout
@@ -101,8 +103,8 @@ def new_layout_and_mapping_builders():
 
 
 def clone_layout_pruning_foreground(
-    input_layout_element, foreground_ids, object_to_builder
-):
+    input_layout_element: typing.Any, foreground_ids: set[int], object_to_builder: dict
+) -> typing.Any:
     """Clone an input layout element as a builder, to serve as dimmed background.
 
     Any descendant subtree whose input original is in ``foreground_ids``
@@ -126,7 +128,10 @@ def clone_layout_pruning_foreground(
 
 
 def _prune_foreground_from_clone(
-    input_layout_element, clone, foreground_ids, object_to_builder
+    input_layout_element: typing.Any,
+    clone: typing.Any,
+    foreground_ids: set[int],
+    object_to_builder: dict,
 ):
     # The only foreground glyphs that can sit *inside* a background clone are
     # subunits nested via `layout_elements` (e.g. promoted subunits of a
@@ -149,7 +154,9 @@ def _prune_foreground_from_clone(
     clone.layout_elements = surviving_clones
 
 
-def make_decoration_stripped_layout(input_layout, original_to_stripped):
+def make_decoration_stripped_layout(
+    input_layout: typing.Any, original_to_stripped: dict[int, typing.Any] | None
+) -> typing.Any:
     """Return a frozen copy of ``input_layout`` stripped of its decoration glyphs.
 
     Every PTM-decoration and active-border sub-glyph is dropped, at any depth,
@@ -191,7 +198,7 @@ def make_decoration_stripped_layout(input_layout, original_to_stripped):
     return stripped
 
 
-def make_synthetic_layout(species, index):
+def make_synthetic_layout(species: typing.Any, index: int) -> typing.Any:
     """Build a placeholder Node for ``species``.
 
     ``index`` seeds the position so two synthetic layouts for
@@ -216,7 +223,12 @@ def make_synthetic_layout(species, index):
     return layout_class(position=position, label=label)
 
 
-def make_modulation_arc(context, modulation, source_layout, target_layout):
+def make_modulation_arc(
+    context: pd2af.context.BuilderContext,
+    modulation: typing.Any,
+    source_layout: typing.Any,
+    target_layout: typing.Any,
+) -> typing.Any:
     """Build the arc layout for ``modulation`` between two node layouts.
 
     In the ``dot`` mode the segments are placeholders that graphviz overwrites;
@@ -236,7 +248,7 @@ def make_modulation_arc(context, modulation, source_layout, target_layout):
     )
 
 
-def make_synthetic_gate_layout(gate, index):
+def make_synthetic_gate_layout(gate: typing.Any, index: int) -> typing.Any:
     """Build a placeholder gate node for ``gate``.
 
     Used by the ``dot`` mode when the input gate has no curated layout.
@@ -252,7 +264,11 @@ def make_synthetic_gate_layout(gate, index):
     return layout_class(position=position)
 
 
-def make_logic_arc(context, gate_layout, input_layout):
+def make_logic_arc(
+    context: pd2af.context.BuilderContext,
+    gate_layout: typing.Any,
+    input_layout: typing.Any,
+) -> typing.Any:
     """Build a ``LogicArcLayout`` from a gate to one of its input species.
 
     The CellDesigner writer locates a gate's inputs by scanning for logic arcs
@@ -273,7 +289,9 @@ def make_logic_arc(context, gate_layout, input_layout):
 
 
 def add_mappings_for_layout_and_descendants(
-    context, input_layout, original_to_stripped=None
+    context: pd2af.context.BuilderContext,
+    input_layout: typing.Any,
+    original_to_stripped: dict[int, typing.Any] | None = None,
 ):
     """Map an input glyph and its descendants to their model elements.
 
@@ -302,7 +320,11 @@ def add_mappings_for_layout_and_descendants(
 
 
 def add_modulation_mapping(
-    mapping_builder, arc, source_layout, target_layout, modulation
+    mapping_builder: typing.Any,
+    arc: typing.Any,
+    source_layout: typing.Any,
+    target_layout: typing.Any,
+    modulation: typing.Any,
 ):
     """Map the arc, together with its two endpoint clusters, to ``modulation``.
 
@@ -330,7 +352,7 @@ def add_modulation_mapping(
 # ---------------------------------------------------------------------------
 
 
-def make_and_add_layout(context):
+def make_and_add_layout(context: pd2af.context.BuilderContext):
     """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
     context.layout, context.layout_model_mapping = new_layout_and_mapping_builders()
 
@@ -365,7 +387,9 @@ def make_and_add_layout(context):
     pd2af.utils.harmonize_root_layout(context.layout)
 
 
-def _make_and_add_compartment_layout(context, compartment):
+def _make_and_add_compartment_layout(
+    context: pd2af.context.BuilderContext, compartment: typing.Any
+):
     input_layouts = context.input_map.layout_model_mapping.get_mapping(compartment)
     if not input_layouts:
         return
@@ -374,7 +398,11 @@ def _make_and_add_compartment_layout(context, compartment):
         add_mappings_for_layout_and_descendants(context, input_layout)
 
 
-def _add_decoration_stripped_species_layouts(context, species, input_layouts):
+def _add_decoration_stripped_species_layouts(
+    context: pd2af.context.BuilderContext,
+    species: typing.Any,
+    input_layouts: typing.Any,
+):
     """Place decoration-pruned clones of ``input_layouts`` for ``species``.
 
     Their surviving glyphs are mapped to the model (the merged proteoform
@@ -392,7 +420,11 @@ def _add_decoration_stripped_species_layouts(context, species, input_layouts):
     context.model_element_to_layout_elements[id(species)] = tuple(stripped_layouts)
 
 
-def _make_and_add_species_layout(context, species, input_species):
+def _make_and_add_species_layout(
+    context: pd2af.context.BuilderContext,
+    species: typing.Any,
+    input_species: typing.Any,
+):
     input_layouts = (
         context.input_map.layout_model_mapping.get_mapping(input_species)
         if input_species is not None
@@ -426,7 +458,9 @@ def _make_and_add_species_layout(context, species, input_species):
         context.model_element_to_layout_elements[id(species)] = (synthetic_layout,)
 
 
-def _make_and_add_gate_layout(context, gate, input_gate):
+def _make_and_add_gate_layout(
+    context: pd2af.context.BuilderContext, gate: typing.Any, input_gate: typing.Any
+):
     """Place a gate glyph and its logic arcs.
 
     Mirrors :func:`_make_and_add_species_layout`. The gate glyph is the curated input gate layout when one exists
@@ -469,7 +503,9 @@ def _make_and_add_gate_layout(context, gate, input_gate):
             context.layout.layout_elements.append(arc)
 
 
-def _make_and_add_modulation_layout(context, modulation):
+def _make_and_add_modulation_layout(
+    context: pd2af.context.BuilderContext, modulation: typing.Any
+):
     source_layouts = context.model_element_to_layout_elements.get(id(modulation.source))
     target_layouts = context.model_element_to_layout_elements.get(id(modulation.target))
     if not source_layouts or not target_layouts:
@@ -495,7 +531,9 @@ def _make_and_add_modulation_layout(context, modulation):
         )
 
 
-def _add_dimmed_background(context, foreground, insert_index):
+def _add_dimmed_background(
+    context: pd2af.context.BuilderContext, foreground: typing.Any, insert_index: int
+):
     """Clone the input layout's remaining glyphs into ``context.layout``.
 
     They go in as unmapped background, for the dimmer to grey out.

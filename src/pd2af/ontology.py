@@ -1,5 +1,9 @@
 """Derive the ASP ontology rules from a language's momapy classes."""
 
+import collections.abc
+import types
+import typing
+
 import momapy.core.elements
 import momapy.core.model
 
@@ -9,7 +13,7 @@ import pd2af.languages
 _BASES = (momapy.core.elements.ModelElement, momapy.core.model.Model)
 
 
-def _iter_types(module):
+def _iter_types(module: types.ModuleType) -> collections.abc.Iterator[type]:
     for attr_name in dir(module):
         if attr_name.startswith("_"):
             continue
@@ -18,7 +22,7 @@ def _iter_types(module):
             yield attr_value
 
 
-def make_rules(session, language):
+def make_rules(session: typing.Any, language: str) -> list[str]:
     """The sorted ontology rules for every model class of ``language``."""
     module = pd2af.languages.LANGUAGES[language]["momapy_module"]
     rules = set()

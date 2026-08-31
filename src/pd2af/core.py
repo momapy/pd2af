@@ -52,13 +52,15 @@ class TransformerResult:
 INFLUENCE_PAIRINGS = ("cross", "nearest")
 
 
-def _normalize_layout_mode(layout_mode):
+def _normalize_layout_mode(layout_mode: str | None) -> str | None:
     if layout_mode == "none":
         return None
     return layout_mode
 
 
-def _validate_layout_mode(layout_mode, mode, language):
+def _validate_layout_mode(
+    layout_mode: str | None, mode: pd2af.modes.TransformationMode, language: str
+) -> None:
     """Check a concrete layout mode against the transformation mode and language.
 
     The `None` sentinel means "build no layout at all", so it is always valid;
@@ -75,7 +77,7 @@ def _validate_layout_mode(layout_mode, mode, language):
         )
 
 
-def _wrap_model_in_map(model, language):
+def _wrap_model_in_map(model: typing.Any, language: str) -> typing.Any:
     """Wrap a bare input model in a layout-less map of the matching language.
 
     ``Map`` is a keyword-only frozen dataclass whose ``layout`` and
@@ -88,7 +90,7 @@ def _wrap_model_in_map(model, language):
 
 
 def transform(
-    map_or_model,
+    map_or_model: typing.Any,
     mode: str = "normal",
     layout_mode: typing.Literal["auto", "dot", "plain", "overlay"] | None = "auto",
     influence_pairing: typing.Literal["cross", "nearest"] = "cross",
@@ -98,9 +100,9 @@ def transform(
     set_all_inactive: bool = False,
     exclude_groups: tuple[str, ...] = (),
     exclude_rules: tuple[str, ...] = (),
-    element_to_annotations=None,
-    element_to_notes=None,
-):
+    element_to_annotations: dict | None = None,
+    element_to_notes: dict | None = None,
+) -> TransformerResult:
     """Transform a process-description map or model into an activity-flow one.
 
     Args:

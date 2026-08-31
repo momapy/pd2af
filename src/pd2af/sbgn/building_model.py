@@ -22,11 +22,14 @@ cache (``register_or_reuse``) and resolving influence endpoints through the
 deduped activities, mirroring the model-element dedup invariant.
 """
 
+import typing
+
 import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
 import pd2af.building_model
+import pd2af.context
 import pd2af.predicates
 import pd2af.sbgn.building_labels
 from pd2af.utils import add_model_element_if_new, register_or_reuse
@@ -87,7 +90,7 @@ _OPERATOR_TYPE_TO_OPERATOR_CLASS = {
 }
 
 
-def make_and_add_model(context, clingo_model):
+def make_and_add_model(context: pd2af.context.BuilderContext, clingo_model: typing.Any):
     """Build ``context.model`` from the clingo atoms (pass 1)."""
     context.model = momapy.builder.get_or_make_builder_cls(momapy.sbgn.af.SBGNAFModel)()
     pd2af.building_model.collect_atoms(context, clingo_model)
@@ -105,7 +108,9 @@ def make_and_add_model(context, clingo_model):
     _make_and_add_influences(context)
 
 
-def _compartment_for_input_element(context, input_element):
+def _compartment_for_input_element(
+    context: pd2af.context.BuilderContext, input_element: typing.Any
+) -> typing.Any:
     """The compartment an element belongs to.
 
     SBGN-PD subunit classes have no ``compartment`` field, so a subunit inherits
@@ -119,11 +124,13 @@ def _compartment_for_input_element(context, input_element):
     return getattr(top_level_element, "compartment", None)
 
 
-def _input_element_for_key(context, key):
+def _input_element_for_key(
+    context: pd2af.context.BuilderContext, key: typing.Any
+) -> typing.Any:
     return context.clingo_id_to_model_element[key.species]
 
 
-def _make_and_add_compartments(context):
+def _make_and_add_compartments(context: pd2af.context.BuilderContext):
     seen_compartment_identities = set()
     for atom in context.activity_atoms:
         input_element = _input_element_for_key(context, atom.key)
@@ -142,7 +149,9 @@ def _make_and_add_compartments(context):
         )
 
 
-def _get_or_make_compartment(context, input_compartment):
+def _get_or_make_compartment(
+    context: pd2af.context.BuilderContext, input_compartment: typing.Any
+) -> typing.Any:
     canonical = context.input_compartment_to_af_compartment.get(id(input_compartment))
     if canonical is None:
         candidate = momapy.sbgn.af.Compartment(label=input_compartment.label)
@@ -156,7 +165,7 @@ def _get_or_make_compartment(context, input_compartment):
     return canonical
 
 
-def _make_and_add_activities(context):
+def _make_and_add_activities(context: pd2af.context.BuilderContext):
     strip = context.mode.merges_proteoforms
     seen_activity_identities = set()
     for atom in context.activity_atoms:
@@ -171,7 +180,11 @@ def _make_and_add_activities(context):
             context.activity_emissions.append((activity, input_element))
 
 
-def _make_activity(context, input_element, strip=False):
+def _make_activity(
+    context: pd2af.context.BuilderContext,
+    input_element: typing.Any,
+    strip: bool = False,
+) -> typing.Any:
     """Build (and intern) the AF activity for ``input_element``.
 
     ``strip=True`` (the merged modes ``normal``/``normal-no-complex``) drops state
@@ -216,7 +229,7 @@ def _make_activity(context, input_element, strip=False):
     return register_or_reuse(candidate, context.cache)
 
 
-def _make_and_add_influences(context):
+def _make_and_add_influences(context: pd2af.context.BuilderContext):
     seen_influence_identities = set()
     for atom in context.influence_atoms:
         source = pd2af.building_model.resolve_influence_source(context, atom.source)

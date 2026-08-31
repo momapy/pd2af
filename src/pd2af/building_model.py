@@ -11,11 +11,17 @@ an influence. Each builder passes in the classes it wants and the model
 collection to add to.
 """
 
+import collections.abc
+import typing
+
+import pd2af.context
 import pd2af.predicates
 from pd2af.utils import add_model_element_if_new, register_or_reuse
 
 
-def collect_atoms(context, clingo_model):
+def collect_atoms(
+    context: pd2af.context.BuilderContext, clingo_model: typing.Any
+) -> None:
     """Sort the ``new(...)`` atoms into the context scratch lists by payload type.
 
     Activities, influences, logical operators and operator inputs each get their
@@ -33,7 +39,9 @@ def collect_atoms(context, clingo_model):
             context.operator_input_atoms.append(payload)
 
 
-def resolve_influence_source(context, source_key):
+def resolve_influence_source(
+    context: pd2af.context.BuilderContext, source_key: typing.Any
+) -> typing.Any:
     """Resolve an influence ``source`` key to its model element.
 
     A logical operator resolves through ``key_to_operator``, any activity key
@@ -45,7 +53,9 @@ def resolve_influence_source(context, source_key):
     return context.key_to_activity.get(source_key)
 
 
-def build_subunit_to_top_level(top_level_elements):
+def build_subunit_to_top_level(
+    top_level_elements: collections.abc.Iterable[typing.Any],
+) -> dict[int, typing.Any]:
     """Map ``id(subunit)`` -> the top-level element it belongs to.
 
     Every subunit of ``top_level_elements`` is covered, at any depth.
@@ -56,7 +66,7 @@ def build_subunit_to_top_level(top_level_elements):
     """
     subunit_to_top_level = {}
 
-    def walk(element, top_level_element):
+    def walk(element: typing.Any, top_level_element: typing.Any) -> None:
         for subunit in getattr(element, "subunits", None) or ():
             subunit_to_top_level[id(subunit)] = top_level_element
             walk(subunit, top_level_element)
@@ -67,8 +77,11 @@ def build_subunit_to_top_level(top_level_elements):
 
 
 def make_and_add_operators(
-    context, operator_type_to_class, operator_input_class, model_operators
-):
+    context: pd2af.context.BuilderContext,
+    operator_type_to_class: dict[str, type],
+    operator_input_class: type,
+    model_operators: typing.Any,
+) -> None:
     """Build every authored logical operator, adding the used ones to the model.
 
     An operator reaches ``model_operators`` only when it actually sources an
@@ -112,12 +125,12 @@ def make_and_add_operators(
 
 
 def _get_or_make_operator(
-    context,
-    operator_type,
-    input_keys,
-    operator_type_to_class,
-    operator_input_class,
-):
+    context: pd2af.context.BuilderContext,
+    operator_type: str,
+    input_keys: collections.abc.Iterable[typing.Any],
+    operator_type_to_class: dict[str, type],
+    operator_input_class: type,
+) -> typing.Any:
     """Build (and intern) an operator of ``operator_type``.
 
     Its inputs resolve through ``context.key_to_activity``; an unknown token

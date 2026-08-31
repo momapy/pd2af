@@ -1,5 +1,8 @@
 """Clingo glue: build a control, solve, return the model + element registry."""
 
+import collections.abc
+import typing
+
 import clorm
 import clorm.clingo
 import clingo.ast
@@ -15,17 +18,17 @@ import pd2af.rules
 
 
 def _make_control(
-    model,
-    clingo_id_to_model_element,
-    mode,
-    language,
-    set_active,
-    set_inactive,
-    set_all_active,
-    set_all_inactive,
-    exclude_groups=(),
-    exclude_rules=(),
-):
+    model: typing.Any,
+    clingo_id_to_model_element: dict,
+    mode: str,
+    language: str,
+    set_active: list[str] | None,
+    set_inactive: list[str] | None,
+    set_all_active: bool,
+    set_all_inactive: bool,
+    exclude_groups: tuple[str, ...] = (),
+    exclude_rules: tuple[str, ...] = (),
+) -> clorm.clingo.Control:
     control = clorm.clingo.Control(
         ["--warn=no-atom-undefined"],
         unifier=[pd2af.predicates.new],
@@ -61,7 +64,7 @@ def _make_control(
     return control
 
 
-def _build_id_to_generated_constant(clingo_id_to_model_element):
+def _build_id_to_generated_constant(clingo_id_to_model_element: dict) -> dict[str, str]:
     """Reverse `clingo_id_to_model_element` to `id_ -> generated ASP constant`.
 
     Only species / entity pools are kept, since those are the elements a user
@@ -77,7 +80,11 @@ def _build_id_to_generated_constant(clingo_id_to_model_element):
     }
 
 
-def _resolve_ids_to_generated_constants(ids, id_to_generated_constant, option_name):
+def _resolve_ids_to_generated_constants(
+    ids: collections.abc.Iterable[str],
+    id_to_generated_constant: dict[str, str],
+    option_name: str,
+) -> list[str]:
     """Validate `ids` name known species / entity pools and return their constants.
 
     Raises `ValueError` (naming `option_name`, e.g. `--set-active`) if any id is
@@ -96,13 +103,13 @@ def _resolve_ids_to_generated_constants(ids, id_to_generated_constant, option_na
 
 
 def _add_activity_override_facts(
-    control,
-    clingo_id_to_model_element,
-    set_active,
-    set_inactive,
-    set_all_active,
-    set_all_inactive,
-):
+    control: clorm.clingo.Control,
+    clingo_id_to_model_element: dict,
+    set_active: list[str] | None,
+    set_inactive: list[str] | None,
+    set_all_active: bool,
+    set_all_inactive: bool,
+) -> None:
     """Inject the user's activity overrides as ASP facts.
 
     Four options, in strict precedence per-id > global > rules:
@@ -158,15 +165,15 @@ def _add_activity_override_facts(
 
 
 def solve(
-    map_,
-    mode,
-    set_active=None,
-    set_inactive=None,
-    set_all_active=False,
-    set_all_inactive=False,
-    exclude_groups=(),
-    exclude_rules=(),
-):
+    map_: typing.Any,
+    mode: str,
+    set_active: list[str] | None = None,
+    set_inactive: list[str] | None = None,
+    set_all_active: bool = False,
+    set_all_inactive: bool = False,
+    exclude_groups: tuple[str, ...] = (),
+    exclude_rules: tuple[str, ...] = (),
+) -> tuple[typing.Any, dict]:
     """Solve the ASP program for ``map_`` in ``mode``.
 
     Returns the single clingo model of derived atoms together with the

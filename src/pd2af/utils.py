@@ -3,6 +3,7 @@
 import dataclasses
 import itertools
 import math
+import typing
 
 import momapy.core.layout
 import momapy.styling
@@ -15,7 +16,7 @@ import momapy.celldesigner
 import pydot
 
 
-def register_or_reuse(element, cache):
+def register_or_reuse(element: typing.Any, cache: dict) -> typing.Any:
     """Intern ``element`` by content in ``cache``.
 
     First-registered wins: if a content-equal element is already cached, return
@@ -28,7 +29,9 @@ def register_or_reuse(element, cache):
     return element
 
 
-def add_model_element_if_new(collection, model_element, seen_identities):
+def add_model_element_if_new(
+    collection: typing.Any, model_element: typing.Any, seen_identities: set[int]
+) -> bool:
     """Append ``model_element`` to ``collection`` unless it was already appended.
 
     Identities already added are tracked in ``seen_identities``.
@@ -56,7 +59,7 @@ class _NotInIdSetSelector(momapy.styling.Selector):
 
     keep_ids: frozenset
 
-    def select(self, obj, ancestors):
+    def select(self, obj: typing.Any, ancestors: typing.Any) -> bool:
         obj_id = getattr(obj, "id_", None)
         return obj_id is None or obj_id not in self.keep_ids
 
@@ -72,7 +75,7 @@ class _ClassNameSuffixSelector(momapy.styling.Selector):
 
     suffix: str
 
-    def select(self, obj, ancestors):
+    def select(self, obj: typing.Any, ancestors: typing.Any) -> bool:
         class_name = type(obj).__name__
         if class_name.endswith("Builder"):
             class_name = class_name[: -len("Builder")]
@@ -96,7 +99,9 @@ _ROOT_LAYOUT_SEP = 15.0
 _DOT_CLUSTER_SEP = 40.0
 
 
-def nearest_layout_pair(source_layouts, target_layouts):
+def nearest_layout_pair(
+    source_layouts: typing.Any, target_layouts: typing.Any
+) -> tuple:
     """Return the (source_layout, target_layout) pair closest in Euclidean distance.
 
     ``min`` over ``itertools.product`` is deterministic: on a distance tie it
@@ -111,7 +116,9 @@ def nearest_layout_pair(source_layouts, target_layouts):
     )
 
 
-def influence_layout_pairs(source_layouts, target_layouts, prefer_nearest):
+def influence_layout_pairs(
+    source_layouts: typing.Any, target_layouts: typing.Any, prefer_nearest: bool
+) -> list[tuple]:
     """Return the (source_layout, target_layout) pairs an arc is drawn between.
 
     By default the full ``source x target`` cross product. ``prefer_nearest``
@@ -143,7 +150,9 @@ PLACEHOLDER_ARC_SEGMENTS = (
 )
 
 
-def make_arc_segments_from_source_and_target(source_layout, target_layout):
+def make_arc_segments_from_source_and_target(
+    source_layout: typing.Any, target_layout: typing.Any
+) -> list:
     """Segments for a modulation / influence arc connecting two node layouts.
 
     A self-loop (source is target) bows out into a visible loop via
@@ -156,7 +165,7 @@ def make_arc_segments_from_source_and_target(source_layout, target_layout):
     return _make_straight_segments(source_layout, target_layout)
 
 
-def harmonize_root_layout(layout_builder):
+def harmonize_root_layout(layout_builder: typing.Any) -> None:
     """Set the root layout's fill to white and fit it around its children.
 
     Applied uniformly across all layout modes so the rendered canvas has
@@ -183,7 +192,9 @@ def harmonize_root_layout(layout_builder):
     )
 
 
-def highlight_layout_elements(layout_elements, layout):
+def highlight_layout_elements(
+    layout_elements: typing.Any, layout: typing.Any
+) -> typing.Any:
     """Dim everything in ``layout`` that is not part of ``layout_elements``.
 
     The overlay mode's greying pass: a style sheet selects every element whose
@@ -197,7 +208,7 @@ def highlight_layout_elements(layout_elements, layout):
             keep_ids.add(descendant.id_)
     not_selector = _NotInIdSetSelector(frozenset(keep_ids))
 
-    def make_selector(selector):
+    def make_selector(selector: typing.Any) -> typing.Any:
         return momapy.styling.CompoundSelector(tuple([selector, not_selector]))
 
     layout_element_selector = make_selector(
@@ -288,7 +299,9 @@ def highlight_layout_elements(layout_elements, layout):
     return layout
 
 
-def _translate_layout_element(layout_element, translation_x, translation_y):
+def _translate_layout_element(
+    layout_element: typing.Any, translation_x: float, translation_y: float
+):
     layout_element.position = momapy.geometry.Point(
         layout_element.position.x + translation_x,
         layout_element.position.y + translation_y,
@@ -297,7 +310,7 @@ def _translate_layout_element(layout_element, translation_x, translation_y):
         _translate_layout_element(sub_layout_element, translation_x, translation_y)
 
 
-def _get_coordinates_from_pydot_node(dot_node):
+def _get_coordinates_from_pydot_node(dot_node: typing.Any) -> tuple[float, float]:
     x, y = [
         float(coordinate) for coordinate in dot_node.get("pos").strip('"').split(",")
     ]
@@ -308,7 +321,7 @@ def _get_coordinates_from_pydot_node(dot_node):
     return x, y
 
 
-def _collect_dot_nodes_recursively(dot_graph):
+def _collect_dot_nodes_recursively(dot_graph: typing.Any) -> list:
     dot_nodes = dot_graph.get_nodes()
     for dot_subgraph in dot_graph.get_subgraphs():
         dot_nodes += _collect_dot_nodes_recursively(dot_subgraph)
@@ -316,11 +329,11 @@ def _collect_dot_nodes_recursively(dot_graph):
 
 
 def _build_dot_graph(
-    new_map_builder,
-    new_layout_builder,
-    compartment_layout_classes,
-    reversed_arc_classes=(),
-):
+    new_map_builder: typing.Any,
+    new_layout_builder: typing.Any,
+    compartment_layout_classes: typing.Any,
+    reversed_arc_classes: typing.Any = (),
+) -> typing.Any:
     """Build the pydot graph from the built layout.
 
     Compartments become dot clusters, Node layout elements become dot nodes
@@ -360,7 +373,7 @@ def _build_dot_graph(
             else:
                 dot_graph.add_subgraph(compartment_dot_cluster)
 
-    def is_node_layout_element(layout_element_builder):
+    def is_node_layout_element(layout_element_builder: typing.Any) -> bool:
         return momapy.builder.isinstance_or_builder(
             layout_element_builder, momapy.core.layout.Node
         ) and not momapy.builder.isinstance_or_builder(
@@ -433,7 +446,7 @@ def _build_dot_graph(
 
 
 def _apply_dot_cluster_bounding_boxes_to_compartments(
-    dot_graph, dot_cluster_name_to_compartment_layout_element
+    dot_graph: typing.Any, dot_cluster_name_to_compartment_layout_element: typing.Any
 ):
     """Copy each dot cluster's bounding box onto its compartment layout element.
 
@@ -475,8 +488,10 @@ def _apply_dot_cluster_bounding_boxes_to_compartments(
 
 
 def _reposition_from_dot(
-    dot_graph, id_to_layout_element, dot_cluster_name_to_compartment_layout_element
-):
+    dot_graph: typing.Any,
+    id_to_layout_element: typing.Any,
+    dot_cluster_name_to_compartment_layout_element: typing.Any,
+) -> typing.Any:
     """Run graphviz `dot` and apply the geometry it computes to the layout.
 
     Every layout element is translated to the position dot computed for it, and
@@ -517,7 +532,7 @@ def _reposition_from_dot(
     return id_to_new_layout_element_builder
 
 
-def _make_self_loop_angles(index, count):
+def _make_self_loop_angles(index: int, count: int) -> tuple[float, float]:
     """The (start, end) border angles of one of several parallel self-loops.
 
     The ``count`` loops on a node are spread evenly around it, each spanning
@@ -531,7 +546,9 @@ def _make_self_loop_angles(index, count):
     )
 
 
-def _make_self_loop_segments(layout_element, start_angle, end_angle):
+def _make_self_loop_segments(
+    layout_element: typing.Any, start_angle: float, end_angle: float
+) -> list:
     """Segments for an arc whose source and target resolve to the same node.
 
     The loop leaves the border at ``start_angle`` and returns at ``end_angle``,
@@ -564,7 +581,7 @@ def _make_self_loop_segments(layout_element, start_angle, end_angle):
     ]
 
 
-def _make_offset_ladder(count):
+def _make_offset_ladder(count: int) -> list[float]:
     """The perpendicular offsets spreading ``count`` arcs between the same two nodes.
 
     They form a ladder symmetric about the straight line joining the nodes, in
@@ -583,12 +600,12 @@ def _make_offset_ladder(count):
 
 
 def _make_offset_segments(
-    source_layout_element,
-    target_layout_element,
-    frame_start_center,
-    frame_end_center,
-    offset,
-):
+    source_layout_element: typing.Any,
+    target_layout_element: typing.Any,
+    frame_start_center: typing.Any,
+    frame_end_center: typing.Any,
+    offset: float,
+) -> typing.Any:
     """Segments for one arc of a group connecting the same two nodes.
 
     The curve bows ``offset`` points off the straight line through a single
@@ -622,7 +639,9 @@ def _make_offset_segments(
     ]
 
 
-def _make_straight_segments(source_layout_element, target_layout_element):
+def _make_straight_segments(
+    source_layout_element: typing.Any, target_layout_element: typing.Any
+) -> list:
     """Segments for an arc drawn straight: one segment between the node borders.
 
     Used for the only arc between its two nodes, or the middle one of an odd
@@ -649,11 +668,11 @@ class _ArcPlacement:
 
 
 def _group_arcs_by_node_pair(
-    new_layout_builder,
-    id_to_new_layout_element_builder,
-    descendant_id_to_top_level_id,
-    operator_arc_resolver=None,
-):
+    new_layout_builder: typing.Any,
+    id_to_new_layout_element_builder: typing.Any,
+    descendant_id_to_top_level_id: typing.Any,
+    operator_arc_resolver: typing.Any = None,
+) -> typing.Any:
     """Group the layout's arcs by the *unordered* pair of nodes they connect.
 
     Both directions between two nodes thus land in one group. Returns
@@ -712,10 +731,10 @@ def _group_arcs_by_node_pair(
 
 
 def _rebuild_arc_geometry(
-    new_layout_builder,
-    id_to_new_layout_element_builder,
-    descendant_id_to_top_level_id,
-    operator_arc_resolver=None,
+    new_layout_builder: typing.Any,
+    id_to_new_layout_element_builder: typing.Any,
+    descendant_id_to_top_level_id: typing.Any,
+    operator_arc_resolver: typing.Any = None,
 ):
     """Rebuild each arc's segments from the repositioned node geometry.
 
@@ -762,14 +781,14 @@ def _rebuild_arc_geometry(
 
 
 def make_auto_layout(
-    cd_map,
-    compartment_layout_classes=(
+    cd_map: typing.Any,
+    compartment_layout_classes: typing.Any = (
         momapy.celldesigner.RectangleCompartmentLayout,
         momapy.celldesigner.OvalCompartmentLayout,
     ),
-    reversed_arc_classes=(),
-    operator_arc_resolver=None,
-):
+    reversed_arc_classes: typing.Any = (),
+    operator_arc_resolver: typing.Any = None,
+) -> typing.Any:
     """Reposition an already-built layout with graphviz (dot).
 
     Generic over the map language except for the compartment-layout classes,

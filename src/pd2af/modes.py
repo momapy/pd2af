@@ -75,13 +75,13 @@ class TransformationMode:
     merges_proteoforms: bool = False
 
     @property
-    def rule_group_ids(self):
+    def rule_group_ids(self) -> tuple[str, ...]:
         """Every group this mode is made of, defined ones included."""
         return self.rule_group_references + tuple(
             rule_group.identifier for rule_group in self.rule_group_definitions
         )
 
-    def compatible_layout_modes(self, language):
+    def compatible_layout_modes(self, language: str) -> tuple[str, ...]:
         """The concrete layout modes valid for this mode on the given input language.
 
         Merged activities are synthesized from several input species, so they
@@ -216,7 +216,7 @@ _BUILTIN_TRANSFORMATION_MODES = (
 
 
 @functools.cache
-def get_transformation_modes():
+def get_transformation_modes() -> types.MappingProxyType[str, "TransformationMode"]:
     """Return ``{name: TransformationMode}``, read-only and ordered.
 
     Built-in modes come first in declaration order, then the modes contributed
@@ -242,7 +242,7 @@ def get_transformation_modes():
     return types.MappingProxyType(modes)
 
 
-def get_transformation_mode(name):
+def get_transformation_mode(name: str) -> "TransformationMode":
     """Return the :class:`TransformationMode` called ``name``.
 
     Raises ``ValueError``, listing the available names, if there is none.
