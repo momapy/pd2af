@@ -21,6 +21,7 @@ nav:
     - Predicates: api_reference/predicates.md
     - Ontology: api_reference/ontology.md
     - Build: api_reference/build.md
+    - Context: api_reference/context.md
     - CellDesigner model: api_reference/celldesigner_building_model.md
     - CellDesigner layout: api_reference/celldesigner_building_layout.md
     - SBGN-AF model: api_reference/sbgn_building_model.md

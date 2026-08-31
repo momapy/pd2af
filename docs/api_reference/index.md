@@ -20,6 +20,7 @@ The pd2af public API is organized into the following modules.
 ## Build
 
 - [Build](build.md): coordinator that drives the two-phase model/layout builder pipeline
+- [Context](context.md): the shared state the two build passes read and write
 - [CellDesigner model](celldesigner_building_model.md): build the AF model from clingo atoms (CellDesigner output)
 - [CellDesigner layout](celldesigner_building_layout.md): build the AF layout (plain / overlay / dot), CellDesigner output
 - [SBGN-AF model](sbgn_building_model.md): build the SBGN-AF model from clingo atoms

@@ -6,7 +6,8 @@
 primitives below -- synthetic nodes, modulation arcs, mapping helpers, and
 background cloning for overlay -- do the per-element construction.
 
-:mod:`pd2af.build` owns the ``BuilderContext`` and invokes this pass after
+:mod:`pd2af.build` invokes this pass through a
+:class:`pd2af.context.BuilderContext` after
 the model pass.
 """
 

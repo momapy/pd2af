@@ -140,7 +140,7 @@ def transform(
         exclude_groups=exclude_groups,
         exclude_rules=exclude_rules,
     )
-    result = pd2af.build.build_map(
+    new_map, provenance = pd2af.build.build_map(
         map_,
         layout_mode,
         clingo_model,
@@ -152,19 +152,15 @@ def transform(
         output_element_to_annotations,
         output_element_to_notes,
     ) = pd2af.annotations.carry_annotations_through_provenance(
-        result.provenance,
+        provenance,
         element_to_annotations,
         element_to_notes,
         input_map=map_,
-        output_map=result.obj,
+        output_map=new_map,
     )
-    result.element_to_annotations = output_element_to_annotations
-    result.element_to_notes = output_element_to_notes
-    if is_model_input:
-        return TransformerResult(
-            obj=result.obj.model,
-            provenance=result.provenance,
-            element_to_annotations=output_element_to_annotations,
-            element_to_notes=output_element_to_notes,
-        )
-    return result
+    return TransformerResult(
+        obj=new_map.model if is_model_input else new_map,
+        provenance=provenance,
+        element_to_annotations=output_element_to_annotations,
+        element_to_notes=output_element_to_notes,
+    )

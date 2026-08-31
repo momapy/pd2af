@@ -1,4 +1,4 @@
-"""Coordinator: drive the two-phase BuilderContext pipeline.
+"""Coordinator: drive the two-phase :class:`pd2af.context.BuilderContext` pipeline.
 
 Pass 1 (:func:`pd2af.celldesigner.building_model.make_and_add_model`) walks clingo
 activity / influence atoms and populates ``context.model`` with canonical,
@@ -10,12 +10,11 @@ Pass 2 (:func:`pd2af.celldesigner.building_layout.make_and_add_layout`) -- skipp
 entirely when ``layout_mode is None`` -- populates ``context.layout`` and
 ``context.layout_model_mapping``, branching on ``layout_mode``.
 
-``build_map`` creates the ``BuilderContext``, runs the two passes, then
-assembles the final CellDesignerMap from the three context slots and
-returns the frozen map.
+``build_map`` creates the :class:`pd2af.context.BuilderContext`, runs the two
+passes, then assembles the final map from the three context slots and returns
+it with the provenance mapping. :func:`pd2af.core.transform` -- its only caller
+-- builds the public :class:`pd2af.core.TransformerResult` from that pair.
 """
-
-import dataclasses
 
 import momapy.builder
 import momapy.celldesigner
@@ -24,64 +23,12 @@ import momapy.utils
 
 import pd2af.celldesigner.building_layout
 import pd2af.celldesigner.building_model
+import pd2af.context
 import pd2af.languages
 import pd2af.modes
 import pd2af.sbgn.building_layout
 import pd2af.sbgn.building_model
 import pd2af.utils
-
-
-@dataclasses.dataclass
-class BuilderContext:
-    # --- inputs ---
-    input_map: object
-    layout_mode: str | None
-    clingo_id_to_model_element: dict
-    mode: pd2af.modes.TransformationMode
-    influence_pairing: str = "cross"
-
-    # --- outputs being built ---
-    model: object = None
-    layout: object = None
-    layout_model_mapping: object = None
-
-    # --- Pass-1 -> Pass-2 handoff ---
-    activity_emissions: list = dataclasses.field(default_factory=list)
-    input_model_element_to_canonical_model_element: dict = dataclasses.field(
-        default_factory=dict
-    )
-    # (input_compartment, output_compartment) pairs, feeding the provenance
-    # mapping so compartment annotations/notes carry to their AF compartment.
-    compartment_emissions: list = dataclasses.field(default_factory=list)
-
-    # --- Pass-1 scratch ---
-    cache: dict = dataclasses.field(default_factory=dict)
-    subunit_to_top_level: dict = None
-    activity_atoms: list = dataclasses.field(default_factory=list)
-    influence_atoms: list = dataclasses.field(default_factory=list)
-    key_to_activity: dict = dataclasses.field(default_factory=dict)
-
-    # --- Logical-operator scratch ---
-    # The activity / operator key maps and emission lists hold the CellDesigner
-    # species and gates or the SBGN-AF activities and logical operators,
-    # depending on the language being built.
-    operator_atoms: list = dataclasses.field(default_factory=list)
-    operator_input_atoms: list = dataclasses.field(default_factory=list)
-    key_to_operator: dict = dataclasses.field(default_factory=dict)
-    operator_emissions: list = dataclasses.field(default_factory=list)
-
-    # --- Pass-2 scratch ---
-    model_element_to_layout_elements: dict = dataclasses.field(default_factory=dict)
-    object_to_builder: dict = dataclasses.field(default_factory=dict)
-    synthetic_index: int = 0
-
-    # --- SBGN-AF pass scratch ---
-    input_compartment_to_af_compartment: dict = dataclasses.field(
-        default_factory=dict
-    )
-    af_compartment_to_input_compartment: dict = dataclasses.field(
-        default_factory=dict
-    )
 
 
 def build_map(
@@ -93,7 +40,7 @@ def build_map(
     *,
     mode: pd2af.modes.TransformationMode,
 ):
-    context = BuilderContext(
+    context = pd2af.context.BuilderContext(
         input_map=map_,
         layout_mode=layout_mode,
         clingo_id_to_model_element=clingo_id_to_model_element,
@@ -142,13 +89,7 @@ def build_map(
     if layout_mode == "dot":
         new_map = pd2af.utils.make_auto_layout(new_map, **auto_layout_arguments)
 
-    # Imported here (not at module top) to break the core -> build import cycle.
-    from pd2af.core import TransformerResult
-
-    return TransformerResult(
-        obj=new_map,
-        provenance=make_provenance_from_context(context),
-    )
+    return new_map, make_provenance_from_context(context)
 
 
 def record_provenance_for_subunit_trees(

@@ -16,7 +16,8 @@ collapse to a single Python identity end-to-end. The canonicity policy is
 input-map element is always the canonical instance for its content class,
 never displaced by a freshly stripped one.
 
-:mod:`pd2af.build` owns the ``BuilderContext`` and drives this pass, then
+:mod:`pd2af.build` drives this pass through a
+:class:`pd2af.context.BuilderContext`, then
 the layout pass.
 """
 
