@@ -1,8 +1,8 @@
 """The parts of the model pass that are the same for either language.
 
 :mod:`pd2af.celldesigner.building_model` and :mod:`pd2af.sbgn.building_model`
-build their own compartments, species and influences, but read the clingo atoms
-and resolve an influence source the same way. The logical-operator pass is
+build their own compartments, species and influences, but read the clingo atoms,
+resolve an influence source and walk the input subunit trees the same way. The logical-operator pass is
 shared too: the CellDesigner builder makes ``BooleanLogicGate`` objects and the
 SBGN-AF builder ``LogicalOperator`` objects, and otherwise the two do the
 same thing -- read the operator atoms, resolve each operator's inputs through
@@ -38,6 +38,27 @@ def resolve_influence_source(context, source_key):
     if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
         return context.key_to_operator.get(source_key)
     return context.key_to_activity.get(source_key)
+
+
+def build_subunit_to_top_level(top_level_elements):
+    """Map ``id(subunit)`` -> the top-level element it belongs to, for every
+    subunit of ``top_level_elements`` at any depth.
+
+    A subunit is a structural component, never an independent activity, so both
+    builders attribute it to its outermost element: the CellDesigner builder
+    takes the top-level species' compartment, the SBGN-AF builder the top-level
+    entity pool's.
+    """
+    subunit_to_top_level = {}
+
+    def walk(element, top_level_element):
+        for subunit in getattr(element, "subunits", None) or ():
+            subunit_to_top_level[id(subunit)] = top_level_element
+            walk(subunit, top_level_element)
+
+    for element in top_level_elements:
+        walk(element, element)
+    return subunit_to_top_level
 
 
 def make_and_add_operators(

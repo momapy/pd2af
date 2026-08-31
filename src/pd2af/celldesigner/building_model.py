@@ -190,23 +190,6 @@ def get_parent_complex_compartment(subunit, subunit_to_top_level):
     return getattr(top_level, "compartment", None)
 
 
-def build_subunit_to_top_level(input_map):
-    """Map every subunit (transitively) to its top-level species in the
-    input map. Top-level species map to themselves so the lookup is
-    total over all model species.
-    """
-    subunit_to_top_level = {}
-
-    def walk(species, top_level):
-        subunit_to_top_level[id(species)] = top_level
-        for subunit in getattr(species, "subunits", ()) or ():
-            walk(subunit, top_level)
-
-    for species in input_map.model.species:
-        walk(species, species)
-    return subunit_to_top_level
-
-
 def compartments_outermost_first(compartments):
     def depth(compartment):
         result = 0
@@ -262,7 +245,9 @@ def make_and_add_model(context, clingo_model):
     context.model = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
     )()
-    context.subunit_to_top_level = build_subunit_to_top_level(context.input_map)
+    context.subunit_to_top_level = pd2af.building_model.build_subunit_to_top_level(
+        context.input_map.model.species
+    )
     pd2af.building_model.collect_atoms(context, clingo_model)
     _make_and_add_compartments(context)
     _make_and_add_templates(context)

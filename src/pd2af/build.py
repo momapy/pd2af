@@ -82,9 +82,6 @@ class BuilderContext:
     af_compartment_to_input_compartment: dict = dataclasses.field(
         default_factory=dict
     )
-    subunit_id_to_parent_compartment: dict = dataclasses.field(
-        default_factory=dict
-    )
 
 
 def build_map(

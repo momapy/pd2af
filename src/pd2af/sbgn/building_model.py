@@ -94,7 +94,9 @@ def make_and_add_model(context, clingo_model):
         momapy.sbgn.af.SBGNAFModel
     )()
     pd2af.building_model.collect_atoms(context, clingo_model)
-    _build_subunit_compartment_map(context)
+    context.subunit_to_top_level = pd2af.building_model.build_subunit_to_top_level(
+        context.input_map.model.entity_pools
+    )
     _make_and_add_compartments(context)
     _make_and_add_activities(context)
     pd2af.building_model.make_and_add_operators(
@@ -106,24 +108,16 @@ def make_and_add_model(context, clingo_model):
     _make_and_add_influences(context)
 
 
-def _build_subunit_compartment_map(context):
-    """Map ``id(subunit)`` -> the compartment of its enclosing complex.
-
-    SBGN-PD subunit classes have no ``compartment`` field, so a promoted
-    subunit activity would otherwise get ``compartment=None`` and never merge
-    with a top-level twin. Mirror the CellDesigner builder: a subunit inherits
-    its parent complex's compartment. Built once by walking the input model's
-    complexes recursively (nested complexes pass their compartment down)."""
-    context.subunit_id_to_parent_compartment = {}
-
-    def walk(entity, inherited_compartment):
-        compartment = getattr(entity, "compartment", None) or inherited_compartment
-        for subunit in getattr(entity, "subunits", None) or ():
-            context.subunit_id_to_parent_compartment[id(subunit)] = compartment
-            walk(subunit, compartment)
-
-    for entity in context.input_map.model.entity_pools:
-        walk(entity, None)
+def _compartment_for_input_element(context, input_element):
+    """The compartment an element belongs to. SBGN-PD subunit classes have no
+    ``compartment`` field, so a subunit inherits its top-level entity pool's:
+    otherwise a promoted subunit activity would get ``compartment=None`` and
+    never merge with a top-level twin."""
+    compartment = getattr(input_element, "compartment", None)
+    if compartment is not None:
+        return compartment
+    top_level_element = context.subunit_to_top_level.get(id(input_element))
+    return getattr(top_level_element, "compartment", None)
 
 
 def _input_element_for_key(context, key):
@@ -134,11 +128,7 @@ def _make_and_add_compartments(context):
     seen_compartment_identities = set()
     for atom in context.activity_atoms:
         input_element = _input_element_for_key(context, atom.key)
-        input_compartment = getattr(input_element, "compartment", None)
-        if input_compartment is None:
-            input_compartment = context.subunit_id_to_parent_compartment.get(
-                id(input_element)
-            )
+        input_compartment = _compartment_for_input_element(context, input_element)
         if input_compartment is None:
             continue
         af_compartment = _get_or_make_compartment(context, input_compartment)
@@ -216,13 +206,7 @@ def _make_activity(context, input_element, strip=False):
     unit_of_information = register_or_reuse(
         unit_of_information_class(label=unit_of_information_label), context.cache
     )
-    input_compartment = getattr(input_element, "compartment", None)
-    if input_compartment is None:
-        # A subunit has no compartment field; inherit its parent complex's so a
-        # promoted subunit can merge with a top-level twin (parity).
-        input_compartment = context.subunit_id_to_parent_compartment.get(
-            id(input_element)
-        )
+    input_compartment = _compartment_for_input_element(context, input_element)
     compartment = None
     if input_compartment is not None:
         compartment = _get_or_make_compartment(context, input_compartment)
