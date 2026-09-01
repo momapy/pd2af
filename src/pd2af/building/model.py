@@ -1,6 +1,6 @@
 """The parts of the model pass that are the same for either language.
 
-:mod:`pd2af.celldesigner.building_model` and :mod:`pd2af.sbgn.building_model`
+:mod:`pd2af.building.celldesigner.model` and :mod:`pd2af.building.sbgn.model`
 build their own compartments, species and influences, but read the clingo atoms,
 resolve an influence source and walk the input subunit trees the same way. The logical-operator pass is
 shared too: the CellDesigner builder makes ``BooleanLogicGate`` objects and the
@@ -14,33 +14,64 @@ collection to add to.
 import collections.abc
 import typing
 
-import pd2af.context
-import pd2af.predicates
-from pd2af.utils import add_model_element_if_new, register_or_reuse
+import pd2af.building.context
+import pd2af.asp.predicates
+
+
+def register_or_reuse(element: typing.Any, cache: dict) -> typing.Any:
+    """Intern ``element`` by content in ``cache``.
+
+    First-registered wins: if a content-equal element is already cached, return
+    it; otherwise record ``element`` as the canonical instance and return it.
+    """
+    existing = cache.get(element)
+    if existing is not None:
+        return existing
+    cache[element] = element
+    return element
+
+
+def add_model_element_if_new(
+    collection: typing.Any, model_element: typing.Any, seen_identities: set[int]
+) -> bool:
+    """Append ``model_element`` to ``collection`` unless it was already appended.
+
+    Identities already added are tracked in ``seen_identities``.
+
+    ``model_element`` is assumed to already be the canonical instance (e.g. the
+    result of :func:`register_or_reuse`); this only guards against adding the
+    same identity twice. Returns ``True`` if it was added this call, ``False``
+    if it was a duplicate.
+    """
+    if id(model_element) in seen_identities:
+        return False
+    seen_identities.add(id(model_element))
+    collection.add(model_element)
+    return True
 
 
 def collect_atoms(
-    context: pd2af.context.BuilderContext, clingo_model: typing.Any
+    context: pd2af.building.context.BuilderContext, clingo_model: typing.Any
 ) -> None:
     """Sort the ``new(...)`` atoms into the context scratch lists by payload type.
 
     Activities, influences, logical operators and operator inputs each get their
     own list.
     """
-    for atom in clingo_model.query(pd2af.predicates.new).all():
+    for atom in clingo_model.query(pd2af.asp.predicates.new).all():
         payload = atom.object_
-        if isinstance(payload, pd2af.predicates.activity):
+        if isinstance(payload, pd2af.asp.predicates.activity):
             context.activity_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.INFLUENCE_PREDICATES):
+        elif isinstance(payload, pd2af.asp.predicates.INFLUENCE_PREDICATES):
             context.influence_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.logicalOperator):
+        elif isinstance(payload, pd2af.asp.predicates.logicalOperator):
             context.operator_atoms.append(payload)
-        elif isinstance(payload, pd2af.predicates.logicalOperatorInput):
+        elif isinstance(payload, pd2af.asp.predicates.logicalOperatorInput):
             context.operator_input_atoms.append(payload)
 
 
 def resolve_influence_source(
-    context: pd2af.context.BuilderContext, source_key: typing.Any
+    context: pd2af.building.context.BuilderContext, source_key: typing.Any
 ) -> typing.Any:
     """Resolve an influence ``source`` key to its model element.
 
@@ -48,7 +79,7 @@ def resolve_influence_source(
     through ``key_to_activity``. ``None`` when the gate or the activity was not
     built, so the caller skips the edge.
     """
-    if isinstance(source_key, pd2af.predicates.logicalOperatorKey):
+    if isinstance(source_key, pd2af.asp.predicates.logicalOperatorKey):
         return context.key_to_operator.get(source_key)
     return context.key_to_activity.get(source_key)
 
@@ -77,7 +108,7 @@ def build_subunit_to_top_level(
 
 
 def make_and_add_operators(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     operator_type_to_class: dict[str, type],
     operator_input_class: type,
     model_operators: typing.Any,
@@ -101,7 +132,7 @@ def make_and_add_operators(
     used_operator_keys = {
         atom.source
         for atom in context.influence_atoms
-        if isinstance(atom.source, pd2af.predicates.logicalOperatorKey)
+        if isinstance(atom.source, pd2af.asp.predicates.logicalOperatorKey)
     }
     seen_operator_identities = set()
     for atom in context.operator_atoms:
@@ -125,7 +156,7 @@ def make_and_add_operators(
 
 
 def _get_or_make_operator(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     operator_type: str,
     input_keys: collections.abc.Iterable[typing.Any],
     operator_type_to_class: dict[str, type],

@@ -70,7 +70,7 @@ def make_units_of_information_label(entity_pool_or_subunit: typing.Any) -> str |
 
     The merged ``normal`` / ``normal-no-complex`` modes move this off the activity
     *label* and onto the AF activity's typed unit-of-information glyph (see
-    :func:`pd2af.sbgn.building_model._make_activity`), where a curator would put
+    :func:`pd2af.building.sbgn.model._make_activity`), where a curator would put
     it -- e.g. ``ct:mRNA`` on a nucleic-acid-feature glyph. It carries **no**
     surrounding brackets: those are only the activity-label serialization device
     (added by :func:`make_label`), not part of the glyph text.

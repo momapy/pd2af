@@ -46,7 +46,7 @@ from aspcompose import (
 )
 
 import pd2af.modes
-from pd2af.languages import CELLDESIGNER, SBGN_PD
+from pd2af.modes import CELLDESIGNER, SBGN_PD
 
 # Activity discovery drives the path-inference modes: `keep-reactions` keeps the
 # mandatory `activity:core` bridge but replaces the structural-reason

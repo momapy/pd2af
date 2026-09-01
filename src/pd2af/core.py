@@ -1,18 +1,34 @@
-"""The public :func:`transform` entry point and its result type."""
+"""The transformation itself: check the arguments, solve, build the map.
+
+:func:`transform` validates its arguments against the transformation mode,
+solves the ASP program (:mod:`pd2af.asp.solver`) and hands the answer to
+:func:`build_map`, which runs the two build passes. The model pass walks the
+clingo activity and influence atoms and fills ``context.model`` with canonical,
+content-deduped elements; the layout pass -- skipped when ``layout_mode is
+None`` -- fills ``context.layout`` and ``context.layout_model_mapping``.
+:func:`build_map` then assembles the map from those three slots and returns it
+with the provenance mapping.
+"""
 
 import dataclasses
 import typing
 
+import momapy.builder
 import momapy.celldesigner
 import momapy.core.model
+import momapy.sbgn.af
 import momapy.sbgn.pd
 import momapy.utils
 
-import pd2af.annotations
-import pd2af.build
-import pd2af.languages
+import pd2af.asp.solver
+import pd2af.building.celldesigner.layout
+import pd2af.building.celldesigner.model
+import pd2af.building.context
+import pd2af.building.layout
+import pd2af.building.provenance
+import pd2af.building.sbgn.layout
+import pd2af.building.sbgn.model
 import pd2af.modes
-import pd2af.solver
 
 
 @dataclasses.dataclass
@@ -49,9 +65,6 @@ class TransformerResult:
     element_to_notes: dict | None = None
 
 
-INFLUENCE_PAIRINGS = ("cross", "nearest")
-
-
 def _normalize_layout_mode(layout_mode: str | None) -> str | None:
     if layout_mode == "none":
         return None
@@ -84,9 +97,73 @@ def _wrap_model_in_map(model: typing.Any, language: str) -> typing.Any:
     ``layout_model_mapping`` default to ``None``, so a model-only map is a
     direct construction.
     """
-    if language == pd2af.languages.SBGN_PD:
+    if language == pd2af.modes.SBGN_PD:
         return momapy.sbgn.pd.SBGNPDMap(model=model)
     return momapy.celldesigner.CellDesignerMap(model=model)
+
+
+def build_map(
+    map_: typing.Any,
+    layout_mode: str | None,
+    clingo_model: typing.Any,
+    clingo_id_to_model_element: dict,
+    influence_pairing: str = "cross",
+    *,
+    mode: pd2af.modes.TransformationMode,
+) -> tuple[typing.Any, momapy.utils.FrozenIdentityMultiDict]:
+    """Run the model and layout passes and return ``(new_map, provenance)``."""
+    context = pd2af.building.context.BuilderContext(
+        input_map=map_,
+        layout_mode=layout_mode,
+        clingo_id_to_model_element=clingo_id_to_model_element,
+        influence_pairing=influence_pairing,
+        mode=mode,
+    )
+    language = pd2af.modes.get_language_from_map_or_model(map_)
+    if language == pd2af.modes.SBGN_PD:
+        pd2af.building.sbgn.model.make_and_add_model(context, clingo_model)
+        if layout_mode is not None:
+            pd2af.building.sbgn.layout.make_and_add_layout(context)
+        map_builder_class = momapy.builder.get_or_make_builder_cls(
+            momapy.sbgn.af.SBGNAFMap
+        )
+        # SBGN-AF logical operators have input/output connectors: rank their
+        # logic-arc inputs upstream (reversed_arc_classes) and re-attach the
+        # operator arcs to the connector tips after graphviz repositions
+        # (operator_arc_resolver). Both hooks are no-ops on operator-free maps,
+        # so non-operator SBGN output is unchanged.
+        auto_layout_arguments = {
+            "compartment_layout_classes": (momapy.sbgn.af.CompartmentLayout,),
+            "reversed_arc_classes": (momapy.sbgn.af.LogicArcLayout,),
+            "operator_arc_resolver": (
+                pd2af.building.sbgn.layout.resolve_operator_arc_segments
+            ),
+        }
+    else:
+        pd2af.building.celldesigner.model.make_and_add_model(context, clingo_model)
+        if layout_mode is not None:
+            pd2af.building.celldesigner.layout.make_and_add_layout(context)
+        map_builder_class = momapy.builder.get_or_make_builder_cls(
+            momapy.celldesigner.CellDesignerMap
+        )
+        auto_layout_arguments = {}
+
+    map_builder = map_builder_class(
+        model=context.model,
+        layout=context.layout,
+        layout_model_mapping=context.layout_model_mapping,
+    )
+    new_map = momapy.builder.object_from_builder(map_builder)
+
+    # the "dot" mode (graphviz) repositions an already-built layout. The
+    # compartment-layout classes differ per language (see
+    # pd2af.building.layout.make_auto_layout).
+    if layout_mode == "dot":
+        new_map = pd2af.building.layout.make_auto_layout(
+            new_map, **auto_layout_arguments
+        )
+
+    return new_map, pd2af.building.provenance.make_provenance_from_context(context)
 
 
 def transform(
@@ -151,13 +228,13 @@ def transform(
         layout_mode = None
         map_ = _wrap_model_in_map(
             map_or_model,
-            pd2af.languages.get_language_from_map_or_model(map_or_model),
+            pd2af.modes.get_language_from_map_or_model(map_or_model),
         )
     else:
         map_ = map_or_model
         if layout_mode == "auto":
             layout_mode = "dot"
-    language = pd2af.languages.get_language_from_map_or_model(map_)
+    language = pd2af.modes.get_language_from_map_or_model(map_)
     if language not in transformation_mode.compatible_languages:
         raise ValueError(
             f"transformation mode {mode!r} does not support {language!r} "
@@ -165,12 +242,13 @@ def transform(
             + ", ".join(sorted(transformation_mode.compatible_languages))
         )
     _validate_layout_mode(layout_mode, transformation_mode, language)
-    if influence_pairing not in INFLUENCE_PAIRINGS:
+    if influence_pairing not in pd2af.modes.INFLUENCE_PAIRINGS:
         raise ValueError(
-            f"influence_pairing must be one of {list(INFLUENCE_PAIRINGS)}, "
+            f"influence_pairing must be one of "
+            f"{list(pd2af.modes.INFLUENCE_PAIRINGS)}, "
             f"got {influence_pairing!r}"
         )
-    clingo_model, clingo_id_to_model_element = pd2af.solver.solve(
+    clingo_model, clingo_id_to_model_element = pd2af.asp.solver.solve(
         map_,
         mode,
         set_active=set_active,
@@ -180,7 +258,7 @@ def transform(
         exclude_groups=exclude_groups,
         exclude_rules=exclude_rules,
     )
-    new_map, provenance = pd2af.build.build_map(
+    new_map, provenance = build_map(
         map_,
         layout_mode,
         clingo_model,
@@ -191,7 +269,7 @@ def transform(
     (
         output_element_to_annotations,
         output_element_to_notes,
-    ) = pd2af.annotations.carry_annotations_through_provenance(
+    ) = pd2af.building.provenance.carry_annotations_through_provenance(
         provenance,
         element_to_annotations,
         element_to_notes,

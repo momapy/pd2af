@@ -1,6 +1,7 @@
 """Clingo glue: build a control, solve, return the model + element registry."""
 
 import collections.abc
+import types
 import typing
 
 import clorm
@@ -8,13 +9,38 @@ import clorm.clingo
 import clingo.ast
 
 import momapy.celldesigner
+import momapy.core.elements
+import momapy.core.model
 import momapy.sbgn.pd
 import momapy_kb.clingo.core
 
-import pd2af.languages
-import pd2af.ontology
-import pd2af.predicates
-import pd2af.rules
+import pd2af.asp.predicates
+import pd2af.asp.rules
+import pd2af.modes
+
+
+_ONTOLOGY_BASES = (momapy.core.elements.ModelElement, momapy.core.model.Model)
+
+
+def _iter_types(module: types.ModuleType) -> collections.abc.Iterator[type]:
+    for attr_name in dir(module):
+        if attr_name.startswith("_"):
+            continue
+        attr_value = getattr(module, attr_name)
+        if isinstance(attr_value, type) and issubclass(attr_value, _ONTOLOGY_BASES):
+            yield attr_value
+
+
+def _make_ontology_rules(session: typing.Any, language: str) -> list[str]:
+    """The sorted ontology rules for every model class of ``language``."""
+    module = pd2af.modes.LANGUAGES[language]["momapy_module"]
+    rules = set()
+    for type_ in _iter_types(module):
+        session.get_or_make_predicate_classes_from_type(
+            type_, make_predicate_classes_recursively=True
+        )
+        rules.update(session.make_ontology_rules_from_type(type_))
+    return sorted(rules)
 
 
 def _make_control(
@@ -31,10 +57,10 @@ def _make_control(
 ) -> clorm.clingo.Control:
     control = clorm.clingo.Control(
         ["--warn=no-atom-undefined"],
-        unifier=[pd2af.predicates.new],
+        unifier=[pd2af.asp.predicates.new],
     )
     with momapy_kb.clingo.core.Session() as session:
-        ontology_rules = pd2af.ontology.make_rules(session, language)
+        ontology_rules = _make_ontology_rules(session, language)
         facts = session.make_facts_from_object(
             model, id_to_object=clingo_id_to_model_element
         )
@@ -45,7 +71,7 @@ def _make_control(
     control.add(
         "base",
         [],
-        pd2af.rules.build_program(
+        pd2af.asp.rules.build_program(
             mode,
             language,
             exclude_groups=exclude_groups,
@@ -180,7 +206,7 @@ def solve(
     ``clingo_id -> model_element`` map the build pass resolves keys through.
     """
     clingo_id_to_model_element = {}
-    language = pd2af.languages.get_language_from_map_or_model(map_)
+    language = pd2af.modes.get_language_from_map_or_model(map_)
     control = _make_control(
         map_.model,
         clingo_id_to_model_element,

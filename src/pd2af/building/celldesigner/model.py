@@ -16,8 +16,8 @@ collapse to a single Python identity end-to-end. The canonicity policy is
 input-map element is always the canonical instance for its content class,
 never displaced by a freshly stripped one.
 
-:mod:`pd2af.build` drives this pass through a
-:class:`pd2af.context.BuilderContext`, then
+:mod:`pd2af.core` drives this pass through a
+:class:`pd2af.building.context.BuilderContext`, then
 the layout pass.
 """
 
@@ -27,18 +27,18 @@ import typing
 import momapy.builder
 import momapy.celldesigner
 
-import pd2af.building_model
-import pd2af.context
-import pd2af.predicates
-from pd2af.utils import add_model_element_if_new, register_or_reuse
+import pd2af.building.model
+import pd2af.building.context
+import pd2af.asp.predicates
+from pd2af.building.model import add_model_element_if_new, register_or_reuse
 
 
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
 
 
 _SPECIES_LAYER_ORDER = (
-    pd2af.predicates.keptSpeciesKey,
-    pd2af.predicates.promotedSubunitKey,
+    pd2af.asp.predicates.keptSpeciesKey,
+    pd2af.asp.predicates.promotedSubunitKey,
 )
 
 # Operator-type token (``logicalOperator.type_``) -> CellDesigner gate class.
@@ -242,19 +242,21 @@ def collect_ancestor_compartments(compartments: typing.Any) -> typing.Any:
 # ---------------------------------------------------------------------------
 
 
-def make_and_add_model(context: pd2af.context.BuilderContext, clingo_model: typing.Any):
+def make_and_add_model(
+    context: pd2af.building.context.BuilderContext, clingo_model: typing.Any
+):
     """Build ``context.model`` from the clingo atoms (pass 1)."""
     context.model = momapy.builder.get_or_make_builder_cls(
         momapy.celldesigner.CellDesignerModel
     )()
-    context.subunit_to_top_level = pd2af.building_model.build_subunit_to_top_level(
+    context.subunit_to_top_level = pd2af.building.model.build_subunit_to_top_level(
         context.input_map.model.species
     )
-    pd2af.building_model.collect_atoms(context, clingo_model)
+    pd2af.building.model.collect_atoms(context, clingo_model)
     _make_and_add_compartments(context)
     _make_and_add_templates(context)
     _make_and_add_species(context)
-    pd2af.building_model.make_and_add_operators(
+    pd2af.building.model.make_and_add_operators(
         context,
         _OPERATOR_TYPE_TO_GATE_CLASS,
         momapy.celldesigner.BooleanLogicGateInput,
@@ -263,7 +265,9 @@ def make_and_add_model(context: pd2af.context.BuilderContext, clingo_model: typi
     _make_and_add_modulations(context)
 
 
-def _activity_atoms_in_layer_order(context: pd2af.context.BuilderContext) -> typing.Any:
+def _activity_atoms_in_layer_order(
+    context: pd2af.building.context.BuilderContext,
+) -> typing.Any:
     """The activity atoms sorted by the layer their key class belongs to.
 
     A kept species is thus always registered before a promoted subunit.
@@ -274,7 +278,7 @@ def _activity_atoms_in_layer_order(context: pd2af.context.BuilderContext) -> typ
     )
 
 
-def _make_and_add_compartments(context: pd2af.context.BuilderContext):
+def _make_and_add_compartments(context: pd2af.building.context.BuilderContext):
     immediate_compartments = set()
     for atom in _activity_atoms_in_layer_order(context):
         input_species = context.clingo_id_to_model_element[atom.key.species]
@@ -291,14 +295,14 @@ def _make_and_add_compartments(context: pd2af.context.BuilderContext):
 
 
 def _compartment_for_input_species(
-    context: pd2af.context.BuilderContext, input_species: typing.Any
+    context: pd2af.building.context.BuilderContext, input_species: typing.Any
 ) -> typing.Any:
     if getattr(input_species, "compartment", None) is not None:
         return input_species.compartment
     return get_parent_complex_compartment(input_species, context.subunit_to_top_level)
 
 
-def _make_and_add_templates(context: pd2af.context.BuilderContext):
+def _make_and_add_templates(context: pd2af.building.context.BuilderContext):
     strip = context.mode.merges_proteoforms
     seen_template_identities = set()
 
@@ -329,7 +333,7 @@ def _walk_templates(species: typing.Any):
         yield from _walk_templates(subunit)
 
 
-def _make_and_add_species(context: pd2af.context.BuilderContext):
+def _make_and_add_species(context: pd2af.building.context.BuilderContext):
     seen_species_identities = set()
     for atom in _activity_atoms_in_layer_order(context):
         species = _resolve_activity_key(context, atom.key)
@@ -342,7 +346,7 @@ def _make_and_add_species(context: pd2af.context.BuilderContext):
 
 
 def _resolve_activity_key(
-    context: pd2af.context.BuilderContext, key: typing.Any
+    context: pd2af.building.context.BuilderContext, key: typing.Any
 ) -> typing.Any:
     """Resolve an activity key to its output species.
 
@@ -360,23 +364,25 @@ def _resolve_activity_key(
             context.cache,
             context.input_model_element_to_canonical_model_element,
         )
-    if isinstance(key, pd2af.predicates.promotedSubunitKey):
+    if isinstance(key, pd2af.asp.predicates.promotedSubunitKey):
         return get_or_make_promoted_subunit_key_species(
             input_species,
             context.subunit_to_top_level,
             context.cache,
             context.input_model_element_to_canonical_model_element,
         )
-    if isinstance(key, pd2af.predicates.keptSpeciesKey):
+    if isinstance(key, pd2af.asp.predicates.keptSpeciesKey):
         return get_or_make_kept_species_key_or_subunit(input_species, context.cache)
     raise ValueError(f"unknown activity key wrapper {type(key).__name__}")
 
 
-def _make_and_add_modulations(context: pd2af.context.BuilderContext):
+def _make_and_add_modulations(context: pd2af.building.context.BuilderContext):
     seen_modulation_identities = set()
     for atom in context.influence_atoms:
-        modulation_class = pd2af.predicates.predicate_to_model_element_class[type(atom)]
-        source = pd2af.building_model.resolve_influence_source(context, atom.source)
+        modulation_class = pd2af.asp.predicates.predicate_to_model_element_class[
+            type(atom)
+        ]
+        source = pd2af.building.model.resolve_influence_source(context, atom.source)
         if source is None:
             continue
         target = context.key_to_activity[atom.target]

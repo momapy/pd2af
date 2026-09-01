@@ -8,7 +8,7 @@ activities and influences.
 
 Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
 :class:`UnitOfInformation` (the entity class) and a label that is the canonical
-serialization of the whole entity pool (:mod:`pd2af.sbgn.building_labels`). In
+serialization of the whole entity pool (:mod:`pd2af.building.sbgn.labels`). In
 the merged modes (``normal``/``normal-no-complex``) the label is built with state
 variables stripped, so distinct proteoforms collapse to one merged activity,
 and the entity's unit-of-information block is moved off the label onto the typed
@@ -28,11 +28,11 @@ import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
-import pd2af.building_model
-import pd2af.context
-import pd2af.predicates
-import pd2af.sbgn.building_labels
-from pd2af.utils import add_model_element_if_new, register_or_reuse
+import pd2af.building.model
+import pd2af.building.context
+import pd2af.asp.predicates
+import pd2af.building.sbgn.labels
+from pd2af.building.model import add_model_element_if_new, register_or_reuse
 
 
 _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
@@ -69,14 +69,14 @@ _FALLBACK_UNIT_OF_INFORMATION_CLASS = momapy.sbgn.af.UnspecifiedEntityUnitOfInfo
 # left-hand kinds (it has no "unknown" modulation twins), but the unknown
 # variants are mapped too so the table is total over the predicate set.
 _INFLUENCE_PREDICATE_TO_AF_CLASS = {
-    pd2af.predicates.positivelyInfluences: momapy.sbgn.af.PositiveInfluence,
-    pd2af.predicates.negativelyInfluences: momapy.sbgn.af.NegativeInfluence,
-    pd2af.predicates.triggers: momapy.sbgn.af.NecessaryStimulation,
-    pd2af.predicates.modulates: momapy.sbgn.af.UnknownInfluence,
-    pd2af.predicates.unknownPositivelyInfluences: momapy.sbgn.af.PositiveInfluence,
-    pd2af.predicates.unknownNegativelyInfluences: momapy.sbgn.af.NegativeInfluence,
-    pd2af.predicates.unknownTriggers: momapy.sbgn.af.NecessaryStimulation,
-    pd2af.predicates.unknownModulates: momapy.sbgn.af.UnknownInfluence,
+    pd2af.asp.predicates.positivelyInfluences: momapy.sbgn.af.PositiveInfluence,
+    pd2af.asp.predicates.negativelyInfluences: momapy.sbgn.af.NegativeInfluence,
+    pd2af.asp.predicates.triggers: momapy.sbgn.af.NecessaryStimulation,
+    pd2af.asp.predicates.modulates: momapy.sbgn.af.UnknownInfluence,
+    pd2af.asp.predicates.unknownPositivelyInfluences: momapy.sbgn.af.PositiveInfluence,
+    pd2af.asp.predicates.unknownNegativelyInfluences: momapy.sbgn.af.NegativeInfluence,
+    pd2af.asp.predicates.unknownTriggers: momapy.sbgn.af.NecessaryStimulation,
+    pd2af.asp.predicates.unknownModulates: momapy.sbgn.af.UnknownInfluence,
 }
 
 # Operator-type token (``logicalOperator.type_``) -> SBGN-AF operator class.
@@ -90,16 +90,18 @@ _OPERATOR_TYPE_TO_OPERATOR_CLASS = {
 }
 
 
-def make_and_add_model(context: pd2af.context.BuilderContext, clingo_model: typing.Any):
+def make_and_add_model(
+    context: pd2af.building.context.BuilderContext, clingo_model: typing.Any
+):
     """Build ``context.model`` from the clingo atoms (pass 1)."""
     context.model = momapy.builder.get_or_make_builder_cls(momapy.sbgn.af.SBGNAFModel)()
-    pd2af.building_model.collect_atoms(context, clingo_model)
-    context.subunit_to_top_level = pd2af.building_model.build_subunit_to_top_level(
+    pd2af.building.model.collect_atoms(context, clingo_model)
+    context.subunit_to_top_level = pd2af.building.model.build_subunit_to_top_level(
         context.input_map.model.entity_pools
     )
     _make_and_add_compartments(context)
     _make_and_add_activities(context)
-    pd2af.building_model.make_and_add_operators(
+    pd2af.building.model.make_and_add_operators(
         context,
         _OPERATOR_TYPE_TO_OPERATOR_CLASS,
         momapy.sbgn.af.LogicalOperatorInput,
@@ -109,7 +111,7 @@ def make_and_add_model(context: pd2af.context.BuilderContext, clingo_model: typi
 
 
 def _compartment_for_input_element(
-    context: pd2af.context.BuilderContext, input_element: typing.Any
+    context: pd2af.building.context.BuilderContext, input_element: typing.Any
 ) -> typing.Any:
     """The compartment an element belongs to.
 
@@ -125,12 +127,12 @@ def _compartment_for_input_element(
 
 
 def _input_element_for_key(
-    context: pd2af.context.BuilderContext, key: typing.Any
+    context: pd2af.building.context.BuilderContext, key: typing.Any
 ) -> typing.Any:
     return context.clingo_id_to_model_element[key.species]
 
 
-def _make_and_add_compartments(context: pd2af.context.BuilderContext):
+def _make_and_add_compartments(context: pd2af.building.context.BuilderContext):
     seen_compartment_identities = set()
     for atom in context.activity_atoms:
         input_element = _input_element_for_key(context, atom.key)
@@ -150,7 +152,7 @@ def _make_and_add_compartments(context: pd2af.context.BuilderContext):
 
 
 def _get_or_make_compartment(
-    context: pd2af.context.BuilderContext, input_compartment: typing.Any
+    context: pd2af.building.context.BuilderContext, input_compartment: typing.Any
 ) -> typing.Any:
     canonical = context.input_compartment_to_af_compartment.get(id(input_compartment))
     if canonical is None:
@@ -165,7 +167,7 @@ def _get_or_make_compartment(
     return canonical
 
 
-def _make_and_add_activities(context: pd2af.context.BuilderContext):
+def _make_and_add_activities(context: pd2af.building.context.BuilderContext):
     strip = context.mode.merges_proteoforms
     seen_activity_identities = set()
     for atom in context.activity_atoms:
@@ -181,7 +183,7 @@ def _make_and_add_activities(context: pd2af.context.BuilderContext):
 
 
 def _make_activity(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     input_element: typing.Any,
     strip: bool = False,
 ) -> typing.Any:
@@ -206,7 +208,7 @@ def _make_activity(
         type(input_element), _FALLBACK_UNIT_OF_INFORMATION_CLASS
     )
     unit_of_information_label = (
-        pd2af.sbgn.building_labels.make_units_of_information_label(input_element)
+        pd2af.building.sbgn.labels.make_units_of_information_label(input_element)
         if strip
         else None
     )
@@ -218,7 +220,7 @@ def _make_activity(
     if input_compartment is not None:
         compartment = _get_or_make_compartment(context, input_compartment)
     candidate = momapy.sbgn.af.BiologicalActivity(
-        label=pd2af.sbgn.building_labels.make_label(
+        label=pd2af.building.sbgn.labels.make_label(
             input_element,
             include_state_variables=not strip,
             include_units_of_information=not strip,
@@ -229,10 +231,10 @@ def _make_activity(
     return register_or_reuse(candidate, context.cache)
 
 
-def _make_and_add_influences(context: pd2af.context.BuilderContext):
+def _make_and_add_influences(context: pd2af.building.context.BuilderContext):
     seen_influence_identities = set()
     for atom in context.influence_atoms:
-        source = pd2af.building_model.resolve_influence_source(context, atom.source)
+        source = pd2af.building.model.resolve_influence_source(context, atom.source)
         target = context.key_to_activity.get(atom.target)
         if source is None or target is None:
             continue

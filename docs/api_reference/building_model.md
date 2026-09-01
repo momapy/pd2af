@@ -1,1 +1,1 @@
-::: pd2af.building_model
+::: pd2af.building.model

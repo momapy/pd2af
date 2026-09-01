@@ -1,13 +1,13 @@
 """Build the AF layout, reusing the input map's glyphs where possible.
 
 ``make_and_add_layout`` is the layout pass: it walks the model built by
-:mod:`pd2af.celldesigner.building_model` and populates ``context.layout`` and
+:mod:`pd2af.building.celldesigner.model` and populates ``context.layout`` and
 ``context.layout_model_mapping``, branching on ``layout_mode``. The leaf
 primitives below -- synthetic nodes, modulation arcs, mapping helpers, and
 background cloning for overlay -- do the per-element construction.
 
-:mod:`pd2af.build` invokes this pass through a
-:class:`pd2af.context.BuilderContext` after
+:mod:`pd2af.core` invokes this pass through a
+:class:`pd2af.building.context.BuilderContext` after
 the model pass.
 """
 
@@ -20,9 +20,9 @@ import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 
-import pd2af.celldesigner.building_model
-import pd2af.context
-import pd2af.utils
+import pd2af.building.celldesigner.model
+import pd2af.building.context
+import pd2af.building.layout
 
 
 _GATE_CLASS_TO_LAYOUT_CLASS = {
@@ -224,7 +224,7 @@ def make_synthetic_layout(species: typing.Any, index: int) -> typing.Any:
 
 
 def make_modulation_arc(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     modulation: typing.Any,
     source_layout: typing.Any,
     target_layout: typing.Any,
@@ -236,9 +236,9 @@ def make_modulation_arc(
     """
     arc_class = _MODULATION_CLASS_TO_LAYOUT_CLASS[type(modulation)]
     if context.layout_mode == "dot":
-        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+        segments = pd2af.building.layout.PLACEHOLDER_ARC_SEGMENTS
     else:
-        segments = pd2af.utils.make_arc_segments_from_source_and_target(
+        segments = pd2af.building.layout.make_arc_segments_from_source_and_target(
             source_layout, target_layout
         )
     return arc_class(
@@ -265,7 +265,7 @@ def make_synthetic_gate_layout(gate: typing.Any, index: int) -> typing.Any:
 
 
 def make_logic_arc(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     gate_layout: typing.Any,
     input_layout: typing.Any,
 ) -> typing.Any:
@@ -276,9 +276,9 @@ def make_logic_arc(
     (the CellDesigner convention), not input -> gate.
     """
     if context.layout_mode == "dot":
-        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+        segments = pd2af.building.layout.PLACEHOLDER_ARC_SEGMENTS
     else:
-        segments = pd2af.utils.make_arc_segments_from_source_and_target(
+        segments = pd2af.building.layout.make_arc_segments_from_source_and_target(
             gate_layout, input_layout
         )
     return momapy.celldesigner.LogicArcLayout(
@@ -289,7 +289,7 @@ def make_logic_arc(
 
 
 def add_mappings_for_layout_and_descendants(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     input_layout: typing.Any,
     original_to_stripped: dict[int, typing.Any] | None = None,
 ):
@@ -352,11 +352,11 @@ def add_modulation_mapping(
 # ---------------------------------------------------------------------------
 
 
-def make_and_add_layout(context: pd2af.context.BuilderContext):
+def make_and_add_layout(context: pd2af.building.context.BuilderContext):
     """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
     context.layout, context.layout_model_mapping = new_layout_and_mapping_builders()
 
-    for compartment in pd2af.celldesigner.building_model.compartments_outermost_first(
+    for compartment in pd2af.building.celldesigner.model.compartments_outermost_first(
         context.model.compartments
     ):
         _make_and_add_compartment_layout(context, compartment)
@@ -381,14 +381,14 @@ def make_and_add_layout(context: pd2af.context.BuilderContext):
     if context.layout_mode == "overlay":
         foreground = list(context.layout.layout_elements)
         _add_dimmed_background(context, foreground, compartment_count)
-        context.layout = pd2af.utils.highlight_layout_elements(
+        context.layout = pd2af.building.layout.highlight_layout_elements(
             foreground, context.layout
         )
-    pd2af.utils.harmonize_root_layout(context.layout)
+    pd2af.building.layout.harmonize_root_layout(context.layout)
 
 
 def _make_and_add_compartment_layout(
-    context: pd2af.context.BuilderContext, compartment: typing.Any
+    context: pd2af.building.context.BuilderContext, compartment: typing.Any
 ):
     input_layouts = context.input_map.layout_model_mapping.get_mapping(compartment)
     if not input_layouts:
@@ -399,7 +399,7 @@ def _make_and_add_compartment_layout(
 
 
 def _add_decoration_stripped_species_layouts(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     species: typing.Any,
     input_layouts: typing.Any,
 ):
@@ -421,7 +421,7 @@ def _add_decoration_stripped_species_layouts(
 
 
 def _make_and_add_species_layout(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     species: typing.Any,
     input_species: typing.Any,
 ):
@@ -459,7 +459,9 @@ def _make_and_add_species_layout(
 
 
 def _make_and_add_gate_layout(
-    context: pd2af.context.BuilderContext, gate: typing.Any, input_gate: typing.Any
+    context: pd2af.building.context.BuilderContext,
+    gate: typing.Any,
+    input_gate: typing.Any,
 ):
     """Place a gate glyph and its logic arcs.
 
@@ -504,7 +506,7 @@ def _make_and_add_gate_layout(
 
 
 def _make_and_add_modulation_layout(
-    context: pd2af.context.BuilderContext, modulation: typing.Any
+    context: pd2af.building.context.BuilderContext, modulation: typing.Any
 ):
     source_layouts = context.model_element_to_layout_elements.get(id(modulation.source))
     target_layouts = context.model_element_to_layout_elements.get(id(modulation.target))
@@ -517,7 +519,7 @@ def _make_and_add_modulation_layout(
         "plain",
         "overlay",
     )
-    for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
+    for source_layout, target_layout in pd2af.building.layout.influence_layout_pairs(
         source_layouts, target_layouts, prefer_nearest
     ):
         arc = make_modulation_arc(context, modulation, source_layout, target_layout)
@@ -532,7 +534,9 @@ def _make_and_add_modulation_layout(
 
 
 def _add_dimmed_background(
-    context: pd2af.context.BuilderContext, foreground: typing.Any, insert_index: int
+    context: pd2af.building.context.BuilderContext,
+    foreground: typing.Any,
+    insert_index: int,
 ):
     """Clone the input layout's remaining glyphs into ``context.layout``.
 

@@ -51,8 +51,8 @@ single-hop influences, and takes none of the inference layers. It is
 CellDesigner-only.
 
 Stripping is a single recursive operation over the resolved entity
-(`pd2af.celldesigner.building_model.get_or_make_stripped_species`;
-`pd2af.sbgn.building_labels.make_label` with `include_state_variables=False`),
+(`pd2af.building.celldesigner.model.get_or_make_stripped_species`;
+`pd2af.building.sbgn.labels.make_label` with `include_state_variables=False`),
 applied to *every* entity in the merged modes — complexes and
 non-templated entities included, not just templated proteoforms. The
 two structural-role activity keys are `kept_species` (a top-level
@@ -62,29 +62,49 @@ level when its complex is dissolved). `TransformationMode.merges_proteoforms`
 (`pd2af.modes`) is the single source of truth for which modes strip; the
 builder reads it off `context.mode`.
 
-## Languages and layout modes each have one home
+## How the package is laid out
 
-`pd2af.languages.LANGUAGES` is the single source for input languages: its
-keyset *is* the set of languages, its order is the order the CLI and the docs
-list them in, and its values carry every per-language fact (`display_name`, the
-`momapy_module` whose classes seed the ontology vocabulary, and the `map_class`
-/ `model_class` an input is recognised by). Adding a language is one literal
-edit there; `get_language_from_map_or_model` infers the token by walking it.
+pd2af does one thing in three steps, and the package follows them:
+
+| place | what it holds |
+| --- | --- |
+| `core.py` | the transformation itself: check the arguments, solve, build the map |
+| `modes.py` | everything a user chooses from |
+| `asp/` | the question asked to clingo |
+| `building/` | how the answer becomes a map |
+| `cli.py` | the command line, on top of `core` |
+
+Inside `building/`, a module directly in the folder is shared by both output
+languages (`context`, `model`, `layout`, `provenance`); a module in
+`building/celldesigner/` or `building/sbgn/` belongs to that language only, and
+each language folder holds a `model` and a `layout` matching the two build
+passes. Nothing imports `core`, so the import graph has no cycle.
+
+`pd2af.modes` holds the three vocabularies a transformation mode is defined
+against, next to the modes themselves. `LANGUAGES` is the single source for
+input languages: its keyset *is* the set of languages, its order is the order
+the CLI and the docs list them in, and its values carry every per-language fact
+(`display_name`, the `momapy_module` whose classes seed the ontology
+vocabulary, and the `map_class` / `model_class` an input is recognised by).
+Adding a language is one literal edit there; `get_language_from_map_or_model`
+infers the token by walking it. `LAYOUT_MODES` holds the layout-mode
+vocabulary, the CLI descriptions and the `auto` meta value, and
+`LAYOUT_MODES_BY_LANGUAGE` is the join of the two dimensions.
+`INFLUENCE_PAIRINGS` is the third vocabulary, read by the CLI and validated by
+`transform`.
 
 The token is the wire format, not just a label: it is the aspcompose variant
-key `pd2af.rules.build_program` resolves, a segment of every language-specific
-rule identifier (`activity:core:celldesigner:from_global_activate`, public via
+key `pd2af.asp.rules.build_program` resolves, a segment of every
+language-specific rule identifier
+(`activity:core:celldesigner:from_global_activate`, public via
 `--exclude-rule`), and a member of a mode's `compatible_languages`.
 
-`pd2af.layout_modes` owns the layout-mode vocabulary, the CLI descriptions, the
-`auto` meta value and `LAYOUT_MODES_BY_LANGUAGE` — the join of the two
-dimensions. It imports `pd2af.languages`, never the reverse.
-
-The per-language dispatches in `pd2af.build` (builder modules, the `dot`
-auto-layout kwargs, the provenance scratch slots) and `core._wrap_model_in_map`
-deliberately stay where they are: they select build *behavior* rather than
-define a language, and hosting builder references in `pd2af.languages` would
-make it drag the whole builder tree into every importer of `pd2af.modes`.
+The per-language dispatches in `pd2af.core.build_map` (builder modules, the
+`dot` auto-layout kwargs, the provenance scratch slots) and
+`core._wrap_model_in_map` deliberately stay where they are: they select build
+*behavior* rather than define a language, and hosting builder references in
+`pd2af.modes` would make it drag the whole builder tree into every importer of
+`pd2af.modes`.
 
 ## Modes are objects, contributed through an entry point
 
@@ -92,7 +112,7 @@ A mode is a `pd2af.modes.TransformationMode`: its name, its `docs` (the prose
 the CLI lists it with), the rule groups its program is made of
 (`rule_group_references` naming registered groups, `rule_group_definitions`
 carrying groups the mode brings itself), the input languages it accepts, and
-`merges_proteoforms`. `pd2af.rules` owns the groups
+`merges_proteoforms`. `pd2af.asp.rules` owns the groups
 and composes the program; the mode owns the membership, so no rule group decides
 which modes include it. A mode that brings its own groups names them after
 itself: `keep_reactions:*`, as a contributed `casq` mode would name `casq:*`.
@@ -122,12 +142,12 @@ element_to_annotations=..., element_to_notes=...)` and it returns
 output-keyed side-tables on the `TransformerResult`, ready to hand to the
 writer. The carrier is `TransformerResult.provenance`, re-keyed to the
 origin direction (`output_element -> frozenset(input_elements)`); the pure
-remap lives in `pd2af.annotations.carry_annotations_through_provenance`,
+remap lives in `pd2af.building.provenance.carry_annotations_through_provenance`,
 which unions the metadata of every input that merged into a given output
 (so a merged activity gathers the annotations of all its proteoforms).
 
 Coverage is species/activities, **complex subunits** at any depth (paired from
-the species provenance by `pd2af.build.record_provenance_for_subunit_trees`,
+the species provenance by `pd2af.building.provenance.record_provenance_for_subunit_trees`,
 through the builder's `input_model_element_to_canonical_model_element` map in
 the merged modes and by content-equality in the kept modes), logical operators,
 **compartments** (folded into `provenance` via `context.compartment_emissions`)
@@ -160,7 +180,7 @@ which causes `KeyError` on read-back of the written CellDesigner XML.
 
 The right fix when this shape of bug appears is a dedup-and-remap pass
 over the constructed model (mirroring `register_model_element`), not
-ad-hoc patching. See `pd2af.utils.register_or_reuse`.
+ad-hoc patching. See `pd2af.building.model.register_or_reuse`.
 
 ## Read-back as the integration test
 

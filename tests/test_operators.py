@@ -30,13 +30,13 @@ import momapy.io.core
 import momapy.sbgn.af
 
 import pd2af
-import pd2af.celldesigner.building_layout
-import pd2af.celldesigner.building_model
-import pd2af.languages
-import pd2af.predicates
-import pd2af.rules
-import pd2af.sbgn.building_layout
-import pd2af.sbgn.building_model
+import pd2af.building.celldesigner.layout
+import pd2af.building.celldesigner.model
+import pd2af.modes
+import pd2af.asp.predicates
+import pd2af.asp.rules
+import pd2af.building.sbgn.layout
+import pd2af.building.sbgn.model
 
 from tests._helpers import (
     MAPS_DIR,
@@ -88,54 +88,56 @@ def _gate_map_paths():
 
 class TestOperatorPredicates:
     def test_logical_operator_key_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.logicalOperatorKey, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.logicalOperatorKey, clorm.Predicate)
 
     def test_logical_operator_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.logicalOperator, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.logicalOperator, clorm.Predicate)
 
     def test_logical_operator_input_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.logicalOperatorInput, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.logicalOperatorInput, clorm.Predicate)
 
     def test_logical_operator_key_can_be_constructed(self):
-        atom = pd2af.predicates.logicalOperatorKey(gate="some_gate")
+        atom = pd2af.asp.predicates.logicalOperatorKey(gate="some_gate")
         assert atom.gate == "some_gate"
 
     def test_logical_operator_carries_type_token(self):
-        atom = pd2af.predicates.logicalOperator(
-            key=pd2af.predicates.logicalOperatorKey(gate="g"), type_="and"
+        atom = pd2af.asp.predicates.logicalOperator(
+            key=pd2af.asp.predicates.logicalOperatorKey(gate="g"), type_="and"
         )
         assert atom.type_ == "and"
-        assert isinstance(atom.key, pd2af.predicates.logicalOperatorKey)
+        assert isinstance(atom.key, pd2af.asp.predicates.logicalOperatorKey)
 
     def test_each_typed_influence_accepts_operator_source(self):
         for name in _TYPED_INFLUENCE_NAMES:
-            predicate = getattr(pd2af.predicates, name)
+            predicate = getattr(pd2af.asp.predicates, name)
             atom = predicate(
-                source=pd2af.predicates.logicalOperatorKey(gate="g"),
-                target=pd2af.predicates.keptSpeciesKey(species="t"),
+                source=pd2af.asp.predicates.logicalOperatorKey(gate="g"),
+                target=pd2af.asp.predicates.keptSpeciesKey(species="t"),
             )
-            assert isinstance(atom.source, pd2af.predicates.logicalOperatorKey), name
-            assert isinstance(atom.target, pd2af.predicates.keptSpeciesKey), name
+            assert isinstance(atom.source, pd2af.asp.predicates.logicalOperatorKey), (
+                name
+            )
+            assert isinstance(atom.target, pd2af.asp.predicates.keptSpeciesKey), name
 
     def test_new_wraps_operator_node_and_input(self):
-        key = pd2af.predicates.logicalOperatorKey(gate="g")
-        node = pd2af.predicates.new(
-            object_=pd2af.predicates.logicalOperator(key=key, type_="or")
+        key = pd2af.asp.predicates.logicalOperatorKey(gate="g")
+        node = pd2af.asp.predicates.new(
+            object_=pd2af.asp.predicates.logicalOperator(key=key, type_="or")
         )
-        edge = pd2af.predicates.new(
-            object_=pd2af.predicates.logicalOperatorInput(
-                operator=key, input=pd2af.predicates.keptSpeciesKey(species="i")
+        edge = pd2af.asp.predicates.new(
+            object_=pd2af.asp.predicates.logicalOperatorInput(
+                operator=key, input=pd2af.asp.predicates.keptSpeciesKey(species="i")
             )
         )
-        assert isinstance(node.object_, pd2af.predicates.logicalOperator)
-        assert isinstance(edge.object_, pd2af.predicates.logicalOperatorInput)
+        assert isinstance(node.object_, pd2af.asp.predicates.logicalOperator)
+        assert isinstance(edge.object_, pd2af.asp.predicates.logicalOperatorInput)
 
 
 class TestGateRules:
     @pytest.mark.parametrize("mode", _PATH_INFERENCE_MODES)
-    @pytest.mark.parametrize("language", tuple(pd2af.languages.LANGUAGES))
+    @pytest.mark.parametrize("language", tuple(pd2af.modes.LANGUAGES))
     def test_gates_group_present_in_path_inference_modes(self, mode, language):
-        program = pd2af.rules.build_program(mode, language=language)
+        program = pd2af.asp.rules.build_program(mode, language=language)
         assert "new(logicalOperator(logicalOperatorKey(OPERATOR)," in program
         assert "new(logicalOperatorInput(logicalOperatorKey(OPERATOR)," in program
         assert (
@@ -144,19 +146,19 @@ class TestGateRules:
         )
 
     def test_celldesigner_activates_gate_inputs(self):
-        program = pd2af.rules.build_program("keep-species", language="celldesigner")
+        program = pd2af.asp.rules.build_program("keep-species", language="celldesigner")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "booleanLogicGateInput(INPUT)" in program
 
     def test_sbgn_pd_operator_input_activation_is_entity_pool_guarded(self):
-        program = pd2af.rules.build_program("keep-species", language="sbgn_pd")
+        program = pd2af.asp.rules.build_program("keep-species", language="sbgn_pd")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "logicalOperatorInput(INPUT)" in program
         assert "entityPool(ELEMENT)" in program
 
     def test_not_token_dodges_reserved_keyword(self):
         # bare `not` is a reserved clingo keyword, so the NOT token is `not_`.
-        program = pd2af.rules.build_program("keep-species", language="celldesigner")
+        program = pd2af.asp.rules.build_program("keep-species", language="celldesigner")
         assert (
             "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR)."
             in program
@@ -165,16 +167,18 @@ class TestGateRules:
     def test_gates_influence_rule_guards_on_umbrella(self):
         # Without the booleanLogicGate/logicalOperator umbrella guard, every
         # path/3 source (species included) would be read as an operator key.
-        cd_program = pd2af.rules.build_program("keep-species", language="celldesigner")
+        cd_program = pd2af.asp.rules.build_program(
+            "keep-species", language="celldesigner"
+        )
         assert "booleanLogicGate(OPERATOR)" in cd_program
-        sbgn_program = pd2af.rules.build_program("keep-species", language="sbgn_pd")
+        sbgn_program = pd2af.asp.rules.build_program("keep-species", language="sbgn_pd")
         assert "logicalOperator(OPERATOR)" in sbgn_program
 
 
 class TestOperatorClassMapsAreTotal:
     def test_celldesigner_gate_type_map_covers_every_gate_class(self):
         gate_classes = set(
-            pd2af.celldesigner.building_model._OPERATOR_TYPE_TO_GATE_CLASS.values()
+            pd2af.building.celldesigner.model._OPERATOR_TYPE_TO_GATE_CLASS.values()
         )
         assert gate_classes == {
             momapy.celldesigner.AndGate,
@@ -184,14 +188,14 @@ class TestOperatorClassMapsAreTotal:
         }
 
     def test_celldesigner_gate_layout_map_covers_every_gate_class(self):
-        layout_map = pd2af.celldesigner.building_layout._GATE_CLASS_TO_LAYOUT_CLASS
+        layout_map = pd2af.building.celldesigner.layout._GATE_CLASS_TO_LAYOUT_CLASS
         assert set(layout_map) == set(
-            pd2af.celldesigner.building_model._OPERATOR_TYPE_TO_GATE_CLASS.values()
+            pd2af.building.celldesigner.model._OPERATOR_TYPE_TO_GATE_CLASS.values()
         )
 
     def test_sbgn_operator_type_map_covers_authored_operators(self):
         operator_classes = set(
-            pd2af.sbgn.building_model._OPERATOR_TYPE_TO_OPERATOR_CLASS.values()
+            pd2af.building.sbgn.model._OPERATOR_TYPE_TO_OPERATOR_CLASS.values()
         )
         assert operator_classes == {
             momapy.sbgn.af.AndOperator,
@@ -200,15 +204,15 @@ class TestOperatorClassMapsAreTotal:
         }
 
     def test_sbgn_operator_layout_map_covers_its_operator_classes(self):
-        layout_map = pd2af.sbgn.building_layout._OPERATOR_CLASS_TO_LAYOUT_CLASS
+        layout_map = pd2af.building.sbgn.layout._OPERATOR_CLASS_TO_LAYOUT_CLASS
         model_classes = set(
-            pd2af.sbgn.building_model._OPERATOR_TYPE_TO_OPERATOR_CLASS.values()
+            pd2af.building.sbgn.model._OPERATOR_TYPE_TO_OPERATOR_CLASS.values()
         )
         assert model_classes.issubset(set(layout_map))
 
     def test_not_token_is_consistent_across_maps(self):
-        assert "not_" in pd2af.celldesigner.building_model._OPERATOR_TYPE_TO_GATE_CLASS
-        assert "not_" in pd2af.sbgn.building_model._OPERATOR_TYPE_TO_OPERATOR_CLASS
+        assert "not_" in pd2af.building.celldesigner.model._OPERATOR_TYPE_TO_GATE_CLASS
+        assert "not_" in pd2af.building.sbgn.model._OPERATOR_TYPE_TO_OPERATOR_CLASS
 
 
 class TestCelldesignerGatesShapeA:

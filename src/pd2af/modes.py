@@ -1,4 +1,16 @@
-"""Transformation modes: what a mode *is*, and how to contribute a new one.
+"""Everything a user chooses from: the vocabularies and the transformation modes.
+
+The input languages, the layout modes and the influence pairings are the three
+vocabularies a transformation mode is defined against, so they live here with
+it: :data:`LANGUAGES` is the single source of the input languages and of the
+order the CLI and the docs list them in, :data:`LAYOUT_MODES` of the layout
+modes and their CLI descriptions, and :data:`LAYOUT_MODES_BY_LANGUAGE` is the
+join of the two. A language token is also the wire format: it is the aspcompose
+variant key resolved by :func:`pd2af.asp.rules.build_program`, a segment of
+every language-specific rule identifier, and a member of a mode's
+``compatible_languages``. The output language is *deduced* from the input:
+``celldesigner`` input -> CellDesigner output, ``sbgn_pd`` input -> SBGN-AF
+output.
 
 A :class:`TransformationMode` carries everything pd2af knows about a mode:
 its name, the prose the CLI lists it with, the rule groups its ASP program
@@ -25,7 +37,7 @@ object::
 
 ``rule_group_references`` names groups pd2af already registers;
 ``rule_group_definitions`` holds ``RuleGroup`` objects the mode brings with it,
-which :func:`pd2af.rules.build_registry` registers alongside the built-in ones. A
+which :func:`pd2af.asp.rules.build_registry` registers alongside the built-in ones. A
 contributed mode may not take the name of an existing mode, and a mode that
 fails to load — a bad import, a wrong type, a name collision, a group that
 fails registry validation — takes down every pd2af entry point rather than
@@ -36,11 +48,86 @@ import dataclasses
 import functools
 import importlib.metadata
 import types
+import typing
 
 from aspcompose import RuleGroup
 
-import pd2af.languages
-import pd2af.layout_modes
+import momapy.celldesigner
+import momapy.sbgn.pd
+
+
+CELLDESIGNER = "celldesigner"
+SBGN_PD = "sbgn_pd"
+
+
+# Every input language, in the order the CLI and the docs list them: the token
+# -> everything pd2af knows about it. `momapy_module` is the package whose
+# model-element classes seed the momapy_kb ontology (functor names derive from
+# the class names, so each language yields its own predicate vocabulary, with no
+# overlap between the two); `map_class` and `model_class` are what an input of
+# that language is recognised by.
+LANGUAGES = {
+    CELLDESIGNER: {
+        "display_name": "CellDesigner",
+        "momapy_module": momapy.celldesigner,
+        "map_class": momapy.celldesigner.CellDesignerMap,
+        "model_class": momapy.celldesigner.CellDesignerModel,
+    },
+    SBGN_PD: {
+        "display_name": "SBGN PD",
+        "momapy_module": momapy.sbgn.pd,
+        "map_class": momapy.sbgn.pd.SBGNPDMap,
+        "model_class": momapy.sbgn.pd.SBGNPDModel,
+    },
+}
+
+
+# The concrete layout modes -> their one-line CLI description, in display order.
+LAYOUT_MODES = {
+    "plain": "reuse original positions",
+    "overlay": ("reuse full original layout with unmapped layout elements dimmed"),
+    "dot": "graphviz `dot` auto-layout (requires `dot` on PATH)",
+}
+
+# Not a layout mode of its own: a meta value accepted by the CLI and
+# `transform`, resolved from the input before the build stage ever sees it.
+AUTO = "auto"
+AUTO_DESCRIPTION = "pick automatically from the input (graphviz `dot` for a map)"
+
+# The concrete layout modes each output language supports. SBGN-AF output
+# supports the curated-geometry `plain` mode and the graphviz `dot` mode; the
+# `overlay` dimming is CellDesigner-only.
+LAYOUT_MODES_BY_LANGUAGE = {
+    CELLDESIGNER: tuple(LAYOUT_MODES),
+    SBGN_PD: ("plain", "dot"),
+}
+
+# How to draw an influence whose source or target maps to several glyphs.
+INFLUENCE_PAIRINGS = ("cross", "nearest")
+
+
+def get_language_from_map_or_model(map_or_model: typing.Any) -> str:
+    """Infer the input language token from an input map's or model's type.
+
+    Matching is by ``isinstance`` rather than exact type: momapy's builder
+    classes are subclasses of the map classes, so a builder is accepted too.
+    """
+    for language, properties in LANGUAGES.items():
+        if isinstance(
+            map_or_model, (properties["map_class"], properties["model_class"])
+        ):
+            return language
+    raise ValueError(
+        f"unsupported input type {type(map_or_model).__name__!r}; expected "
+        + " or ".join(
+            momapy_class.__name__
+            for properties in LANGUAGES.values()
+            for momapy_class in (
+                properties["map_class"],
+                properties["model_class"],
+            )
+        )
+    )
 
 
 ENTRY_POINT_GROUP = "pd2af.modes"
@@ -71,7 +158,7 @@ class TransformationMode:
     docs: str
     rule_group_references: tuple[str, ...] = ()
     rule_group_definitions: tuple[RuleGroup, ...] = ()
-    compatible_languages: frozenset[str] = frozenset(pd2af.languages.LANGUAGES)
+    compatible_languages: frozenset[str] = frozenset(LANGUAGES)
     merges_proteoforms: bool = False
 
     @property
@@ -87,7 +174,7 @@ class TransformationMode:
         Merged activities are synthesized from several input species, so they
         have no original geometry for `plain`/`overlay` to reuse.
         """
-        available_layout_modes = pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
+        available_layout_modes = LAYOUT_MODES_BY_LANGUAGE[language]
         if not self.merges_proteoforms:
             return available_layout_modes
         return ("dot",) if "dot" in available_layout_modes else ()
@@ -210,7 +297,7 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "keep_reactions:activity",
             "keep_reactions:influences",
         ),
-        compatible_languages=frozenset({pd2af.languages.CELLDESIGNER}),
+        compatible_languages=frozenset({CELLDESIGNER}),
     ),
 )
 

@@ -1,99 +1,26 @@
-"""Coordinator: drive the two-phase :class:`pd2af.context.BuilderContext` pipeline.
+"""Where each output element comes from, and the metadata it inherits.
 
-Pass 1 (:func:`pd2af.celldesigner.building_model.make_and_add_model`) walks clingo
-activity / influence atoms and populates ``context.model`` with canonical,
-content-deduped compartments, templates, species and modulations.
-References between elements are wired to canonical instances at
-construction time.
+Provenance maps each output element to the input elements it derives from;
+:func:`make_provenance_from_context` builds it from the slots the model pass
+filled, and :func:`carry_annotations_through_provenance` reads it back to
+re-key the input annotations and notes onto the output.
 
-Pass 2 (:func:`pd2af.celldesigner.building_layout.make_and_add_layout`) -- skipped
-entirely when ``layout_mode is None`` -- populates ``context.layout`` and
-``context.layout_model_mapping``, branching on ``layout_mode``.
-
-``build_map`` creates the :class:`pd2af.context.BuilderContext`, runs the two
-passes, then assembles the final map from the three context slots and returns
-it with the provenance mapping. :func:`pd2af.core.transform` -- its only caller
--- builds the public :class:`pd2af.core.TransformerResult` from that pair.
+momapy stores annotations and notes not on model elements but in side-tables on
+the ``ReaderResult`` (``element_to_annotations`` / ``element_to_notes``, each a
+``Mapping[model_element -> frozenset]``). The transform builds new output
+elements, so those input-keyed side-tables no longer address anything in the
+output map. This module re-keys them onto the output elements through the
+transform's provenance -- which maps each output element to the input elements
+it derives from -- unioning the annotations/notes of every merged source onto
+their shared output element.
 """
 
 import collections.abc
 import typing
 
-import momapy.builder
-import momapy.celldesigner
-import momapy.sbgn.af
 import momapy.utils
 
-import pd2af.celldesigner.building_layout
-import pd2af.celldesigner.building_model
-import pd2af.context
-import pd2af.languages
-import pd2af.modes
-import pd2af.sbgn.building_layout
-import pd2af.sbgn.building_model
-import pd2af.utils
-
-
-def build_map(
-    map_: typing.Any,
-    layout_mode: str | None,
-    clingo_model: typing.Any,
-    clingo_id_to_model_element: dict,
-    influence_pairing: str = "cross",
-    *,
-    mode: pd2af.modes.TransformationMode,
-) -> tuple[typing.Any, momapy.utils.FrozenIdentityMultiDict]:
-    """Run the model and layout passes and return ``(new_map, provenance)``."""
-    context = pd2af.context.BuilderContext(
-        input_map=map_,
-        layout_mode=layout_mode,
-        clingo_id_to_model_element=clingo_id_to_model_element,
-        influence_pairing=influence_pairing,
-        mode=mode,
-    )
-    language = pd2af.languages.get_language_from_map_or_model(map_)
-    if language == pd2af.languages.SBGN_PD:
-        pd2af.sbgn.building_model.make_and_add_model(context, clingo_model)
-        if layout_mode is not None:
-            pd2af.sbgn.building_layout.make_and_add_layout(context)
-        map_builder_class = momapy.builder.get_or_make_builder_cls(
-            momapy.sbgn.af.SBGNAFMap
-        )
-        # SBGN-AF logical operators have input/output connectors: rank their
-        # logic-arc inputs upstream (reversed_arc_classes) and re-attach the
-        # operator arcs to the connector tips after graphviz repositions
-        # (operator_arc_resolver). Both hooks are no-ops on operator-free maps,
-        # so non-operator SBGN output is unchanged.
-        auto_layout_arguments = {
-            "compartment_layout_classes": (momapy.sbgn.af.CompartmentLayout,),
-            "reversed_arc_classes": (momapy.sbgn.af.LogicArcLayout,),
-            "operator_arc_resolver": (
-                pd2af.sbgn.building_layout.resolve_operator_arc_segments
-            ),
-        }
-    else:
-        pd2af.celldesigner.building_model.make_and_add_model(context, clingo_model)
-        if layout_mode is not None:
-            pd2af.celldesigner.building_layout.make_and_add_layout(context)
-        map_builder_class = momapy.builder.get_or_make_builder_cls(
-            momapy.celldesigner.CellDesignerMap
-        )
-        auto_layout_arguments = {}
-
-    map_builder = map_builder_class(
-        model=context.model,
-        layout=context.layout,
-        layout_model_mapping=context.layout_model_mapping,
-    )
-    new_map = momapy.builder.object_from_builder(map_builder)
-
-    # the "dot" mode (graphviz) repositions an already-built layout. The
-    # compartment-layout classes differ per language (see
-    # pd2af.utils.make_auto_layout).
-    if layout_mode == "dot":
-        new_map = pd2af.utils.make_auto_layout(new_map, **auto_layout_arguments)
-
-    return new_map, make_provenance_from_context(context)
+import pd2af.building.context
 
 
 def record_provenance_for_subunit_trees(
@@ -150,7 +77,7 @@ def record_provenance_for_subunit_trees(
 
 
 def make_provenance_from_context(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
 ) -> momapy.utils.FrozenIdentityMultiDict:
     """Build the output-element -> input-elements provenance mapping.
 
@@ -213,3 +140,67 @@ def make_provenance_from_context(
             )
         }
     )
+
+
+def carry_annotations_through_provenance(
+    provenance: momapy.utils.FrozenIdentityMultiDict,
+    input_element_to_annotations: dict | None,
+    input_element_to_notes: dict | None,
+    input_map: typing.Any = None,
+    output_map: typing.Any = None,
+) -> tuple[dict, dict]:
+    """Re-key input annotation/note side-tables onto the output elements.
+
+    Args:
+        provenance: the transform's ``FrozenIdentityMultiDict`` mapping each
+            output element to the ``frozenset`` of input elements it derives
+            from (``TransformerResult.provenance``).
+        input_element_to_annotations: ``Mapping[input_element -> frozenset]`` of
+            RDF annotations from the input ``ReaderResult`` (or ``None``).
+        input_element_to_notes: ``Mapping[input_element -> frozenset[str]]`` of
+            notes from the input ``ReaderResult`` (or ``None``).
+        input_map: the input map, whose own annotations/notes are keyed by the
+            map object itself (the map is not a provenance element); pass it
+            with ``output_map`` to carry the map-level metadata.
+        output_map: the output map -- the key the writer looks the map-level
+            annotations up under.
+
+    Returns:
+        An ``(output_element_to_annotations, output_element_to_notes)`` tuple of
+        plain dicts keyed by output model element with ``frozenset`` values,
+        ready to hand to the momapy writer. For every output element the
+        annotations/notes of all its provenance input sources are unioned, so a
+        merged activity gathers the metadata of every proteoform that collapsed
+        into it.
+    """
+    input_element_to_annotations = input_element_to_annotations or {}
+    input_element_to_notes = input_element_to_notes or {}
+    output_element_to_annotations = {}
+    output_element_to_notes = {}
+
+    def union_metadata_onto_output(
+        output_element: typing.Any, input_element: typing.Any
+    ) -> None:
+        annotations = input_element_to_annotations.get(input_element)
+        if annotations:
+            output_element_to_annotations[output_element] = (
+                output_element_to_annotations.get(output_element, frozenset())
+                | annotations
+            )
+        notes = input_element_to_notes.get(input_element)
+        if notes:
+            output_element_to_notes[output_element] = (
+                output_element_to_notes.get(output_element, frozenset()) | notes
+            )
+
+    for output_element, input_elements in (provenance or {}).items():
+        for input_element in input_elements:
+            union_metadata_onto_output(output_element, input_element)
+
+    # The input map's own annotations/notes are keyed by the map object, which
+    # is not a provenance element; re-key them onto the output map object (what
+    # the writer looks the map-level metadata up under).
+    if input_map is not None and output_map is not None:
+        union_metadata_onto_output(output_map, input_map)
+
+    return output_element_to_annotations, output_element_to_notes

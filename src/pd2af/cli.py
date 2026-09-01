@@ -13,16 +13,14 @@ import momapy.io.core
 
 import pd2af
 import pd2af.core
-import pd2af.languages
-import pd2af.layout_modes
 import pd2af.modes
-import pd2af.rules
+import pd2af.asp.rules
 
 
-_LAYOUT_CHOICES = tuple(pd2af.layout_modes.LAYOUT_MODES) + (pd2af.layout_modes.AUTO,)
+_LAYOUT_CHOICES = tuple(pd2af.modes.LAYOUT_MODES) + (pd2af.modes.AUTO,)
 
-_LAYOUT_MODE_INFO = pd2af.layout_modes.LAYOUT_MODES | {
-    pd2af.layout_modes.AUTO: pd2af.layout_modes.AUTO_DESCRIPTION
+_LAYOUT_MODE_INFO = pd2af.modes.LAYOUT_MODES | {
+    pd2af.modes.AUTO: pd2af.modes.AUTO_DESCRIPTION
 }
 
 
@@ -32,7 +30,7 @@ def _compatible_language_names_for_mode(
     """Display names of the input languages a transformation mode applies to."""
     return [
         properties["display_name"]
-        for language, properties in pd2af.languages.LANGUAGES.items()
+        for language, properties in pd2af.modes.LANGUAGES.items()
         if language in mode.compatible_languages
     ]
 
@@ -53,7 +51,7 @@ def _compatible_layout_mode_names_for_mode(
         offered.update(mode.compatible_layout_modes(language))
     return [
         layout_mode
-        for layout_mode in pd2af.layout_modes.LAYOUT_MODES
+        for layout_mode in pd2af.modes.LAYOUT_MODES
         if layout_mode in offered
     ]
 
@@ -61,16 +59,16 @@ def _compatible_layout_mode_names_for_mode(
 def _compatible_language_names_for_layout_mode(layout_mode: str) -> list[str]:
     """Display names of the input languages whose output supports a layout mode.
 
-    Derived from pd2af.layout_modes: SBGN-AF output (SBGN-PD input) does not
+    Derived from pd2af.modes: SBGN-AF output (SBGN-PD input) does not
     support the `overlay` dimming; CellDesigner output supports every layout
     mode. The `auto` meta value is not a concrete layout mode, so no language
     rejects it and every display name is returned.
     """
     return [
         properties["display_name"]
-        for language, properties in pd2af.languages.LANGUAGES.items()
-        if layout_mode == pd2af.layout_modes.AUTO
-        or layout_mode in pd2af.layout_modes.LAYOUT_MODES_BY_LANGUAGE[language]
+        for language, properties in pd2af.modes.LANGUAGES.items()
+        if layout_mode == pd2af.modes.AUTO
+        or layout_mode in pd2af.modes.LAYOUT_MODES_BY_LANGUAGE[language]
     ]
 
 
@@ -317,7 +315,7 @@ def _build_groups_data() -> dict:
     """
     data = {}
     for mode_name in pd2af.modes.get_transformation_modes():
-        excludable, mandatory = pd2af.rules.get_excludable_groups(mode_name)
+        excludable, mandatory = pd2af.asp.rules.get_excludable_groups(mode_name)
         data[mode_name] = {
             "excludable": sorted(excludable),
             "mandatory": sorted(mandatory),
@@ -403,7 +401,7 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "-p",
         "--influence-pairing",
-        choices=pd2af.core.INFLUENCE_PAIRINGS,
+        choices=pd2af.modes.INFLUENCE_PAIRINGS,
         default="cross",
         help=(
             "how to draw an influence whose source or target maps to several "

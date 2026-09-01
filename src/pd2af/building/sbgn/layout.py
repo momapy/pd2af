@@ -18,7 +18,7 @@ Two layout modes:
   single arc between the closest pair). Activities/compartments whose input has
   no layout are skipped.
 * ``dot`` -- build every element at a placeholder position with the default
-  size, then hand the whole layout to ``pd2af.utils.make_auto_layout``
+  size, then hand the whole layout to ``pd2af.building.layout.make_auto_layout``
   (graphviz) in ``build.py`` for repositioning. Required by the merged
   ``normal`` / ``normal-no-complex`` modes, where a merged activity has no
   single input layout.
@@ -36,8 +36,8 @@ import momapy.sbgn.af
 import momapy.sbgn.io.sbgnml._reading_layout
 import momapy.sbgn.layout
 
-import pd2af.context
-import pd2af.utils
+import pd2af.building.context
+import pd2af.building.layout
 
 
 _UNIT_OF_INFORMATION_CLASS_TO_LAYOUT_CLASS = {
@@ -83,7 +83,7 @@ def _builder(layout_class: type, **kwargs) -> typing.Any:
     return momapy.builder.get_or_make_builder_cls(layout_class)(**kwargs)
 
 
-def make_and_add_layout(context: pd2af.context.BuilderContext):
+def make_and_add_layout(context: pd2af.building.context.BuilderContext):
     """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
     if context.layout_mode not in ("plain", "dot"):
         raise NotImplementedError(
@@ -105,11 +105,11 @@ def make_and_add_layout(context: pd2af.context.BuilderContext):
     for influence in context.model.influences:
         _make_and_add_influence_layout(context, influence)
 
-    pd2af.utils.harmonize_root_layout(context.layout)
+    pd2af.building.layout.harmonize_root_layout(context.layout)
 
 
 def _get_input_layouts(
-    context: pd2af.context.BuilderContext, input_element: typing.Any
+    context: pd2af.building.context.BuilderContext, input_element: typing.Any
 ) -> typing.Any:
     """Return the input map's layout elements for a model element, as a tuple.
 
@@ -120,7 +120,7 @@ def _get_input_layouts(
 
 
 def _make_and_add_compartment_layout(
-    context: pd2af.context.BuilderContext, compartment: typing.Any
+    context: pd2af.building.context.BuilderContext, compartment: typing.Any
 ):
     if context.layout_mode == "dot":
         # Default size; graphviz fits the cluster around its members afterwards.
@@ -152,13 +152,13 @@ def _make_and_add_compartment_layout(
 
 
 def _input_compartment_for(
-    context: pd2af.context.BuilderContext, af_compartment: typing.Any
+    context: pd2af.building.context.BuilderContext, af_compartment: typing.Any
 ) -> typing.Any:
     return context.af_compartment_to_input_compartment.get(id(af_compartment))
 
 
 def _make_and_add_activity_layout(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     activity: typing.Any,
     input_element: typing.Any,
 ):
@@ -197,7 +197,7 @@ def _make_and_add_activity_layout(
 
 
 def _make_and_add_unit_of_information_layout(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     activity_layout: typing.Any,
     unit_of_information: typing.Any,
 ):
@@ -231,7 +231,7 @@ def _make_and_add_unit_of_information_layout(
 
 
 def _make_and_add_operator_layout(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     operator: typing.Any,
     input_operator: typing.Any,
 ):
@@ -303,7 +303,7 @@ def _make_and_add_operator_layout(
 
 
 def _input_operator_glyph(
-    context: pd2af.context.BuilderContext, input_operator: typing.Any
+    context: pd2af.building.context.BuilderContext, input_operator: typing.Any
 ) -> typing.Any:
     """Return the input SBGN-PD operator's glyph layout, or ``None``.
 
@@ -361,7 +361,7 @@ def _operator_connector_segment(
 def resolve_operator_arc_segments(
     arc: typing.Any, source_builder: typing.Any, target_builder: typing.Any
 ) -> typing.Any:
-    """Per-arc hook for :func:`pd2af.utils.make_auto_layout`'s arc-geometry step.
+    """Per-arc hook for :func:`pd2af.building.layout.make_auto_layout`'s arc-geometry step.
 
     When ``arc`` is sourced by an operator glyph, return its connector-attached
     segments recomputed from the graphviz-repositioned geometry; otherwise
@@ -380,12 +380,12 @@ def resolve_operator_arc_segments(
 
 
 def _make_logic_arc(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     operator_layout: typing.Any,
     input_layout: typing.Any,
 ) -> typing.Any:
     if context.layout_mode == "dot":
-        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+        segments = pd2af.building.layout.PLACEHOLDER_ARC_SEGMENTS
     else:
         segments = (
             _operator_connector_segment(
@@ -401,7 +401,7 @@ def _make_logic_arc(
 
 
 def _make_and_add_influence_layout(
-    context: pd2af.context.BuilderContext, influence: typing.Any
+    context: pd2af.building.context.BuilderContext, influence: typing.Any
 ):
     source_layouts = context.model_element_to_layout_elements.get(id(influence.source))
     target_layouts = context.model_element_to_layout_elements.get(id(influence.target))
@@ -410,7 +410,7 @@ def _make_and_add_influence_layout(
     prefer_nearest = (
         context.influence_pairing == "nearest" and context.layout_mode == "plain"
     )
-    for source_layout, target_layout in pd2af.utils.influence_layout_pairs(
+    for source_layout, target_layout in pd2af.building.layout.influence_layout_pairs(
         source_layouts, target_layouts, prefer_nearest
     ):
         arc = _make_influence_arc(context, influence, source_layout, target_layout)
@@ -421,7 +421,7 @@ def _make_and_add_influence_layout(
 
 
 def _make_influence_arc(
-    context: pd2af.context.BuilderContext,
+    context: pd2af.building.context.BuilderContext,
     influence: typing.Any,
     source_layout: typing.Any,
     target_layout: typing.Any,
@@ -430,7 +430,7 @@ def _make_influence_arc(
     # An operator-sourced influence leaves the operator's output connector; every
     # other influence runs plain border-to-border (untouched).
     if context.layout_mode == "dot":
-        segments = pd2af.utils.PLACEHOLDER_ARC_SEGMENTS
+        segments = pd2af.building.layout.PLACEHOLDER_ARC_SEGMENTS
     elif momapy.builder.isinstance_or_builder(source_layout, _OPERATOR_LAYOUT_CLASSES):
         segments = (
             _operator_connector_segment(
@@ -438,7 +438,7 @@ def _make_influence_arc(
             ),
         )
     else:
-        segments = pd2af.utils.make_arc_segments_from_source_and_target(
+        segments = pd2af.building.layout.make_arc_segments_from_source_and_target(
             source_layout, target_layout
         )
     return _builder(

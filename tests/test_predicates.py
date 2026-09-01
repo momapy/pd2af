@@ -2,73 +2,73 @@ import clorm
 
 import momapy.celldesigner
 
-import pd2af.predicates
+import pd2af.asp.predicates
 
 
 class TestPredicateClass:
     def test_kept_species_key_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.keptSpeciesKey, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.keptSpeciesKey, clorm.Predicate)
 
     def test_promoted_subunit_key_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.promotedSubunitKey, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.promotedSubunitKey, clorm.Predicate)
 
     def test_activity_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.activity, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.activity, clorm.Predicate)
 
     def test_positively_influences_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.positivelyInfluences, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.positivelyInfluences, clorm.Predicate)
 
     def test_negatively_influences_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.negativelyInfluences, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.negativelyInfluences, clorm.Predicate)
 
     def test_new_is_clorm_predicate(self):
-        assert issubclass(pd2af.predicates.new, clorm.Predicate)
+        assert issubclass(pd2af.asp.predicates.new, clorm.Predicate)
 
     def test_kept_species_key_can_be_constructed(self):
-        atom = pd2af.predicates.keptSpeciesKey(species="some_id")
+        atom = pd2af.asp.predicates.keptSpeciesKey(species="some_id")
         assert atom.species == "some_id"
 
     def test_promoted_subunit_key_can_be_constructed(self):
-        atom = pd2af.predicates.promotedSubunitKey(species="some_id")
+        atom = pd2af.asp.predicates.promotedSubunitKey(species="some_id")
         assert atom.species == "some_id"
 
     def test_activity_wraps_kept_species_key(self):
-        atom = pd2af.predicates.activity(
-            key=pd2af.predicates.keptSpeciesKey(species="x")
+        atom = pd2af.asp.predicates.activity(
+            key=pd2af.asp.predicates.keptSpeciesKey(species="x")
         )
-        assert isinstance(atom.key, pd2af.predicates.keptSpeciesKey)
+        assert isinstance(atom.key, pd2af.asp.predicates.keptSpeciesKey)
         assert atom.key.species == "x"
 
     def test_activity_wraps_promoted_subunit_key(self):
-        atom = pd2af.predicates.activity(
-            key=pd2af.predicates.promotedSubunitKey(species="x")
+        atom = pd2af.asp.predicates.activity(
+            key=pd2af.asp.predicates.promotedSubunitKey(species="x")
         )
-        assert isinstance(atom.key, pd2af.predicates.promotedSubunitKey)
+        assert isinstance(atom.key, pd2af.asp.predicates.promotedSubunitKey)
         assert atom.key.species == "x"
 
     def test_positively_influences_with_key_wrappers(self):
-        atom = pd2af.predicates.positivelyInfluences(
-            source=pd2af.predicates.keptSpeciesKey(species="a"),
-            target=pd2af.predicates.promotedSubunitKey(species="x"),
+        atom = pd2af.asp.predicates.positivelyInfluences(
+            source=pd2af.asp.predicates.keptSpeciesKey(species="a"),
+            target=pd2af.asp.predicates.promotedSubunitKey(species="x"),
         )
-        assert isinstance(atom.source, pd2af.predicates.keptSpeciesKey)
-        assert isinstance(atom.target, pd2af.predicates.promotedSubunitKey)
+        assert isinstance(atom.source, pd2af.asp.predicates.keptSpeciesKey)
+        assert isinstance(atom.target, pd2af.asp.predicates.promotedSubunitKey)
 
     def test_negatively_influences_with_key_wrappers(self):
-        atom = pd2af.predicates.negativelyInfluences(
-            source=pd2af.predicates.keptSpeciesKey(species="a"),
-            target=pd2af.predicates.keptSpeciesKey(species="b"),
+        atom = pd2af.asp.predicates.negativelyInfluences(
+            source=pd2af.asp.predicates.keptSpeciesKey(species="a"),
+            target=pd2af.asp.predicates.keptSpeciesKey(species="b"),
         )
-        assert isinstance(atom.source, pd2af.predicates.keptSpeciesKey)
-        assert isinstance(atom.target, pd2af.predicates.keptSpeciesKey)
+        assert isinstance(atom.source, pd2af.asp.predicates.keptSpeciesKey)
+        assert isinstance(atom.target, pd2af.asp.predicates.keptSpeciesKey)
 
     def test_new_wraps_activity(self):
-        atom = pd2af.predicates.new(
-            object_=pd2af.predicates.activity(
-                key=pd2af.predicates.keptSpeciesKey(species="x")
+        atom = pd2af.asp.predicates.new(
+            object_=pd2af.asp.predicates.activity(
+                key=pd2af.asp.predicates.keptSpeciesKey(species="x")
             )
         )
-        assert isinstance(atom.object_, pd2af.predicates.activity)
+        assert isinstance(atom.object_, pd2af.asp.predicates.activity)
 
 
 class TestTypedInfluencePredicates:
@@ -87,26 +87,26 @@ class TestTypedInfluencePredicates:
 
     def test_all_are_clorm_predicates(self):
         for name in self.PREDICATE_NAMES:
-            predicate = getattr(pd2af.predicates, name)
+            predicate = getattr(pd2af.asp.predicates, name)
             assert issubclass(predicate, clorm.Predicate), name
 
     def test_can_be_constructed_with_key_wrappers(self):
         for name in self.PREDICATE_NAMES:
-            predicate = getattr(pd2af.predicates, name)
+            predicate = getattr(pd2af.asp.predicates, name)
             atom = predicate(
-                source=pd2af.predicates.keptSpeciesKey(species="a"),
-                target=pd2af.predicates.keptSpeciesKey(species="b"),
+                source=pd2af.asp.predicates.keptSpeciesKey(species="a"),
+                target=pd2af.asp.predicates.keptSpeciesKey(species="b"),
             )
-            assert isinstance(atom.source, pd2af.predicates.keptSpeciesKey)
-            assert isinstance(atom.target, pd2af.predicates.keptSpeciesKey)
+            assert isinstance(atom.source, pd2af.asp.predicates.keptSpeciesKey)
+            assert isinstance(atom.target, pd2af.asp.predicates.keptSpeciesKey)
 
     def test_new_wraps_each_typed_influence(self):
         for name in self.PREDICATE_NAMES:
-            predicate = getattr(pd2af.predicates, name)
-            atom = pd2af.predicates.new(
+            predicate = getattr(pd2af.asp.predicates, name)
+            atom = pd2af.asp.predicates.new(
                 object_=predicate(
-                    source=pd2af.predicates.keptSpeciesKey(species="a"),
-                    target=pd2af.predicates.keptSpeciesKey(species="b"),
+                    source=pd2af.asp.predicates.keptSpeciesKey(species="a"),
+                    target=pd2af.asp.predicates.keptSpeciesKey(species="b"),
                 )
             )
             assert isinstance(atom.object_, predicate), name
@@ -114,15 +114,15 @@ class TestTypedInfluencePredicates:
 
 class TestMappingDicts:
     def test_predicate_to_model_element_class(self):
-        mapping = pd2af.predicates.predicate_to_model_element_class
+        mapping = pd2af.asp.predicates.predicate_to_model_element_class
         celldesigner = momapy.celldesigner
         assert mapping == {
-            pd2af.predicates.positivelyInfluences: celldesigner.PositiveInfluence,
-            pd2af.predicates.negativelyInfluences: celldesigner.NegativeInfluence,
-            pd2af.predicates.modulates: celldesigner.Modulation,
-            pd2af.predicates.triggers: celldesigner.Triggering,
-            pd2af.predicates.unknownPositivelyInfluences: celldesigner.UnknownPositiveInfluence,
-            pd2af.predicates.unknownNegativelyInfluences: celldesigner.UnknownNegativeInfluence,
-            pd2af.predicates.unknownModulates: celldesigner.UnknownModulation,
-            pd2af.predicates.unknownTriggers: celldesigner.UnknownTriggering,
+            pd2af.asp.predicates.positivelyInfluences: celldesigner.PositiveInfluence,
+            pd2af.asp.predicates.negativelyInfluences: celldesigner.NegativeInfluence,
+            pd2af.asp.predicates.modulates: celldesigner.Modulation,
+            pd2af.asp.predicates.triggers: celldesigner.Triggering,
+            pd2af.asp.predicates.unknownPositivelyInfluences: celldesigner.UnknownPositiveInfluence,
+            pd2af.asp.predicates.unknownNegativelyInfluences: celldesigner.UnknownNegativeInfluence,
+            pd2af.asp.predicates.unknownModulates: celldesigner.UnknownModulation,
+            pd2af.asp.predicates.unknownTriggers: celldesigner.UnknownTriggering,
         }

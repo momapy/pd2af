@@ -10,7 +10,6 @@ import momapy.io.core
 
 import pd2af
 import pd2af.cli
-import pd2af.languages
 import pd2af.modes
 
 from tests._helpers import MAPS_DIR, has_dot_binary
@@ -341,8 +340,7 @@ class TestListModes:
             for row in json.loads(capsys.readouterr().out)["layout_modes"]
         }
         every_language = [
-            properties["display_name"]
-            for properties in pd2af.languages.LANGUAGES.values()
+            properties["display_name"] for properties in pd2af.modes.LANGUAGES.values()
         ]
         # `overlay` dimming is CellDesigner-only; `auto` is a meta value, not a
         # concrete layout mode, so no language rejects it.

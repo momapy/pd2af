@@ -1,7 +1,7 @@
 """Build the Rules reference page (`rules.md`) from the live rule registry.
 
 Run as a `mkdocs-gen-files` script at every `mkdocs build`, so the page can
-never drift from `src/pd2af/rules.py`. The page has three parts that share a
+never drift from `src/pd2af/asp/rules.py`. The page has three parts that share a
 single canonical definition of each rule:
 
 1. a by-mode spine listing each mode's applicable groups and rules as tables
@@ -13,20 +13,20 @@ single canonical definition of each rule:
    one-line summary).
 
 Every one-line summary is the first sentence of a ``docs`` string; those first
-sentences are written as pure natural language in ``pd2af.rules``.
+sentences are written as pure natural language in ``pd2af.asp.rules``.
 """
 
 import mkdocs_gen_files
 
-from pd2af.languages import LANGUAGES
+from pd2af.modes import LANGUAGES
 from pd2af.modes import _BUILTIN_TRANSFORMATION_MODES
-from pd2af.rules import build_registry, get_excludable_groups
+from pd2af.asp.rules import build_registry, get_excludable_groups
 
 PAGE_PATH = "rules.md"
 
 # Order in which base and per-language variant rules are presented within a
 # group: language-agnostic base rules first, then each language variant in the
-# order pd2af.languages lists them.
+# order pd2af.modes lists them.
 _VARIANT_ORDER = tuple(LANGUAGES)
 
 
@@ -105,7 +105,7 @@ def write_intro(page):
         "group addresses.\n\n"
     )
     page.write(
-        "This page is generated from the live registry in `pd2af.rules`. It "
+        "This page is generated from the live registry in `pd2af.asp.rules`. It "
         "presents a [by-mode](#by-mode) view of which rules each mode uses, a "
         "[canonical reference](#rule-groups) documenting each rule once, and an "
         "alphabetical [index](#rule-index) of every rule.\n\n"

@@ -12,24 +12,20 @@ nav:
   - API reference:
     - Overview: api_reference/index.md
     - Core: api_reference/core.md
-    - CLI: api_reference/cli.md
-    - Languages: api_reference/languages.md
-    - Layout modes: api_reference/layout_modes.md
     - Modes: api_reference/modes.md
-    - Solver: api_reference/solver.md
-    - Rules: api_reference/rules.md
-    - Predicates: api_reference/predicates.md
-    - Ontology: api_reference/ontology.md
-    - Build: api_reference/build.md
-    - Context: api_reference/context.md
-    - CellDesigner model: api_reference/celldesigner_building_model.md
-    - CellDesigner layout: api_reference/celldesigner_building_layout.md
-    - SBGN-AF model: api_reference/sbgn_building_model.md
-    - SBGN-AF layout: api_reference/sbgn_building_layout.md
-    - SBGN-AF labels: api_reference/sbgn_building_labels.md
-    - Shared model pass: api_reference/building_model.md
-    - Annotations: api_reference/annotations.md
-    - Utils: api_reference/utils.md
+    - CLI: api_reference/cli.md
+    - Solver: api_reference/asp_solver.md
+    - Rules: api_reference/asp_rules.md
+    - Predicates: api_reference/asp_predicates.md
+    - Context: api_reference/building_context.md
+    - Model: api_reference/building_model.md
+    - Layout: api_reference/building_layout.md
+    - Provenance: api_reference/building_provenance.md
+    - CellDesigner model: api_reference/building_celldesigner_model.md
+    - CellDesigner layout: api_reference/building_celldesigner_layout.md
+    - SBGN-AF model: api_reference/building_sbgn_model.md
+    - SBGN-AF layout: api_reference/building_sbgn_layout.md
+    - SBGN-AF labels: api_reference/building_sbgn_labels.md
   - About: about.md
 theme:
   name: material

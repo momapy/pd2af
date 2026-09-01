@@ -14,7 +14,7 @@ import momapy.utils
 from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
-from pd2af.annotations import carry_annotations_through_provenance
+from pd2af.building.provenance import carry_annotations_through_provenance
 
 from tests._helpers import MAPS_DIR
 
