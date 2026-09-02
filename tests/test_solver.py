@@ -8,6 +8,8 @@ import pd2af.modes
 import pd2af.asp.predicates
 import pd2af.asp.solver
 
+from tests._helpers import solve_map_in_mode_name
+
 
 _INFLUENCE_PREDICATES = (
     pd2af.asp.predicates.positivelyInfluences,
@@ -41,7 +43,7 @@ def _influence_atoms(clingo_model):
 
 @pytest.fixture(scope="module")
 def solved_keep_species(example_cd_map):
-    return pd2af.asp.solver.solve(example_cd_map, mode="keep-species")
+    return solve_map_in_mode_name(example_cd_map, mode_name="keep-species")
 
 
 class TestSolve:
@@ -76,8 +78,8 @@ class TestSolve:
     def test_solve_keep_species_no_complex_excludes_complex_with_active_subunit(
         self, example_cd_map
     ):
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
-            example_cd_map, mode="keep-species-no-complex"
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
+            example_cd_map, mode_name="keep-species-no-complex"
         )
         atoms = _activity_atoms(clingo_model)
         names = sorted(id_to_model_element[atom.key.species].name for atom in atoms)
@@ -86,7 +88,7 @@ class TestSolve:
 
     def test_solve_unknown_mode_raises(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.asp.solver.solve(example_cd_map, mode="not-a-mode")
+            solve_map_in_mode_name(example_cd_map, mode_name="not-a-mode")
 
 
 def test_supported_modes():
@@ -110,7 +112,7 @@ class TestSolveSbgnPdMergedModes:
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_sbgn_pd_merged_mode_emits_influences(self, sbgn_example_map, mode):
-        clingo_model, _ = pd2af.asp.solver.solve(sbgn_example_map, mode=mode)
+        clingo_model, _ = solve_map_in_mode_name(sbgn_example_map, mode_name=mode)
         assert len(_activity_atoms(clingo_model)) > 0
         assert len(_influence_atoms(clingo_model)) > 0
 
@@ -165,8 +167,8 @@ class TestCycleAwareInfluences:
                 _reaction(species_c, species_b),
             ),
         )
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
-            cyclic_map, mode="normal"
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
+            cyclic_map, mode_name="normal"
         )
         edges = _named_influence_edges(clingo_model, id_to_model_element)
         # Consumption survives: A depletes its catalysed reactant B.
@@ -190,8 +192,8 @@ class TestCycleAwareInfluences:
                 _reaction(species_c, species_d),
             ),
         )
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
-            acyclic_map, mode="normal"
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
+            acyclic_map, mode_name="normal"
         )
         edges = _named_influence_edges(clingo_model, id_to_model_element)
         # Transitivity across the non-cycle C->D edge is preserved.
@@ -210,8 +212,8 @@ class TestSetActive:
         # absent from the baseline activities (B, D, E, F, G).
         baseline_model, _ = solved_keep_species
         baseline_count = len(_activity_atoms(baseline_model))
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
-            example_cd_map, mode="keep-species", set_active=["s1"]
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
+            example_cd_map, mode_name="keep-species", set_active=["s1"]
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
@@ -220,8 +222,8 @@ class TestSetActive:
 
     def test_unknown_set_active_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.asp.solver.solve(
-                example_cd_map, mode="keep-species", set_active=["not-an-id"]
+            solve_map_in_mode_name(
+                example_cd_map, mode_name="keep-species", set_active=["not-an-id"]
             )
 
 
@@ -236,8 +238,8 @@ class TestSetInactive:
         # activities B, D, E, F, G). Marking it inactive drops it entirely.
         baseline_model, _ = solved_keep_species
         baseline_count = len(_activity_atoms(baseline_model))
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
-            example_cd_map, mode="keep-species", set_inactive=["s2"]
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
+            example_cd_map, mode_name="keep-species", set_inactive=["s2"]
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
@@ -246,18 +248,18 @@ class TestSetInactive:
 
     def test_set_inactive_conflicting_with_set_active_raises(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.asp.solver.solve(
+            solve_map_in_mode_name(
                 example_cd_map,
-                mode="keep-species",
+                mode_name="keep-species",
                 set_active=["s1"],
                 set_inactive=["s1"],
             )
 
     def test_unknown_set_inactive_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.asp.solver.solve(
+            solve_map_in_mode_name(
                 example_cd_map,
-                mode="keep-species",
+                mode_name="keep-species",
                 set_inactive=["not-an-id"],
             )
 
@@ -268,8 +270,8 @@ class TestSetAllActive:
     are mutually exclusive."""
 
     def test_set_all_active_activates_every_top_level_species(self, example_cd_map):
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
-            example_cd_map, mode="keep-species", set_all_active=True
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
+            example_cd_map, mode_name="keep-species", set_all_active=True
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
@@ -278,9 +280,9 @@ class TestSetAllActive:
 
     def test_set_inactive_overrides_set_all_active(self, example_cd_map):
         # Per-id > global: B is globally activated but explicitly suppressed.
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
             example_cd_map,
-            mode="keep-species",
+            mode_name="keep-species",
             set_all_active=True,
             set_inactive=["s2"],
         )
@@ -290,9 +292,9 @@ class TestSetAllActive:
 
     def test_both_global_toggles_raises(self, example_cd_map):
         with pytest.raises(ValueError):
-            pd2af.asp.solver.solve(
+            solve_map_in_mode_name(
                 example_cd_map,
-                mode="keep-species",
+                mode_name="keep-species",
                 set_all_active=True,
                 set_all_inactive=True,
             )
@@ -303,16 +305,16 @@ class TestSetAllInactive:
     still forces the named ids back on."""
 
     def test_set_all_inactive_suppresses_every_activity(self, example_cd_map):
-        clingo_model, _ = pd2af.asp.solver.solve(
-            example_cd_map, mode="keep-species", set_all_inactive=True
+        clingo_model, _ = solve_map_in_mode_name(
+            example_cd_map, mode_name="keep-species", set_all_inactive=True
         )
         assert not _activity_atoms(clingo_model)
 
     def test_set_active_overrides_set_all_inactive(self, example_cd_map):
         # Per-id > global: everything is suppressed except the forced id.
-        clingo_model, id_to_model_element = pd2af.asp.solver.solve(
+        clingo_model, id_to_model_element = solve_map_in_mode_name(
             example_cd_map,
-            mode="keep-species",
+            mode_name="keep-species",
             set_all_inactive=True,
             set_active=["s1"],
         )

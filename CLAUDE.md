@@ -99,12 +99,13 @@ language-specific rule identifier
 (`activity:core:celldesigner:from_global_activate`, public via
 `--exclude-rule`), and a member of a mode's `compatible_languages`.
 
-The per-language dispatches in `pd2af.core.build_map` (builder modules, the
-`dot` auto-layout kwargs, the provenance scratch slots) and
-`core._wrap_model_in_map` deliberately stay where they are: they select build
-*behavior* rather than define a language, and hosting builder references in
-`pd2af.modes` would make it drag the whole builder tree into every importer of
-`pd2af.modes`.
+The per-language build dispatch lives in `core._BUILD_BEHAVIOR_BY_LANGUAGE`
+(the two build-pass modules, the output map class, the `dot` auto-layout
+kwargs), keyed by language token: it selects build *behavior* rather than
+defines a language, and hosting builder references in `pd2af.modes` would make
+it drag the whole builder tree into every importer of `pd2af.modes`. Wrapping a
+bare input model in a map is pure language-table lookup, so it belongs to
+`pd2af.modes.make_map_from_model` instead.
 
 ## Modes are objects, contributed through an entry point
 
@@ -140,8 +141,8 @@ in side-tables on the `ReaderResult` (`element_to_annotations`,
 carries them: pass the reader's side-tables to `transform(...,
 element_to_annotations=..., element_to_notes=...)` and it returns
 output-keyed side-tables on the `TransformerResult`, ready to hand to the
-writer. The carrier is `TransformerResult.provenance`, re-keyed to the
-origin direction (`output_element -> frozenset(input_elements)`); the pure
+writer. The carrier is `TransformerResult.output_element_to_input_elements`, keyed to
+the origin direction (`output_element -> frozenset(input_elements)`); the pure
 remap lives in `pd2af.building.provenance.carry_annotations_through_provenance`,
 which unions the metadata of every input that merged into a given output
 (so a merged activity gathers the annotations of all its proteoforms).

@@ -48,11 +48,12 @@ import dataclasses
 import functools
 import importlib.metadata
 import types
-import typing
 
 from aspcompose import RuleGroup
 
 import momapy.celldesigner
+import momapy.core.map
+import momapy.core.model
 import momapy.sbgn.pd
 
 
@@ -106,7 +107,9 @@ LAYOUT_MODES_BY_LANGUAGE = {
 INFLUENCE_PAIRINGS = ("cross", "nearest")
 
 
-def get_language_from_map_or_model(map_or_model: typing.Any) -> str:
+def get_language_from_map_or_model(
+    map_or_model: momapy.core.map.Map | momapy.core.model.Model,
+) -> str:
     """Infer the input language token from an input map's or model's type.
 
     Matching is by ``isinstance`` rather than exact type: momapy's builder
@@ -128,6 +131,19 @@ def get_language_from_map_or_model(map_or_model: typing.Any) -> str:
             )
         )
     )
+
+
+def make_map_from_model(
+    model: momapy.core.model.Model, language: str
+) -> momapy.core.map.Map:
+    """Wrap a bare model in a layout-less map of its language.
+
+    A ``Map`` is a keyword-only frozen dataclass whose ``layout`` and
+    ``layout_model_mapping`` default to ``None``, so a model-only map is a
+    direct construction of the language's ``map_class``. A language token that
+    is not in :data:`LANGUAGES` raises ``KeyError``.
+    """
+    return LANGUAGES[language]["map_class"](model=model)
 
 
 ENTRY_POINT_GROUP = "pd2af.modes"

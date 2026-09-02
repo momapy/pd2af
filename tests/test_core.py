@@ -559,7 +559,7 @@ def _species_and_subunits(species_iterable):
 
 
 class TestProvenance:
-    """TransformerResult.provenance maps each output AF element to the input
+    """TransformerResult.output_element_to_input_elements maps each output AF element to the input
     elements it derives from; every key is a real element of the output model
     (a species, one of its subunits, a gate or a compartment) and the inverse
     round-trips."""
@@ -572,15 +572,15 @@ class TestProvenance:
             | set(model.boolean_logic_gates)
             | set(model.compartments)
         )
-        assert result.provenance  # at least one output has a traced source
-        for output_element in result.provenance:
+        assert result.output_element_to_input_elements  # at least one output has a traced source
+        for output_element in result.output_element_to_input_elements:
             assert output_element in output_elements
 
     def test_inverse_round_trips(self, example_cd_map):
         result = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
-        for output_element, input_elements in result.provenance.items():
+        for output_element, input_elements in result.output_element_to_input_elements.items():
             for input_element in input_elements:
-                assert output_element in result.provenance.inverse[id(input_element)]
+                assert output_element in result.output_element_to_input_elements.inverse[id(input_element)]
 
 
 class TestTransformModelInput:
@@ -606,8 +606,8 @@ class TestTransformModelInput:
             | set(result.obj.boolean_logic_gates)
             | set(result.obj.compartments)
         )
-        assert result.provenance
-        for output_element in result.provenance:
+        assert result.output_element_to_input_elements
+        for output_element in result.output_element_to_input_elements:
             assert output_element in output_elements
 
     @pytest.mark.parametrize("layout_mode", ["dot", "plain", "overlay"])
@@ -648,7 +648,7 @@ class TestAnnotationCarry:
         # every carried bucket is exactly the union of its provenance sources'
         for output_element, annotations in result.element_to_annotations.items():
             expected = frozenset()
-            for source in result.provenance.get(output_element, ()):
+            for source in result.output_element_to_input_elements.get(output_element, ()):
                 expected |= reader_result.element_to_annotations.get(
                     source, frozenset()
                 )

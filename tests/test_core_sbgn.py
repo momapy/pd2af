@@ -114,7 +114,7 @@ class TestProteoformMerging:
 
 
 class TestProvenance:
-    """The TransformerResult.provenance maps each output AF element to the
+    """The TransformerResult.output_element_to_input_elements maps each output AF element to the
     input elements it derives from, collapsing the many-to-one merge; its
     `.inverse` recovers the output element behind a given input."""
 
@@ -124,10 +124,10 @@ class TestProvenance:
         merged_activity = next(iter(result.obj.model.activities))
         input_proteoforms = frozenset(proteoform_map.model.entity_pools)
         # Forward (many-to-one): the merged activity traces back to both inputs.
-        assert result.provenance[merged_activity] == input_proteoforms
+        assert result.output_element_to_input_elements[merged_activity] == input_proteoforms
         # Inverse: each input proteoform recovers the one merged activity.
         for proteoform in input_proteoforms:
-            assert result.provenance.inverse[id(proteoform)] == frozenset(
+            assert result.output_element_to_input_elements.inverse[id(proteoform)] == frozenset(
                 [merged_activity]
             )
 
@@ -138,7 +138,7 @@ class TestProvenance:
         model_activities = set(result.obj.model.activities)
         activity_sources = [
             input_elements
-            for output_element, input_elements in result.provenance.items()
+            for output_element, input_elements in result.output_element_to_input_elements.items()
             if output_element in model_activities
         ]
         assert activity_sources

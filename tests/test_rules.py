@@ -4,6 +4,8 @@ import pytest
 import pd2af.modes
 import pd2af.asp.rules
 
+from tests._helpers import build_program_for_mode_name
+
 
 _MODES = (
     "normal",
@@ -22,13 +24,13 @@ def _group_ids(mode_name):
 class TestBuildProgram:
     @pytest.mark.parametrize("mode", _MODES)
     def test_mode_returns_program_text(self, mode):
-        program = pd2af.asp.rules.build_program(mode)
+        program = build_program_for_mode_name(mode)
         assert isinstance(program, str)
         assert len(program) > 0
 
     @pytest.mark.parametrize("mode", _MODES)
     def test_mode_has_activity_and_influence_rules(self, mode):
-        program = pd2af.asp.rules.build_program(mode)
+        program = build_program_for_mode_name(mode)
         assert "hasActivity" in program
         assert "hasActivityKey" in program
         assert "new(activity(KEY))" in program
@@ -37,7 +39,7 @@ class TestBuildProgram:
 
     @pytest.mark.parametrize("mode", _MODES)
     def test_mode_emits_all_typed_influence_heads(self, mode):
-        program = pd2af.asp.rules.build_program(mode)
+        program = build_program_for_mode_name(mode)
         for head in (
             "new(positivelyInfluences",
             "new(negativelyInfluences",
@@ -52,7 +54,7 @@ class TestBuildProgram:
 
     @pytest.mark.parametrize("mode", _MODES)
     def test_mode_fans_out_internal_influences_relation(self, mode):
-        program = pd2af.asp.rules.build_program(mode)
+        program = build_program_for_mode_name(mode)
         # The typed heads are derived from the internal influences/3 relation.
         assert "influences(SOURCE, TARGET, positivelyInfluences)" in program
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
@@ -64,7 +66,7 @@ class TestBuildProgram:
             "keep-species",
             "keep-species-no-complex",
         ):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "composesTo(triggers, positivelyInfluences)" in program
             assert (
                 "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)"
@@ -73,23 +75,23 @@ class TestBuildProgram:
 
     def test_normal_no_complex_variants_promote_active_subunits(self):
         for mode in ("normal-no-complex", "keep-species-no-complex"):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "promotedSubunitKey" in program
 
     def test_keep_complex_variants_omit_subunit_promotion(self):
         for mode in ("normal", "keep-species"):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "promotedSubunitKey" not in program
 
     def test_normal_no_complex_variants_include_complex_traversal(self):
         for mode in ("normal-no-complex", "keep-species-no-complex"):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" in program
 
     def test_keep_complex_variants_omit_complex_traversal(self):
         for mode in ("normal", "keep-species"):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" not in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" not in program
 
@@ -98,24 +100,24 @@ class TestBuildProgram:
         # its top-level complex via the shared `resolvesToTopLevel` relation, so a
         # subunit never gets its own key.
         for mode in ("normal", "keep-species"):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "resolvesToTopLevel(SPECIES, TOPLEVEL)" in program
             assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
 
     def test_no_mode_uses_new_species_from_template(self):
         for mode in _MODES:
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "new_species_from_template" not in program
 
     def test_keep_species_modes_use_kept_species_only(self):
         for mode in ("keep-species", "keep-species-no-complex"):
-            program = pd2af.asp.rules.build_program(mode)
+            program = build_program_for_mode_name(mode)
             assert "new_species_from_template" not in program
             assert "keptSpeciesKey" in program
 
     def test_unknown_mode_raises(self):
         with pytest.raises(ValueError):
-            pd2af.asp.rules.build_program("does-not-exist")
+            build_program_for_mode_name("does-not-exist")
 
 
 class TestCycleAwareTransitivity:
@@ -135,14 +137,14 @@ class TestCycleAwareTransitivity:
     @pytest.mark.parametrize("mode", _PATH_INFERENCE)
     @pytest.mark.parametrize("language", tuple(pd2af.modes.LANGUAGES))
     def test_path_inference_modes_define_cycle_relations(self, mode, language):
-        program = pd2af.asp.rules.build_program(mode, language=language)
+        program = build_program_for_mode_name(mode, language=language)
         assert "isDirectlyTransformedTo" in program
         assert "isTransformedTo" in program
         assert "isCyclicallyTransformedTo" in program
 
     @pytest.mark.parametrize("mode", _PATH_INFERENCE)
     def test_celldesigner_transitivity_guards_against_cycles(self, mode):
-        program = pd2af.asp.rules.build_program(mode, language="celldesigner")
+        program = build_program_for_mode_name(mode, language="celldesigner")
         assert (
             "not isCyclicallyTransformedTo(INTERMEDIATE_SPECIES, TARGET_SPECIES)"
             in program
@@ -150,7 +152,7 @@ class TestCycleAwareTransitivity:
 
     @pytest.mark.parametrize("mode", _PATH_INFERENCE)
     def test_sbgn_pd_transitivity_guards_against_cycles(self, mode):
-        program = pd2af.asp.rules.build_program(mode, language="sbgn_pd")
+        program = build_program_for_mode_name(mode, language="sbgn_pd")
         assert (
             "not isCyclicallyTransformedTo(INTERMEDIATE_ENTITY_POOL, TARGET_ENTITY_POOL)"
             in program
@@ -164,20 +166,20 @@ class TestKeepReactionsMode:
     the inference layers."""
 
     def test_every_species_is_an_activity_candidate(self):
-        program = pd2af.asp.rules.build_program("keep-reactions")
+        program = build_program_for_mode_name("keep-reactions")
         assert (
             "hasActivityCandidate(SPECIES, isSpecies) :- species(SPECIES)." in program
         )
 
     def test_reactant_positively_influences_product(self):
-        program = pd2af.asp.rules.build_program("keep-reactions")
+        program = build_program_for_mode_name("keep-reactions")
         assert (
             "propagatesInfluence(REACTANT_SPECIES, PRODUCT_SPECIES, positivelyInfluences)"
             in program
         )
 
     def test_keeps_direct_modulation_influences(self):
-        program = pd2af.asp.rules.build_program("keep-reactions")
+        program = build_program_for_mode_name("keep-reactions")
         # the modulation-arc rule and its kind table, plus the modifier->product
         # rules, all come from `paths:core`/`influences:kind`.
         assert (
@@ -188,7 +190,7 @@ class TestKeepReactionsMode:
         assert "catalyzer(MODIFIER)" in program
 
     def test_omits_multi_hop_chaining(self):
-        program = pd2af.asp.rules.build_program("keep-reactions")
+        program = build_program_for_mode_name("keep-reactions")
         assert "not isCyclicallyTransformedTo" not in program
         assert (
             "composesTo(INCOMING_INFLUENCE_KIND, OUTGOING_INFLUENCE_KIND)"
@@ -196,14 +198,14 @@ class TestKeepReactionsMode:
         )
 
     def test_omits_consumption_and_sparing(self):
-        program = pd2af.asp.rules.build_program("keep-reactions")
+        program = build_program_for_mode_name("keep-reactions")
         # the consumption/sparing rules are the only ones that make a reaction's
         # reactant the *target* of a modifier's influence.
         assert "hasReferredElement(REACTANT, TARGET_SPECIES)" not in program
         assert "influences:consumption" not in _group_ids("keep-reactions")
 
     def test_keys_by_top_level_and_keeps_complexes(self):
-        program = pd2af.asp.rules.build_program("keep-reactions")
+        program = build_program_for_mode_name("keep-reactions")
         assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
         assert "promotedSubunitKey" not in program
 
@@ -228,7 +230,7 @@ class TestInfluencesConsumptionGroup:
         ("normal", "normal-no-complex", "keep-species", "keep-species-no-complex"),
     )
     def test_path_inference_modes_include_it(self, mode):
-        program = pd2af.asp.rules.build_program(mode, "celldesigner")
+        program = build_program_for_mode_name(mode, "celldesigner")
         assert "hasReferredElement(REACTANT, TARGET_SPECIES)" in program
         assert "influences:consumption" in _group_ids(mode)
 
@@ -236,8 +238,8 @@ class TestInfluencesConsumptionGroup:
         assert "influences:consumption" not in _group_ids("keep-reactions")
 
     def test_excluding_it_keeps_the_rest_of_the_derivation(self):
-        full = pd2af.asp.rules.build_program("keep-species", "celldesigner")
-        pruned = pd2af.asp.rules.build_program(
+        full = build_program_for_mode_name("keep-species", "celldesigner")
+        pruned = build_program_for_mode_name(
             "keep-species", "celldesigner", exclude_groups=("influences:consumption",)
         )
         assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
@@ -251,7 +253,7 @@ class TestMergedModesSbgnPdVariant:
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_sbgn_pd_variant_uses_entity_pool_carrier(self, mode):
-        program = pd2af.asp.rules.build_program(mode, language="sbgn_pd")
+        program = build_program_for_mode_name(mode, language="sbgn_pd")
         assert "new_species_from_template" not in program
         assert "isMergeableEntity" not in program
         assert (
@@ -266,7 +268,7 @@ class TestMergedModesSbgnPdVariant:
 
     @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
     def test_celldesigner_variant_uses_species_carrier(self, mode):
-        program = pd2af.asp.rules.build_program(mode, language="celldesigner")
+        program = build_program_for_mode_name(mode, language="celldesigner")
         assert "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
         assert "isMergeableEntity" not in program
         assert "new_species_from_template" not in program
@@ -286,8 +288,8 @@ def test_registry_holds_every_group_the_modes_name():
 
 class TestExcludeGroups:
     def test_exclude_phenotype_drops_only_that_rule(self):
-        full = pd2af.asp.rules.build_program("keep-species", "celldesigner")
-        pruned = pd2af.asp.rules.build_program(
+        full = build_program_for_mode_name("keep-species", "celldesigner")
+        pruned = build_program_for_mode_name(
             "keep-species", "celldesigner", exclude_groups=("activity:phenotype",)
         )
         phenotype_rule = (
@@ -298,7 +300,7 @@ class TestExcludeGroups:
         assert set(pruned.splitlines()) == set(full.splitlines()) - {phenotype_rule}
 
     def test_exclude_paths_chaining_keeps_single_hop_only(self):
-        pruned = pd2af.asp.rules.build_program(
+        pruned = build_program_for_mode_name(
             "normal", "celldesigner", exclude_groups=("paths:chaining",)
         )
         # the multi-hop rule is gone, but the cycle relation it consumed stays.
@@ -307,7 +309,7 @@ class TestExcludeGroups:
 
     def test_exclude_mandatory_group_raises_friendly_error(self):
         with pytest.raises(ValueError) as excinfo:
-            pd2af.asp.rules.build_program(
+            build_program_for_mode_name(
                 "keep-species", "celldesigner", exclude_groups=("activity:core",)
             )
         message = str(excinfo.value)
@@ -316,7 +318,7 @@ class TestExcludeGroups:
 
     def test_exclude_unregistered_group_raises(self):
         with pytest.raises(ValueError):
-            pd2af.asp.rules.build_program(
+            build_program_for_mode_name(
                 "keep-species", "celldesigner", exclude_groups=("does:not:exist",)
             )
 
@@ -325,8 +327,8 @@ class TestExcludeGroups:
             "hasInfluenceKind(MODULATION, positivelyInfluences) :- "
             "catalysis(MODULATION)."
         )
-        full = pd2af.asp.rules.build_program("keep-species", "celldesigner")
-        pruned = pd2af.asp.rules.build_program(
+        full = build_program_for_mode_name("keep-species", "celldesigner")
+        pruned = build_program_for_mode_name(
             "keep-species",
             "celldesigner",
             exclude_rules=("influences:kind:celldesigner:catalysis",),
@@ -336,7 +338,7 @@ class TestExcludeGroups:
 
     def test_exclude_unknown_rule_raises(self):
         with pytest.raises(ValueError):
-            pd2af.asp.rules.build_program(
+            build_program_for_mode_name(
                 "keep-species", "celldesigner", exclude_rules=("no:such:rule",)
             )
 
@@ -376,14 +378,14 @@ class TestPreparationSlot:
 
     def test_excluding_the_filler_raises_rather_than_emitting_no_activities(self):
         with pytest.raises(ValueError) as excinfo:
-            pd2af.asp.rules.build_program(
+            build_program_for_mode_name(
                 "normal", "celldesigner", exclude_groups=("preparation:complex",)
             )
         assert "slot 'preparation'" in str(excinfo.value)
 
     @pytest.mark.parametrize("mode", _MODES)
     def test_the_filler_precedes_its_consumers(self, mode):
-        program = pd2af.asp.rules.build_program(mode)
+        program = build_program_for_mode_name(mode)
         assert program.index("hasActivityKey(SPECIES") < program.index(
             "new(activity(KEY)) :- hasActivityKey(_, KEY)."
         )
@@ -430,7 +432,7 @@ class TestModeExtensionPoint:
         pd2af.modes.get_transformation_modes.cache_clear()
         try:
             assert "contributed" in pd2af.modes.get_transformation_modes()
-            program = pd2af.asp.rules.build_program("contributed")
+            program = build_program_for_mode_name("contributed")
             assert "influences(a, b, positivelyInfluences)." in program
             assert "new(positivelyInfluences(SOURCE, TARGET))" in program
         finally:

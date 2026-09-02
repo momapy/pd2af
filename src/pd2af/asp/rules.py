@@ -1304,7 +1304,7 @@ def _friendly_exclusion_message(error: PlanInvalidError) -> str:
 
 
 def build_program(
-    mode_name: str,
+    mode: pd2af.modes.TransformationMode,
     language: str = CELLDESIGNER,
     exclude_groups: tuple[str, ...] = (),
     exclude_rules: tuple[str, ...] = (),
@@ -1324,7 +1324,6 @@ def build_program(
     by identifier (used for the whole-with-scalpel table groups); an id that
     does not name a resolved rule raises ``ValueError``.
     """
-    mode = pd2af.modes.get_transformation_mode(mode_name)
     plan = CollectionPlan(build_registry())
     for group_id in mode.rule_group_ids:
         plan.add_group(group_id)

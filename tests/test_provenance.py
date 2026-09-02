@@ -120,7 +120,7 @@ class TestSubunitAnnotationCarry:
                 subunit
             ] <= result.element_to_annotations.get(subunit, frozenset())
         # and the output subunits are genuine provenance keys
-        assert any(subunit in result.provenance for subunit in surviving_subunits)
+        assert any(subunit in result.output_element_to_input_elements for subunit in surviving_subunits)
 
     def test_round_trip_preserves_included_species_annotations(
         self, annotated_reader_result, tmp_path

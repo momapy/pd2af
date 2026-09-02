@@ -10,6 +10,7 @@ import clingo.ast
 
 import momapy.celldesigner
 import momapy.core.elements
+import momapy.core.map
 import momapy.core.model
 import momapy.sbgn.pd
 import momapy_kb.clingo.core
@@ -44,9 +45,9 @@ def _make_ontology_rules(session: typing.Any, language: str) -> list[str]:
 
 
 def _make_control(
-    model: typing.Any,
+    model: momapy.core.model.Model,
     clingo_id_to_model_element: dict,
-    mode: str,
+    mode: pd2af.modes.TransformationMode,
     language: str,
     set_active: list[str] | None,
     set_inactive: list[str] | None,
@@ -191,24 +192,24 @@ def _add_activity_override_facts(
 
 
 def solve(
-    map_: typing.Any,
-    mode: str,
+    input_map: momapy.core.map.Map,
+    mode: pd2af.modes.TransformationMode,
     set_active: list[str] | None = None,
     set_inactive: list[str] | None = None,
     set_all_active: bool = False,
     set_all_inactive: bool = False,
     exclude_groups: tuple[str, ...] = (),
     exclude_rules: tuple[str, ...] = (),
-) -> tuple[typing.Any, dict]:
-    """Solve the ASP program for ``map_`` in ``mode``.
+) -> tuple[clorm.FactBase, dict]:
+    """Solve the ASP program for ``input_map`` in ``mode``.
 
     Returns the single clingo model of derived atoms together with the
     ``clingo_id -> model_element`` map the build pass resolves keys through.
     """
     clingo_id_to_model_element = {}
-    language = pd2af.modes.get_language_from_map_or_model(map_)
+    language = pd2af.modes.get_language_from_map_or_model(input_map)
     control = _make_control(
-        map_.model,
+        input_map.model,
         clingo_id_to_model_element,
         mode=mode,
         language=language,

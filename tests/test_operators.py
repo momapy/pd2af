@@ -41,6 +41,7 @@ import pd2af.building.sbgn.model
 from tests._helpers import (
     MAPS_DIR,
     SBGN_MAPS_DIR,
+    build_program_for_mode_name,
     has_dot_binary,
     read_cd_map,
     read_sbgn_map,
@@ -137,7 +138,7 @@ class TestGateRules:
     @pytest.mark.parametrize("mode", _PATH_INFERENCE_MODES)
     @pytest.mark.parametrize("language", tuple(pd2af.modes.LANGUAGES))
     def test_gates_group_present_in_path_inference_modes(self, mode, language):
-        program = pd2af.asp.rules.build_program(mode, language=language)
+        program = build_program_for_mode_name(mode, language=language)
         assert "new(logicalOperator(logicalOperatorKey(OPERATOR)," in program
         assert "new(logicalOperatorInput(logicalOperatorKey(OPERATOR)," in program
         assert (
@@ -146,19 +147,19 @@ class TestGateRules:
         )
 
     def test_celldesigner_activates_gate_inputs(self):
-        program = pd2af.asp.rules.build_program("keep-species", language="celldesigner")
+        program = build_program_for_mode_name("keep-species", language="celldesigner")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "booleanLogicGateInput(INPUT)" in program
 
     def test_sbgn_pd_operator_input_activation_is_entity_pool_guarded(self):
-        program = pd2af.asp.rules.build_program("keep-species", language="sbgn_pd")
+        program = build_program_for_mode_name("keep-species", language="sbgn_pd")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "logicalOperatorInput(INPUT)" in program
         assert "entityPool(ELEMENT)" in program
 
     def test_not_token_dodges_reserved_keyword(self):
         # bare `not` is a reserved clingo keyword, so the NOT token is `not_`.
-        program = pd2af.asp.rules.build_program("keep-species", language="celldesigner")
+        program = build_program_for_mode_name("keep-species", language="celldesigner")
         assert (
             "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR)."
             in program
@@ -167,11 +168,11 @@ class TestGateRules:
     def test_gates_influence_rule_guards_on_umbrella(self):
         # Without the booleanLogicGate/logicalOperator umbrella guard, every
         # path/3 source (species included) would be read as an operator key.
-        cd_program = pd2af.asp.rules.build_program(
+        cd_program = build_program_for_mode_name(
             "keep-species", language="celldesigner"
         )
         assert "booleanLogicGate(OPERATOR)" in cd_program
-        sbgn_program = pd2af.asp.rules.build_program("keep-species", language="sbgn_pd")
+        sbgn_program = build_program_for_mode_name("keep-species", language="sbgn_pd")
         assert "logicalOperator(OPERATOR)" in sbgn_program
 
 

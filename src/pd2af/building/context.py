@@ -1,6 +1,6 @@
 """The shared state of the two build passes.
 
-``BuilderContext`` is a plain dataclass of slots: :func:`pd2af.core.build_map`
+``BuilderContext`` is a plain dataclass of slots: :func:`pd2af.core._build_map`
 creates one, the model pass fills the model and the pass-1 scratch slots, and
 the layout pass reads them back to build the layout and the layout-model
 mapping. It lives in its own module so both language builders can name it in
