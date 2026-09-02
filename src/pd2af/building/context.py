@@ -18,10 +18,12 @@ class BuilderContext:
 
     # --- inputs ---
     input_map: object
-    layout_mode: str | None
+    layout_mode: pd2af.modes.LayoutMode | None
     clingo_id_to_model_element: dict
     mode: pd2af.modes.TransformationMode
-    influence_pairing: str = "cross"
+    influence_pairing: pd2af.modes.InfluencePairingMode = (
+        pd2af.modes.InfluencePairingMode.CROSS
+    )
 
     # --- outputs being built ---
     model: object = None

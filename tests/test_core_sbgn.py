@@ -124,12 +124,15 @@ class TestProvenance:
         merged_activity = next(iter(result.obj.model.activities))
         input_proteoforms = frozenset(proteoform_map.model.entity_pools)
         # Forward (many-to-one): the merged activity traces back to both inputs.
-        assert result.output_element_to_input_elements[merged_activity] == input_proteoforms
+        assert (
+            result.output_element_to_input_elements[merged_activity]
+            == input_proteoforms
+        )
         # Inverse: each input proteoform recovers the one merged activity.
         for proteoform in input_proteoforms:
-            assert result.output_element_to_input_elements.inverse[id(proteoform)] == frozenset(
-                [merged_activity]
-            )
+            assert result.output_element_to_input_elements.inverse[
+                id(proteoform)
+            ] == frozenset([merged_activity])
 
     def test_keep_species_keeps_provenance_one_to_one(self, proteoform_map):
         result = pd2af.transform(proteoform_map, mode="keep-species", layout_mode=None)

@@ -1,13 +1,16 @@
 """Everything a user chooses from: the vocabularies and the transformation modes.
 
-The input languages, the layout modes and the influence pairings are the three
-vocabularies a transformation mode is defined against, so they live here with
-it: :data:`LANGUAGES` is the single source of the input languages and of the
-order the CLI and the docs list them in, :data:`LAYOUT_MODES` of the layout
-modes and their CLI descriptions, and :data:`LAYOUT_MODES_BY_LANGUAGE` is the
-join of the two. A language token is also the wire format: it is the aspcompose
-variant key resolved by :func:`pd2af.asp.rules.build_program`, a segment of
-every language-specific rule identifier, and a member of a mode's
+:class:`Language`, :class:`LayoutMode` and :class:`InfluencePairingMode` are the
+three vocabularies a transformation mode is defined against, so they live here
+with it. They are string enumerations: a member's value is the token the outside
+world sees, on the command line, in the ``--json`` output and in the calls a
+library user writes. :data:`LANGUAGES` carries everything pd2af knows about each
+input language and the order the CLI and the docs list them in,
+:data:`LAYOUT_MODE_DESCRIPTIONS` the prose the CLI lists each layout mode with,
+and :data:`LAYOUT_MODES_BY_LANGUAGE` is the join of the first two vocabularies.
+A language token is also the wire format: it is the aspcompose variant key
+resolved by :func:`pd2af.asp.rules.build_program`, a segment of every
+language-specific rule identifier, and a member of a mode's
 ``compatible_languages``. The output language is *deduced* from the input:
 ``celldesigner`` input -> CellDesigner output, ``sbgn_pd`` input -> SBGN-AF
 output.
@@ -45,6 +48,7 @@ just its own: a mode that half-loads is worse than one that refuses to.
 """
 
 import dataclasses
+import enum
 import functools
 import importlib.metadata
 import types
@@ -57,24 +61,41 @@ import momapy.core.model
 import momapy.sbgn.pd
 
 
-CELLDESIGNER = "celldesigner"
-SBGN_PD = "sbgn_pd"
+class Language(enum.StrEnum):
+    """An input language pd2af accepts, in the order the CLI lists them."""
+
+    CELLDESIGNER = "celldesigner"
+    SBGN_PD = "sbgn_pd"
 
 
-# Every input language, in the order the CLI and the docs list them: the token
-# -> everything pd2af knows about it. `momapy_module` is the package whose
-# model-element classes seed the momapy_kb ontology (functor names derive from
-# the class names, so each language yields its own predicate vocabulary, with no
-# overlap between the two); `map_class` and `model_class` are what an input of
-# that language is recognised by.
+class LayoutMode(enum.StrEnum):
+    """A concrete way of laying the output map out, in display order."""
+
+    PLAIN = "plain"
+    OVERLAY = "overlay"
+    DOT = "dot"
+
+
+class InfluencePairingMode(enum.StrEnum):
+    """How to draw an influence whose source or target maps to several glyphs."""
+
+    CROSS = "cross"
+    NEAREST = "nearest"
+
+
+# Everything pd2af knows about each input language. `momapy_module` is the
+# package whose model-element classes seed the momapy_kb ontology (functor names
+# derive from the class names, so each language yields its own predicate
+# vocabulary, with no overlap between the two); `map_class` and `model_class`
+# are what an input of that language is recognised by.
 LANGUAGES = {
-    CELLDESIGNER: {
+    Language.CELLDESIGNER: {
         "display_name": "CellDesigner",
         "momapy_module": momapy.celldesigner,
         "map_class": momapy.celldesigner.CellDesignerMap,
         "model_class": momapy.celldesigner.CellDesignerModel,
     },
-    SBGN_PD: {
+    Language.SBGN_PD: {
         "display_name": "SBGN PD",
         "momapy_module": momapy.sbgn.pd,
         "map_class": momapy.sbgn.pd.SBGNPDMap,
@@ -82,12 +103,13 @@ LANGUAGES = {
     },
 }
 
-
-# The concrete layout modes -> their one-line CLI description, in display order.
-LAYOUT_MODES = {
-    "plain": "reuse original positions",
-    "overlay": ("reuse full original layout with unmapped layout elements dimmed"),
-    "dot": "graphviz `dot` auto-layout (requires `dot` on PATH)",
+# The one-line description the CLI lists each layout mode with.
+LAYOUT_MODE_DESCRIPTIONS = {
+    LayoutMode.PLAIN: "reuse original positions",
+    LayoutMode.OVERLAY: (
+        "reuse full original layout with unmapped layout elements dimmed"
+    ),
+    LayoutMode.DOT: "graphviz `dot` auto-layout (requires `dot` on PATH)",
 }
 
 # Not a layout mode of its own: a meta value accepted by the CLI and
@@ -99,17 +121,14 @@ AUTO_DESCRIPTION = "pick automatically from the input (graphviz `dot` for a map)
 # supports the curated-geometry `plain` mode and the graphviz `dot` mode; the
 # `overlay` dimming is CellDesigner-only.
 LAYOUT_MODES_BY_LANGUAGE = {
-    CELLDESIGNER: tuple(LAYOUT_MODES),
-    SBGN_PD: ("plain", "dot"),
+    Language.CELLDESIGNER: tuple(LayoutMode),
+    Language.SBGN_PD: (LayoutMode.PLAIN, LayoutMode.DOT),
 }
-
-# How to draw an influence whose source or target maps to several glyphs.
-INFLUENCE_PAIRINGS = ("cross", "nearest")
 
 
 def get_language_from_map_or_model(
     map_or_model: momapy.core.map.Map | momapy.core.model.Model,
-) -> str:
+) -> Language:
     """Infer the input language token from an input map's or model's type.
 
     Matching is by ``isinstance`` rather than exact type: momapy's builder
@@ -134,7 +153,7 @@ def get_language_from_map_or_model(
 
 
 def make_map_from_model(
-    model: momapy.core.model.Model, language: str
+    model: momapy.core.model.Model, language: Language
 ) -> momapy.core.map.Map:
     """Wrap a bare model in a layout-less map of its language.
 
@@ -164,7 +183,7 @@ class TransformationMode:
             tuple is the mode's full inventory.
         rule_group_definitions: Rule groups the mode defines itself, registered
             with the built-in ones. Empty for every mode pd2af ships.
-        compatible_languages: The input-language tokens the mode accepts,
+        compatible_languages: The input languages the mode accepts,
             every registered language by default.
         merges_proteoforms: Whether the build stage strips post-translational
             decorations and merges content-equal results.
@@ -174,7 +193,7 @@ class TransformationMode:
     docs: str
     rule_group_references: tuple[str, ...] = ()
     rule_group_definitions: tuple[RuleGroup, ...] = ()
-    compatible_languages: frozenset[str] = frozenset(LANGUAGES)
+    compatible_languages: frozenset[Language] = frozenset(LANGUAGES)
     merges_proteoforms: bool = False
 
     @property
@@ -184,7 +203,7 @@ class TransformationMode:
             rule_group.identifier for rule_group in self.rule_group_definitions
         )
 
-    def compatible_layout_modes(self, language: str) -> tuple[str, ...]:
+    def compatible_layout_modes(self, language: Language) -> tuple[LayoutMode, ...]:
         """The concrete layout modes valid for this mode on the given input language.
 
         Merged activities are synthesized from several input species, so they
@@ -193,7 +212,9 @@ class TransformationMode:
         available_layout_modes = LAYOUT_MODES_BY_LANGUAGE[language]
         if not self.merges_proteoforms:
             return available_layout_modes
-        return ("dot",) if "dot" in available_layout_modes else ()
+        if LayoutMode.DOT in available_layout_modes:
+            return (LayoutMode.DOT,)
+        return ()
 
 
 _BUILTIN_TRANSFORMATION_MODES = (
@@ -313,7 +334,7 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "keep_reactions:activity",
             "keep_reactions:influences",
         ),
-        compatible_languages=frozenset({CELLDESIGNER}),
+        compatible_languages=frozenset({Language.CELLDESIGNER}),
     ),
 )
 

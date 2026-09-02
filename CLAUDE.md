@@ -81,17 +81,22 @@ each language folder holds a `model` and a `layout` matching the two build
 passes. Nothing imports `core`, so the import graph has no cycle.
 
 `pd2af.modes` holds the three vocabularies a transformation mode is defined
-against, next to the modes themselves. `LANGUAGES` is the single source for
-input languages: its keyset *is* the set of languages, its order is the order
-the CLI and the docs list them in, and its values carry every per-language fact
-(`display_name`, the `momapy_module` whose classes seed the ontology
-vocabulary, and the `map_class` / `model_class` an input is recognised by).
-Adding a language is one literal edit there; `get_language_from_map_or_model`
-infers the token by walking it. `LAYOUT_MODES` holds the layout-mode
-vocabulary, the CLI descriptions and the `auto` meta value, and
-`LAYOUT_MODES_BY_LANGUAGE` is the join of the two dimensions.
-`INFLUENCE_PAIRINGS` is the third vocabulary, read by the CLI and validated by
-`transform`.
+against, next to the modes themselves. Each is a `StrEnum` whose member values
+are the tokens the outside world sees: `Language`, `LayoutMode` and
+`InfluencePairingMode`. Because a member is a string, a token still serialises
+to JSON, resolves an aspcompose variant and compares equal to a raw string a
+contributed mode writes; building one (`LayoutMode(value)`) is what validates
+it, so `transform` and the CLI convert once and pass members around after that.
+`LANGUAGES` carries every per-language fact (`display_name`, the
+`momapy_module` whose classes seed the ontology vocabulary, and the `map_class`
+/ `model_class` an input is recognised by), keyed by `Language` member in the
+order the CLI and the docs list them in. Adding a language is one member plus
+one `LANGUAGES` entry; `get_language_from_map_or_model` infers the member by
+walking the input. `LAYOUT_MODE_DESCRIPTIONS` holds the prose the CLI lists each
+layout mode with, and `LAYOUT_MODES_BY_LANGUAGE` is the join of the first two
+vocabularies. `auto` is not a layout mode but a request to pick one: it stays
+the `AUTO` constant, and `transform` resolves it before the build stage sees
+anything.
 
 The token is the wire format, not just a label: it is the aspcompose variant
 key `pd2af.asp.rules.build_program` resolves, a segment of every

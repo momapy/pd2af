@@ -500,6 +500,21 @@ class TestTransformErrors:
         with pytest.raises(ValueError):
             pd2af.transform(example_cd_map, mode="not-a-mode", layout_mode="plain")
 
+    def test_unknown_layout_mode_raises_value_error(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map, mode="keep-species", layout_mode="not-a-layout-mode"
+            )
+
+    def test_unknown_influence_pairing_raises_value_error(self, example_cd_map):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map,
+                mode="keep-species",
+                layout_mode="plain",
+                influence_pairing="not-a-pairing",
+            )
+
     @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
     @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
     def test_merged_modes_reject_input_derived_layout(
@@ -572,15 +587,25 @@ class TestProvenance:
             | set(model.boolean_logic_gates)
             | set(model.compartments)
         )
-        assert result.output_element_to_input_elements  # at least one output has a traced source
+        assert (
+            result.output_element_to_input_elements
+        )  # at least one output has a traced source
         for output_element in result.output_element_to_input_elements:
             assert output_element in output_elements
 
     def test_inverse_round_trips(self, example_cd_map):
         result = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
-        for output_element, input_elements in result.output_element_to_input_elements.items():
+        for (
+            output_element,
+            input_elements,
+        ) in result.output_element_to_input_elements.items():
             for input_element in input_elements:
-                assert output_element in result.output_element_to_input_elements.inverse[id(input_element)]
+                assert (
+                    output_element
+                    in result.output_element_to_input_elements.inverse[
+                        id(input_element)
+                    ]
+                )
 
 
 class TestTransformModelInput:
@@ -648,7 +673,9 @@ class TestAnnotationCarry:
         # every carried bucket is exactly the union of its provenance sources'
         for output_element, annotations in result.element_to_annotations.items():
             expected = frozenset()
-            for source in result.output_element_to_input_elements.get(output_element, ()):
+            for source in result.output_element_to_input_elements.get(
+                output_element, ()
+            ):
                 expected |= reader_result.element_to_annotations.get(
                     source, frozenset()
                 )

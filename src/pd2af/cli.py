@@ -17,9 +17,9 @@ import pd2af.modes
 import pd2af.asp.rules
 
 
-_LAYOUT_CHOICES = tuple(pd2af.modes.LAYOUT_MODES) + (pd2af.modes.AUTO,)
+_LAYOUT_CHOICES = tuple(pd2af.modes.LayoutMode) + (pd2af.modes.AUTO,)
 
-_LAYOUT_MODE_INFO = pd2af.modes.LAYOUT_MODES | {
+_LAYOUT_MODE_INFO = pd2af.modes.LAYOUT_MODE_DESCRIPTIONS | {
     pd2af.modes.AUTO: pd2af.modes.AUTO_DESCRIPTION
 }
 
@@ -37,7 +37,7 @@ def _compatible_language_names_for_mode(
 
 def _compatible_layout_mode_names_for_mode(
     mode: pd2af.modes.TransformationMode,
-) -> list[str]:
+) -> list[pd2af.modes.LayoutMode]:
     """The layout modes a transformation mode offers on *some* input language.
 
     The per-language answer is the mode's own
@@ -50,13 +50,13 @@ def _compatible_layout_mode_names_for_mode(
     for language in mode.compatible_languages:
         offered.update(mode.compatible_layout_modes(language))
     return [
-        layout_mode
-        for layout_mode in pd2af.modes.LAYOUT_MODES
-        if layout_mode in offered
+        layout_mode for layout_mode in pd2af.modes.LayoutMode if layout_mode in offered
     ]
 
 
-def _compatible_language_names_for_layout_mode(layout_mode: str) -> list[str]:
+def _compatible_language_names_for_layout_mode(
+    layout_mode: pd2af.modes.LayoutMode | str,
+) -> list[str]:
     """Display names of the input languages whose output supports a layout mode.
 
     Derived from pd2af.modes: SBGN-AF output (SBGN-PD input) does not
@@ -401,7 +401,7 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "-p",
         "--influence-pairing",
-        choices=pd2af.modes.INFLUENCE_PAIRINGS,
+        choices=tuple(pd2af.modes.InfluencePairingMode),
         default="cross",
         help=(
             "how to draw an influence whose source or target maps to several "

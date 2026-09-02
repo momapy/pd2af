@@ -32,7 +32,9 @@ def _iter_types(module: types.ModuleType) -> collections.abc.Iterator[type]:
             yield attr_value
 
 
-def _make_ontology_rules(session: typing.Any, language: str) -> list[str]:
+def _make_ontology_rules(
+    session: typing.Any, language: pd2af.modes.Language
+) -> list[str]:
     """The sorted ontology rules for every model class of ``language``."""
     module = pd2af.modes.LANGUAGES[language]["momapy_module"]
     rules = set()
@@ -48,7 +50,7 @@ def _make_control(
     model: momapy.core.model.Model,
     clingo_id_to_model_element: dict,
     mode: pd2af.modes.TransformationMode,
-    language: str,
+    language: pd2af.modes.Language,
     set_active: list[str] | None,
     set_inactive: list[str] | None,
     set_all_active: bool,

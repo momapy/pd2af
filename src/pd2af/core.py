@@ -43,13 +43,13 @@ import pd2af.modes
 # maps. Keyed by language token, so an unknown token raises `KeyError` instead
 # of falling through to a language that was not asked for.
 _BUILD_BEHAVIOR_BY_LANGUAGE = {
-    pd2af.modes.CELLDESIGNER: {
+    pd2af.modes.Language.CELLDESIGNER: {
         "model_module": pd2af.building.celldesigner.model,
         "layout_module": pd2af.building.celldesigner.layout,
         "map_class": momapy.celldesigner.CellDesignerMap,
         "auto_layout_arguments": {},
     },
-    pd2af.modes.SBGN_PD: {
+    pd2af.modes.Language.SBGN_PD: {
         "model_module": pd2af.building.sbgn.model,
         "layout_module": pd2af.building.sbgn.layout,
         "map_class": momapy.sbgn.af.SBGNAFMap,
@@ -100,7 +100,9 @@ class TransformerResult:
 
 
 def _check_layout_mode_is_supported_by_mode(
-    layout_mode: str | None, mode: pd2af.modes.TransformationMode, language: str
+    layout_mode: pd2af.modes.LayoutMode | None,
+    mode: pd2af.modes.TransformationMode,
+    language: pd2af.modes.Language,
 ) -> None:
     """Raise unless a layout mode fits the transformation mode and language.
 
@@ -127,7 +129,7 @@ def _check_layout_mode_is_supported_by_mode(
 def _make_model_and_layout_in_context(
     context: pd2af.building.context.BuilderContext,
     clingo_model: clorm.FactBase,
-    language: str,
+    language: pd2af.modes.Language,
 ) -> None:
     """Run the two build passes of ``language``, filling the context's slots."""
     build_behavior = _BUILD_BEHAVIOR_BY_LANGUAGE[language]
@@ -137,7 +139,7 @@ def _make_model_and_layout_in_context(
 
 
 def _make_map_from_context(
-    context: pd2af.building.context.BuilderContext, language: str
+    context: pd2af.building.context.BuilderContext, language: pd2af.modes.Language
 ) -> momapy.core.map.Map:
     """Assemble the map of ``language`` from the three filled context slots."""
     map_builder_class = momapy.builder.get_or_make_builder_cls(
@@ -157,9 +159,11 @@ def _build_map(
     clingo_id_to_model_element: dict,
     *,
     mode: pd2af.modes.TransformationMode,
-    language: str,
-    layout_mode: str | None,
-    influence_pairing: str = "cross",
+    language: pd2af.modes.Language,
+    layout_mode: pd2af.modes.LayoutMode | None,
+    influence_pairing: pd2af.modes.InfluencePairingMode = (
+        pd2af.modes.InfluencePairingMode.CROSS
+    ),
     element_to_annotations: dict | None = None,
     element_to_notes: dict | None = None,
 ) -> TransformerResult:
@@ -198,7 +202,7 @@ def _build_map(
     # the "dot" mode (graphviz) repositions an already-built layout. The
     # compartment-layout classes differ per language (see
     # pd2af.building.layout.make_auto_layout).
-    if layout_mode == "dot":
+    if layout_mode == pd2af.modes.LayoutMode.DOT:
         new_map = pd2af.building.layout.make_auto_layout(
             new_map,
             **_BUILD_BEHAVIOR_BY_LANGUAGE[language]["auto_layout_arguments"],
@@ -227,8 +231,10 @@ def _build_map(
 def transform(
     map_or_model: momapy.core.map.Map | momapy.core.model.Model,
     mode: str = "normal",
-    layout_mode: typing.Literal["auto", "dot", "plain", "overlay"] | None = "auto",
-    influence_pairing: typing.Literal["cross", "nearest"] = "cross",
+    layout_mode: pd2af.modes.LayoutMode | typing.Literal["auto"] | None = "auto",
+    influence_pairing: pd2af.modes.InfluencePairingMode = (
+        pd2af.modes.InfluencePairingMode.CROSS
+    ),
     set_active: list[str] | None = None,
     set_inactive: list[str] | None = None,
     set_all_active: bool = False,
@@ -276,9 +282,10 @@ def transform(
     """
     transformation_mode = pd2af.modes.get_transformation_mode(mode)
     language = pd2af.modes.get_language_from_map_or_model(map_or_model)
+    influence_pairing = pd2af.modes.InfluencePairingMode(influence_pairing)
     is_model_input = isinstance(map_or_model, momapy.core.model.Model)
     if is_model_input:
-        if layout_mode not in (None, "auto"):
+        if layout_mode not in (None, pd2af.modes.AUTO):
             raise ValueError(
                 f"model input supports only layout_mode 'auto' or None, "
                 f"got {layout_mode!r}"
@@ -287,8 +294,10 @@ def transform(
         input_map = pd2af.modes.make_map_from_model(map_or_model, language)
     else:
         input_map = map_or_model
-        if layout_mode == "auto":
-            layout_mode = "dot"
+        if layout_mode == pd2af.modes.AUTO:
+            layout_mode = pd2af.modes.LayoutMode.DOT
+        elif layout_mode is not None:
+            layout_mode = pd2af.modes.LayoutMode(layout_mode)
     if language not in transformation_mode.compatible_languages:
         raise ValueError(
             f"transformation mode {mode!r} does not support {language!r} "
@@ -296,12 +305,6 @@ def transform(
             + ", ".join(sorted(transformation_mode.compatible_languages))
         )
     _check_layout_mode_is_supported_by_mode(layout_mode, transformation_mode, language)
-    if influence_pairing not in pd2af.modes.INFLUENCE_PAIRINGS:
-        raise ValueError(
-            f"influence_pairing must be one of "
-            f"{list(pd2af.modes.INFLUENCE_PAIRINGS)}, "
-            f"got {influence_pairing!r}"
-        )
     clingo_model, clingo_id_to_model_element = pd2af.asp.solver.solve(
         input_map,
         transformation_mode,

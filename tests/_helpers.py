@@ -21,7 +21,9 @@ SBGN_EXAMPLE_MAP_PATH = os.path.join(
 SBGN_WITH_COMPARTMENTS_MAP_PATH = os.path.join(SBGN_MAPS_DIR, "with_compartments.sbgn")
 
 
-def build_program_for_mode_name(mode_name, language=pd2af.modes.CELLDESIGNER, **kwargs):
+def build_program_for_mode_name(
+    mode_name, language=pd2af.modes.Language.CELLDESIGNER, **kwargs
+):
     """Compose the ASP program of the mode named `mode_name`.
 
     `build_program` takes the resolved `TransformationMode`; the tests name
