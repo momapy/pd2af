@@ -332,11 +332,11 @@ def add_modulation_mapping(
     glyphs) contributes that whole cluster, so the mapping stays consistent with
     the one the endpoint's own layout was registered under.
     """
-    source_key = mapping_builder._singleton_to_key.get(source_layout)
+    source_key = mapping_builder.representative_to_key.get(source_layout)
     source_cluster = (
         source_key if source_key is not None else frozenset([source_layout])
     )
-    target_key = mapping_builder._singleton_to_key.get(target_layout)
+    target_key = mapping_builder.representative_to_key.get(target_layout)
     target_cluster = (
         target_key if target_key is not None else frozenset([target_layout])
     )
