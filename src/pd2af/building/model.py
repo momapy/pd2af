@@ -116,11 +116,15 @@ def make_and_add_operators(
     """Build every authored logical operator, adding the used ones to the model.
 
     An operator reaches ``model_operators`` only when it actually sources an
-    influence.
+    influence, and only when it has at least one resolved input: an operator
+    whose inputs all failed to resolve (every referred element carries no
+    activity key, e.g. every input suppressed) is dropped entirely -- it emits
+    neither a node nor a sourced influence. An operator with some resolved
+    inputs keeps exactly those inputs; the unresolved ones are skipped.
 
-    Every operator is built into ``context.key_to_operator``, so the influence
-    pass can resolve an operator source. Only the operators that appear as an
-    influence source are added to the model and recorded in
+    Every surviving operator is built into ``context.key_to_operator``, so the
+    influence pass can resolve an operator source. Only the operators that
+    appear as an influence source are added to the model and recorded in
     ``context.operator_emissions`` for the layout pass: an operator whose target
     is not an activity yields no influence and would otherwise be a dangling
     node. The CellDesigner writer emits a gate only through its modulation, so

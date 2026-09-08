@@ -127,8 +127,16 @@ def make_provenance_from_context(
 
     for activity_key, output_element in context.key_to_activity.items():
         record_provenance(activity_key.species, output_element)
-    for operator_key, output_element in context.key_to_operator.items():
-        record_provenance(operator_key.gate, output_element)
+    # Only the operators that reached the model (the influence-sourcing ones)
+    # have provenance: the others are absent from the output map, so a key
+    # pointing at them would be a dangling provenance entry. The keys of
+    # content-equal operators that merged into one canonical instance still
+    # walk, so every merged origin is recorded.
+    emitted_operators = {id(operator) for operator, _ in context.operator_emissions}
+    for operator_key, output_operator in context.key_to_operator.items():
+        if id(output_operator) not in emitted_operators:
+            continue
+        record_provenance(operator_key.gate, output_operator)
     for input_compartment, output_compartment in context.compartment_emissions:
         record_pair(output_compartment, input_compartment)
 

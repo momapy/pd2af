@@ -1034,7 +1034,10 @@ _INFLUENCES_OUTPUT = RuleGroup(
 # `hasActivityCarrier`, so `influences:core:path` never matches and the gate
 # is silently dropped. `_GATES_CORE` carries the gate through three rule kinds:
 #
-#   (a) operator node -- one head per gate type, carrying a type token;
+#   (a) operator node -- one head per gate type, carrying a type token; every
+#       node and influence rule is guarded on `new(logicalOperatorInput(OPERATOR,
+#       _))`, so an operator with zero resolved inputs emits neither a node nor
+#       a sourced influence, while one with some resolved inputs keeps them all;
 #   (b) input edges -- each gate input resolved through carrier/key (mirroring
 #       `influences:core:path`);
 #   (c) operator-sourced influence -- ONE rule that *reuses* `propagatesInfluence/3`: the
@@ -1056,29 +1059,41 @@ _INFLUENCES_OUTPUT = RuleGroup(
 _GATES_CORE = RuleGroup(
     identifier="gates:core",
     depends_on=frozenset({"activity:core", "paths:core", "preparation"}),
-    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influences:output` fan these out with no change. Provenance-agnostic.",
+    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The node and influence rules are guarded on the input edges, so an operator with zero resolved inputs emits neither a node nor a sourced influence, and one with some resolved inputs keeps them all. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influences:output` fan these out with no change. Provenance-agnostic.",
     rules=(),
     variants={
         Language.CELLDESIGNER: (
             Rule(
                 identifier="gates:core:celldesigner:node_and",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), and)) :- andGate(OPERATOR).",
-                docs="An `andGate` emits an AND logical-operator node.",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), and)) :-
+                        andGate(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="An `andGate` with at least one resolved input emits an AND logical-operator node.",
             ),
             Rule(
                 identifier="gates:core:celldesigner:node_or",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), or)) :- orGate(OPERATOR).",
-                docs="An `orGate` emits an OR logical-operator node.",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), or)) :-
+                        orGate(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="An `orGate` with at least one resolved input emits an OR logical-operator node.",
             ),
             Rule(
                 identifier="gates:core:celldesigner:node_not",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR).",
-                docs="A `notGate` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword.",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), not_)) :-
+                        notGate(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="A `notGate` with at least one resolved input emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword.",
             ),
             Rule(
                 identifier="gates:core:celldesigner:node_unknown",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), unknown)) :- unknownGate(OPERATOR).",
-                docs="An `unknownGate` emits an unknown-type logical-operator node.",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), unknown)) :-
+                        unknownGate(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="An `unknownGate` with at least one resolved input emits an unknown-type logical-operator node.",
             ),
             Rule(
                 identifier="gates:core:celldesigner:input_edge",
@@ -1096,27 +1111,37 @@ _GATES_CORE = RuleGroup(
                 text=dedent("""\
                     influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND) :-
                         booleanLogicGate(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _)),
                         propagatesInfluence(OPERATOR, TARGET_SPECIES, INFLUENCE_KIND),
                         hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                         hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key.",
+                docs="One rule covering both Shape A (gate is a reaction modifier) and Shape B (gate is a modulation source): the `paths:core` rules already bind a `propagatesInfluence/3` whose source is the gate, so the gate only resolves its TARGET through carrier/key and writes the influence keyed by the operator. Inherits the transitive closure (Decision D1). The `booleanLogicGate` guard is essential -- without it every species `propagatesInfluence/3` source would be read as an operator key. The input-existence guard drops an operator with no resolved input -- it emits neither a node nor a sourced influence; an operator with some resolved inputs keeps them all.",
             ),
         ),
         Language.SBGN_PD: (
             Rule(
                 identifier="gates:core:sbgn_pd:node_and",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), and)) :- andOperator(OPERATOR).",
-                docs="An `andOperator` emits an AND logical-operator node.",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), and)) :-
+                        andOperator(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="An `andOperator` with at least one resolved input emits an AND logical-operator node.",
             ),
             Rule(
                 identifier="gates:core:sbgn_pd:node_or",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), or)) :- orOperator(OPERATOR).",
-                docs="An `orOperator` emits an OR logical-operator node.",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), or)) :-
+                        orOperator(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="An `orOperator` with at least one resolved input emits an OR logical-operator node.",
             ),
             Rule(
                 identifier="gates:core:sbgn_pd:node_not",
-                text="new(logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notOperator(OPERATOR).",
-                docs="A `notOperator` emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. (SBGN-PD has no unknown-operator type.)",
+                text=dedent("""\
+                    new(logicalOperator(logicalOperatorKey(OPERATOR), not_)) :-
+                        notOperator(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _))."""),
+                docs="A `notOperator` with at least one resolved input emits a NOT logical-operator node. The token is `not_` because bare `not` is a reserved clingo keyword. (SBGN-PD has no unknown-operator type.)",
             ),
             Rule(
                 identifier="gates:core:sbgn_pd:input_edge",
@@ -1134,10 +1159,11 @@ _GATES_CORE = RuleGroup(
                 text=dedent("""\
                     influences(logicalOperatorKey(OPERATOR), TARGET_KEY, INFLUENCE_KIND) :-
                         logicalOperator(OPERATOR),
+                        new(logicalOperatorInput(logicalOperatorKey(OPERATOR), _)),
                         propagatesInfluence(OPERATOR, TARGET_ENTITY_POOL, INFLUENCE_KIND),
                         hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
                         hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths:core`, resolving only the target through carrier/key.",
+                docs="SBGN-PD parallel of the CellDesigner operator-sourced influence rule (Shape B: the operator is a modulation source). Reuses the `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure emitted by `paths:core`, resolving only the target through carrier/key. The input-existence guard drops an operator with no resolved input -- it emits neither a node nor a sourced influence; an operator with some resolved inputs keeps them all.",
             ),
         ),
     },

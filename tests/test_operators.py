@@ -160,10 +160,7 @@ class TestGateRules:
     def test_not_token_dodges_reserved_keyword(self):
         # bare `not` is a reserved clingo keyword, so the NOT token is `not_`.
         program = build_program_for_mode_name("keep-species", language="celldesigner")
-        assert (
-            "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :- notGate(OPERATOR)."
-            in program
-        )
+        assert "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :-" in program
 
     def test_gates_influence_rule_guards_on_umbrella(self):
         # Without the booleanLogicGate/logicalOperator umbrella guard, every
@@ -280,6 +277,61 @@ class TestCelldesignerGatesAreAdditive:
         srr_map = read_cd_map(_SRR_MAP_PATH)
         out = pd2af.transform(srr_map, mode="keep-species", layout_mode=None).obj
         assert len(out.model.boolean_logic_gates) == 0
+
+
+class TestZeroInputOperators:
+    """An operator with zero resolved inputs is dropped entirely -- neither a
+    node nor a sourced influence -- while an operator with some resolved inputs
+    keeps exactly those inputs. Default settings resolve every gate input (the
+    `activity:gate_input` group), so the zero-input case is reached by
+    suppressing the referred elements."""
+
+    def test_suppressing_every_sbgn_input_drops_operator_and_influence(self):
+        operator_map = read_sbgn_map(_SBGN_OPERATOR_MAP_PATH)
+        out = pd2af.transform(
+            operator_map,
+            mode="keep-species",
+            layout_mode=None,
+            set_inactive=["glyph14_model", "glyph13_model"],
+        ).obj
+        assert len(out.model.logical_operators) == 0
+        assert not any(
+            isinstance(influence.source, momapy.sbgn.af.LogicalOperator)
+            for influence in out.model.influences
+        )
+
+    def test_partial_suppression_keeps_resolved_inputs(self):
+        operator_map = read_sbgn_map(_SBGN_OPERATOR_MAP_PATH)
+        out = pd2af.transform(
+            operator_map,
+            mode="keep-species",
+            layout_mode=None,
+            set_inactive=["glyph14_model"],
+        ).obj
+        (operator,) = out.model.logical_operators
+        assert isinstance(operator, momapy.sbgn.af.AndOperator)
+        assert len(operator.inputs) == 1
+
+    def test_suppressing_every_celldesigner_input_drops_gate(self):
+        creb_map = read_cd_map(_CREB_MAP_PATH)
+        out = pd2af.transform(
+            creb_map,
+            mode="keep-species",
+            layout_mode=None,
+            set_inactive=["s_id_pdm7b7_active", "s_id_pdmc93"],
+        ).obj
+        assert len(out.model.boolean_logic_gates) == 0
+
+    def test_partial_celldesigner_suppression_keeps_resolved_inputs(self):
+        creb_map = read_cd_map(_CREB_MAP_PATH)
+        out = pd2af.transform(
+            creb_map,
+            mode="keep-species",
+            layout_mode=None,
+            set_inactive=["s_id_pdm7b7_active"],
+        ).obj
+        (gate,) = out.model.boolean_logic_gates
+        assert len(gate.inputs) == 1
 
 
 @pytest.mark.parametrize("path", _gate_map_paths())

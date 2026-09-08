@@ -157,3 +157,29 @@ class TestSubunitAnnotationCarry:
             (reread.element_to_annotations or {}).get(subunit)
             for subunit in reread_subunits
         )
+
+
+class TestDroppedOperatorProvenance:
+    """Provenance covers only the elements actually included in the output: an
+    operator that sources no influence never reaches the model, so it must not
+    appear as a provenance key; a surviving operator does, carrying its gate's
+    origin."""
+
+    def test_srr_dropped_gates_are_absent_from_provenance(self):
+        srr_map = momapy.io.core.read(os.path.join(MAPS_DIR, "SRR_signaling.xml")).obj
+        result = pd2af.transform(srr_map, mode="keep-species", layout_mode=None)
+        assert len(result.obj.model.boolean_logic_gates) == 0
+        gate_class_names = {"AndGate", "OrGate", "NotGate", "UnknownGate"}
+        assert not any(
+            type(output_element).__name__ in gate_class_names
+            for output_element in result.output_element_to_input_elements.keys()
+        )
+
+    def test_creb_surviving_gate_keeps_provenance(self):
+        creb_map = momapy.io.core.read(os.path.join(MAPS_DIR, "CREB_activity.xml")).obj
+        result = pd2af.transform(creb_map, mode="keep-species", layout_mode=None)
+        (gate,) = result.obj.model.boolean_logic_gates
+        gate_inputs = result.output_element_to_input_elements.get(gate)
+        assert gate_inputs is not None
+        gate_ids = {input_gate.id_ for input_gate in creb_map.model.boolean_logic_gates}
+        assert {input_element.id_ for input_element in gate_inputs} & gate_ids
