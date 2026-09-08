@@ -15,6 +15,7 @@ import tempfile
 
 import pytest
 
+import momapy.core.layout
 import momapy.io.core
 import momapy.sbgn.af
 import momapy.sbgn.pd
@@ -364,9 +365,53 @@ class TestCompartments:
         out = pd2af.transform(map_with_compartments, mode=mode, layout_mode="auto").obj
         assert len(_compartment_layouts(out.layout)) == 1
 
+    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
+    def test_auto_layout_compartment_encloses_all_members(
+        self, map_with_compartments, mode
+    ):
+        # `set_all_active` surfaces S as an activity; nothing induces an
+        # influence on it, so it is the member-with-no-influences case.
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            map_with_compartments,
+            mode=mode,
+            layout_mode="auto",
+            set_all_active=True,
+        ).obj
+        mapping = out.layout_model_mapping
+        (compartment_layout,) = _compartment_layouts(out.layout)
+        compartment = mapping.get_mapping(compartment_layout)
+        members = [
+            element
+            for element in out.layout.layout_elements
+            if isinstance(element, momapy.core.layout.Node)
+            and not isinstance(element, momapy.sbgn.af.CompartmentLayout)
+            and getattr(mapping.get_mapping(element), "compartment", None)
+            is compartment
+        ]
+        assert len(members) == 3  # A, B and the influence-free S
+        influenced = {
+            endpoint
+            for influence in out.model.influences
+            for endpoint in (influence.source, influence.target)
+        }
+        assert any(mapping.get_mapping(member) not in influenced for member in members)
+        for member in members:
+            assert (
+                compartment_layout.position.x - compartment_layout.width / 2
+                <= member.position.x
+                <= compartment_layout.position.x + compartment_layout.width / 2
+            )
+            assert (
+                compartment_layout.position.y - compartment_layout.height / 2
+                <= member.position.y
+                <= compartment_layout.position.y + compartment_layout.height / 2
+            )
+
     @pytest.mark.parametrize(
         "mode,layout_mode",
-        (("keep-species", "plain"), ("normal", "auto")),
+        (("keep-species", "plain"), ("normal", "auto"), ("keep-species", "auto")),
     )
     def test_compartments_round_trip(self, map_with_compartments, mode, layout_mode):
         if layout_mode == "auto" and not has_dot_binary():

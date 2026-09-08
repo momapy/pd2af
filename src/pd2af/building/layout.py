@@ -329,17 +329,22 @@ def _build_dot_graph(
             dot_cluster = pydot.Cluster(compartment.id_)
             dot_cluster.set("margin", _DOT_CLUSTER_SEP)
             compartment_to_dot_cluster[compartment] = dot_cluster
-            dot_cluster_name_to_compartment_layout_element[dot_cluster.get_name()] = (
-                compartment_layout_element
-            )
+            # pydot quotes cluster names whose ids need it (uuid-like ids);
+            # strip so the name matches the post-dot subgraph's stripped one.
+            dot_cluster_name_to_compartment_layout_element[
+                dot_cluster.get_name().strip('"')
+            ] = compartment_layout_element
     for compartment, compartment_dot_cluster in compartment_to_dot_cluster.items():
         outside_compartment = getattr(compartment, "outside", None)
-        if outside_compartment is not None:
-            outside_dot_cluster = compartment_to_dot_cluster.get(outside_compartment)
-            if outside_dot_cluster is not None:
-                outside_dot_cluster.add_subgraph(compartment_dot_cluster)
-            else:
-                dot_graph.add_subgraph(compartment_dot_cluster)
+        outside_dot_cluster = (
+            compartment_to_dot_cluster.get(outside_compartment)
+            if outside_compartment is not None
+            else None
+        )
+        if outside_dot_cluster is not None:
+            outside_dot_cluster.add_subgraph(compartment_dot_cluster)
+        else:
+            dot_graph.add_subgraph(compartment_dot_cluster)
 
     def is_node_layout_element(layout_element_builder: typing.Any) -> bool:
         return momapy.builder.isinstance_or_builder(

@@ -1,9 +1,22 @@
-import momapy.celldesigner
-import momapy.geometry
+import os
+import tempfile
+import types
 
+import pytest
+
+import momapy.celldesigner
+import momapy.core.layout
+import momapy.core.mapping
+import momapy.geometry
+import momapy.io.core
+import momapy.sbgn.pd
+
+import pd2af
 import pd2af.asp.predicates
 import pd2af.building.celldesigner.layout
 import pd2af.building.layout
+
+from tests._helpers import MAPS_DIR, has_dot_binary, read_cd_map
 
 
 def _node(position):
@@ -147,3 +160,168 @@ class TestSelfLoopFan:
             assert (
                 start_angle - end_angle
             ) % 360 == pd2af.building.layout._SELF_LOOP_SPAN
+
+
+def _compartment_layout_element(x_offset=0.0):
+    return momapy.celldesigner.RectangleCompartmentLayout(
+        position=momapy.geometry.Point(x_offset, 0.0), width=100.0, height=100.0
+    )
+
+
+class TestDotGraphCompartmentClusters:
+    """Every compartment cluster must end up attached: to its outside
+    compartment's cluster when it has one, to the root graph otherwise. An
+    unattached cluster is invisible to graphviz, so its member nodes drop out
+    of the graph and the compartment never gets computed bounds."""
+
+    @staticmethod
+    def _build_dot_graph(compartments, compartment_layouts, member_nodes=()):
+        mapping_builder = momapy.core.mapping.LayoutModelMappingBuilder()
+        for compartment, compartment_layout in zip(compartments, compartment_layouts):
+            if compartment_layout is not None:
+                mapping_builder.add_mapping(compartment_layout, compartment)
+        for node, member_of in member_nodes:
+            mapping_builder.add_mapping(
+                node, types.SimpleNamespace(compartment=member_of)
+            )
+        map_builder = types.SimpleNamespace(
+            model=types.SimpleNamespace(compartments=list(compartments)),
+            layout_model_mapping=mapping_builder,
+        )
+        layout_builder = types.SimpleNamespace(
+            layout_elements=[node for node, _ in member_nodes]
+        )
+        dot_graph, *_ = pd2af.building.layout._build_dot_graph(
+            map_builder, layout_builder, (), ()
+        )
+        return dot_graph
+
+    def test_root_celldesigner_compartment_cluster_is_attached(self):
+        compartment = momapy.celldesigner.Compartment(id_="c")
+        dot_graph = self._build_dot_graph(
+            [compartment], [_compartment_layout_element()]
+        )
+        assert [cluster.get_name() for cluster in dot_graph.get_subgraphs()] == [
+            "cluster_c"
+        ]
+
+    def test_sbgn_compartment_cluster_is_attached(self):
+        # An SBGN compartment has no `outside` attribute at all.
+        compartment = momapy.sbgn.pd.Compartment(id_="c", label=None)
+        dot_graph = self._build_dot_graph(
+            [compartment], [_compartment_layout_element()]
+        )
+        assert [cluster.get_name() for cluster in dot_graph.get_subgraphs()] == [
+            "cluster_c"
+        ]
+
+    def test_nested_cluster_attaches_to_its_parent(self):
+        parent = momapy.celldesigner.Compartment(id_="parent")
+        child = momapy.celldesigner.Compartment(id_="child", outside=parent)
+        # Child before parent: attachment must not depend on iteration order.
+        dot_graph = self._build_dot_graph(
+            [child, parent],
+            [_compartment_layout_element(200.0), _compartment_layout_element()],
+        )
+        (root_cluster,) = dot_graph.get_subgraphs()
+        assert root_cluster.get_name() == "cluster_parent"
+        assert [cluster.get_name() for cluster in root_cluster.get_subgraphs()] == [
+            "cluster_child"
+        ]
+
+    def test_nested_cluster_attaches_to_root_when_parent_has_no_layout(self):
+        parent = momapy.celldesigner.Compartment(id_="parent")
+        child = momapy.celldesigner.Compartment(id_="child", outside=parent)
+        dot_graph = self._build_dot_graph(
+            [child, parent], [_compartment_layout_element(200.0), None]
+        )
+        assert [cluster.get_name() for cluster in dot_graph.get_subgraphs()] == [
+            "cluster_child"
+        ]
+
+    def test_member_node_lands_inside_its_compartment_cluster(self):
+        # A member without any influence arc (no dot edges) must still be
+        # handed to graphviz inside its compartment's cluster.
+        compartment = momapy.celldesigner.Compartment(id_="c")
+        node = _node(momapy.geometry.Point(10.0, 10.0))
+        dot_graph = self._build_dot_graph(
+            [compartment], [_compartment_layout_element()], [(node, compartment)]
+        )
+        (cluster,) = dot_graph.get_subgraphs()
+        assert [node_layout.get_name() for node_layout in cluster.get_nodes()] == [
+            node.id_
+        ]
+        assert dot_graph.get_nodes() == []
+
+
+_CELLDESIGNER_COMPARTMENT_LAYOUT_CLASSES = tuple(
+    layout_class
+    for layout_class in vars(momapy.celldesigner).values()
+    if isinstance(layout_class, type)
+    and layout_class.__name__.endswith("CompartmentLayout")
+)
+
+_SNCA_EXPRESSION_MAP_PATH = os.path.join(MAPS_DIR, "SNCA_expression.xml")
+
+
+def _is_inside(compartment_layout, node_layout):
+    return (
+        compartment_layout.position.x - compartment_layout.width / 2
+        <= node_layout.position.x
+        <= compartment_layout.position.x + compartment_layout.width / 2
+        and compartment_layout.position.y - compartment_layout.height / 2
+        <= node_layout.position.y
+        <= compartment_layout.position.y + compartment_layout.height / 2
+    )
+
+
+def _celldesigner_compartment_layouts(layout):
+    return [
+        element
+        for element in layout.layout_elements
+        if isinstance(element, _CELLDESIGNER_COMPARTMENT_LAYOUT_CLASSES)
+    ]
+
+
+class TestCelldesignerAutoLayoutCompartments:
+    """End to end, auto layout: each compartment's dot-computed bounds enclose
+    its members. Before the fix, the clusters never reached graphviz, so the
+    compartments kept their curated input geometry while members moved away."""
+
+    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
+    def test_compartments_enclose_their_members(self, mode):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            read_cd_map(_SNCA_EXPRESSION_MAP_PATH), mode=mode, layout_mode="auto"
+        ).obj
+        mapping = out.layout_model_mapping
+        compartment_layouts = _celldesigner_compartment_layouts(out.layout)
+        assert compartment_layouts
+        for compartment_layout in compartment_layouts:
+            compartment = mapping.get_mapping(compartment_layout)
+            members = [
+                element
+                for element in out.layout.layout_elements
+                if isinstance(element, momapy.core.layout.Node)
+                and getattr(mapping.get_mapping(element), "compartment", None)
+                is compartment
+            ]
+            assert members
+            for member in members:
+                assert _is_inside(compartment_layout, member)
+
+    def test_compartment_map_round_trips(self):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            read_cd_map(_SNCA_EXPRESSION_MAP_PATH), mode="normal", layout_mode="auto"
+        ).obj
+        path = os.path.join(tempfile.gettempdir(), "pd2af_test_compartments.xml")
+        momapy.io.core.write(out, path, writer="celldesigner")
+        back = momapy.io.core.read(path).obj
+        assert len(back.model.compartments) == len(out.model.compartments)
+        assert sorted(species.name for species in back.model.species) == sorted(
+            species.name for species in out.model.species
+        )
+        assert len(back.model.modulations) == len(out.model.modulations)
