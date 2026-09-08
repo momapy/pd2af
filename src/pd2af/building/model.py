@@ -115,20 +115,22 @@ def make_and_add_operators(
 ) -> None:
     """Build every authored logical operator, adding the used ones to the model.
 
-    An operator reaches ``model_operators`` only when it actually sources an
-    influence, and only when it has at least one resolved input: an operator
-    whose inputs all failed to resolve (every referred element carries no
-    activity key, e.g. every input suppressed) is dropped entirely -- it emits
-    neither a node nor a sourced influence. An operator with some resolved
-    inputs keeps exactly those inputs; the unresolved ones are skipped.
+    An operator reaches ``model_operators`` when it sources an influence or is
+    reachable from such an operator through input edges (SBGN-PD nesting: the
+    inner operators of an influence-sourcing AND are part of the output). It is
+    added only when it has at least one resolved input: an operator whose
+    inputs all failed to resolve (every referred element carries no activity
+    key, e.g. every input suppressed) is dropped entirely -- it emits neither a
+    node nor a sourced influence, and its consumer keeps only its remaining
+    resolved inputs. An operator with some resolved inputs keeps exactly those
+    inputs; the unresolved ones are skipped.
 
     Every surviving operator is built into ``context.key_to_operator``, so the
-    influence pass can resolve an operator source. Only the operators that
-    appear as an influence source are added to the model and recorded in
-    ``context.operator_emissions`` for the layout pass: an operator whose target
-    is not an activity yields no influence and would otherwise be a dangling
-    node. The CellDesigner writer emits a gate only through its modulation, so
-    dropping it also keeps the output round-trip-safe.
+    influence pass can resolve an operator source. The added operators are
+    appended to ``context.operator_emissions`` in dependency order, inner
+    operators first, so the layout pass finds each input's glyph already
+    registered. The CellDesigner writer emits a gate only through its
+    modulation, so dropping unused gates keeps the output round-trip-safe.
     """
     inputs_by_operator = {}
     for input_atom in context.operator_input_atoms:
@@ -138,25 +140,88 @@ def make_and_add_operators(
         for atom in context.influence_atoms
         if isinstance(atom.source, pd2af.asp.predicates.logicalOperatorKey)
     }
+    atoms_by_key = {atom.key: atom for atom in context.operator_atoms}
     seen_operator_identities = set()
+    building = set()
+    emissions_by_key = {}
     for atom in context.operator_atoms:
-        operator = _get_or_make_operator(
+        operator = _get_or_make_operator_recursive(
             context,
-            atom.type_,
-            inputs_by_operator.get(atom.key, ()),
+            atom.key,
+            atoms_by_key,
+            inputs_by_operator,
             operator_type_to_class,
             operator_input_class,
+            building,
         )
         if operator is None:
             continue
-        context.key_to_operator[atom.key] = operator
-        if atom.key not in used_operator_keys:
-            continue
+        if atom.key in used_operator_keys:
+            emissions_by_key[atom.key] = operator
+    emitted = set()
+
+    def _emit(operator_key: typing.Any) -> None:
+        if operator_key in emitted:
+            return
+        emitted.add(operator_key)
+        for input_key in inputs_by_operator.get(operator_key, ()):
+            if isinstance(input_key, pd2af.asp.predicates.logicalOperatorKey):
+                _emit(input_key)
+        operator = context.key_to_operator.get(operator_key)
+        if operator is None:
+            return
         if add_model_element_if_new(
             model_operators, operator, seen_operator_identities
         ):
-            input_operator = context.clingo_id_to_model_element[atom.key.gate]
+            input_operator = context.clingo_id_to_model_element[operator_key.gate]
             context.operator_emissions.append((operator, input_operator))
+
+    for operator_key in emissions_by_key:
+        _emit(operator_key)
+
+
+def _get_or_make_operator_recursive(
+    context: pd2af.building.context.BuilderContext,
+    operator_key: typing.Any,
+    atoms_by_key: dict,
+    inputs_by_operator: dict,
+    operator_type_to_class: dict[str, type],
+    operator_input_class: type,
+    building: set,
+) -> typing.Any:
+    """Resolve an operator key to its model element, building on demand.
+
+    An operator's inputs may themselves be operators (SBGN-PD nesting), whose
+    model elements may not be built yet; those resolve recursively through
+    this same function. ``key_to_operator`` memoises, and ``building`` refuses
+    to re-enter a key currently being built -- an input cycle would otherwise
+    recurse forever (the ASP layer never emits such an influence, but a cyclic
+    operator graph can emit nodes).
+    """
+    if operator_key in context.key_to_operator:
+        return context.key_to_operator[operator_key]
+    if operator_key in building:
+        return None
+    atom = atoms_by_key.get(operator_key)
+    if atom is None:
+        return None
+    building.add(operator_key)
+    try:
+        operator = _get_or_make_operator(
+            context,
+            atom.type_,
+            inputs_by_operator.get(operator_key, ()),
+            operator_type_to_class,
+            operator_input_class,
+            atoms_by_key,
+            inputs_by_operator,
+            building,
+        )
+    finally:
+        building.discard(operator_key)
+    if operator is not None:
+        context.key_to_operator[operator_key] = operator
+    return operator
 
 
 def _get_or_make_operator(
@@ -165,11 +230,16 @@ def _get_or_make_operator(
     input_keys: collections.abc.Iterable[typing.Any],
     operator_type_to_class: dict[str, type],
     operator_input_class: type,
+    atoms_by_key: dict,
+    inputs_by_operator: dict,
+    building: set,
 ) -> typing.Any:
     """Build (and intern) an operator of ``operator_type``.
 
-    Its inputs resolve through ``context.key_to_activity``; an unknown token
-    yields ``None``.
+    An activity-key input resolves through ``context.key_to_activity``; an
+    operator-key input resolves recursively through
+    :func:`_get_or_make_operator_recursive`, so a nested operator is built
+    before its consumer. An unknown token yields ``None``.
 
     Each operator input and the operator itself are interned by content
     (``register_or_reuse``), so content-equal operators collapse to one
@@ -181,11 +251,22 @@ def _get_or_make_operator(
         return None
     operator_inputs = []
     for input_key in input_keys:
-        activity = context.key_to_activity.get(input_key)
-        if activity is None:
+        if isinstance(input_key, pd2af.asp.predicates.logicalOperatorKey):
+            referred_element = _get_or_make_operator_recursive(
+                context,
+                input_key,
+                atoms_by_key,
+                inputs_by_operator,
+                operator_type_to_class,
+                operator_input_class,
+                building,
+            )
+        else:
+            referred_element = context.key_to_activity.get(input_key)
+        if referred_element is None:
             continue
         operator_input = register_or_reuse(
-            operator_input_class(referred_element=activity), context.cache
+            operator_input_class(referred_element=referred_element), context.cache
         )
         operator_inputs.append(operator_input)
     operator = operator_class(inputs=frozenset(operator_inputs))

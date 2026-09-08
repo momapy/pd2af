@@ -158,6 +158,23 @@ class TestCycleAwareTransitivity:
             in program
         )
 
+    def test_sbgn_pd_operator_input_resolves_through_operator_key(self):
+        # An SBGN-PD operator input whose referred element is another logical
+        # operator resolves through that operator's key, guarded on the input
+        # operator emitting a node.
+        program = build_program_for_mode_name("keep-species", language="sbgn_pd")
+        assert (
+            "new(logicalOperatorInput(logicalOperatorKey(OPERATOR), "
+            "logicalOperatorKey(INPUT_OPERATOR)))" in program
+        )
+        assert "new(logicalOperator(logicalOperatorKey(INPUT_OPERATOR), _))" in program
+
+    def test_celldesigner_has_no_operator_input_rule(self):
+        # A BooleanLogicGateInput always refers to a species, so the CD
+        # variant has no operator-referred input edge.
+        program = build_program_for_mode_name("keep-species", language="celldesigner")
+        assert "logicalOperatorKey(INPUT_OPERATOR)" not in program
+
 
 class TestKeepReactionsMode:
     """`keep-reactions` keeps the PD topology itself: every species is an

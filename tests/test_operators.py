@@ -426,3 +426,115 @@ class TestSbgnOperatorsShapeB:
             assert _points_close(start, input_tip)
         for start in influence_arc_starts:
             assert _points_close(start, output_tip)
+
+
+_NESTED_OPERATORS_MAP_PATH = os.path.join(SBGN_MAPS_DIR, "nested_operators.sbgn")
+
+
+class TestSbgnNestedOperators:
+    """An SBGN-PD logical operator may refer to another logical operator. The
+    nested_operators map is the stat1 map with an OR operator inserted between
+    the AND's two inputs and the AND: AND(OR(nucleic-acid, complex)) -> process.
+    CellDesigner is out of scope here: a `BooleanLogicGateInput` always refers
+    to a species, so its gates cannot nest."""
+
+    @pytest.fixture(scope="class")
+    def nested_map(self):
+        return read_sbgn_map(_NESTED_OPERATORS_MAP_PATH)
+
+    def test_emits_both_operator_levels(self, nested_map):
+        out = pd2af.transform(nested_map, mode="keep-species", layout_mode=None).obj
+        operators = {type(o).__name__ for o in out.model.logical_operators}
+        assert operators == {"AndOperator", "OrOperator"}
+        and_operator = next(
+            o
+            for o in out.model.logical_operators
+            if isinstance(o, momapy.sbgn.af.AndOperator)
+        )
+        assert [type(i.referred_element).__name__ for i in and_operator.inputs] == [
+            "OrOperator"
+        ]
+
+    def test_operator_sources_one_influence(self, nested_map):
+        out = pd2af.transform(nested_map, mode="keep-species", layout_mode=None).obj
+        operator_influences = [
+            influence
+            for influence in out.model.influences
+            if isinstance(influence.source, momapy.sbgn.af.LogicalOperator)
+        ]
+        assert len(operator_influences) == 1
+
+    def test_suppressed_inner_inputs_leave_partial_resolution(self, nested_map):
+        # Suppressing one of the OR's entity pools drops that pool input; the
+        # OR keeps its other input, and the AND keeps the OR.
+        out = pd2af.transform(
+            nested_map,
+            mode="keep-species",
+            layout_mode=None,
+            set_inactive=["glyph14_model"],
+        ).obj
+        assert sorted(type(o).__name__ for o in out.model.logical_operators) == [
+            "AndOperator",
+            "OrOperator",
+        ]
+        or_operator = next(
+            o
+            for o in out.model.logical_operators
+            if isinstance(o, momapy.sbgn.af.OrOperator)
+        )
+        assert len(or_operator.inputs) == 1
+
+    def test_suppressing_every_inner_input_drops_all_operators(self, nested_map):
+        out = pd2af.transform(
+            nested_map,
+            mode="keep-species",
+            layout_mode=None,
+            set_inactive=["glyph14_model", "glyph13_model"],
+        ).obj
+        assert len(out.model.logical_operators) == 0
+
+    @pytest.mark.parametrize("layout_mode", ("plain", "auto"))
+    def test_round_trips_with_nested_logic_arcs(self, nested_map, layout_mode):
+        if layout_mode == "auto" and not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            nested_map, mode="keep-species", layout_mode=layout_mode
+        ).obj
+        path = os.path.join(tempfile.gettempdir(), "pd2af_test_nested_operator.sbgn")
+        momapy.io.core.write(out, path, writer="sbgnml")
+        back = momapy.io.core.read(path, reader="sbgnml").obj
+        operators = list(back.model.logical_operators)
+        assert len(operators) == 2
+        assert any(
+            isinstance(i.referred_element, momapy.sbgn.af.LogicalOperator)
+            for o in operators
+            for i in o.inputs
+        )
+
+    @pytest.mark.parametrize("layout_mode", ("plain", "auto"))
+    def test_logic_arcs_connect_operator_to_operator(self, nested_map, layout_mode):
+        if layout_mode == "auto" and not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            nested_map, mode="keep-species", layout_mode=layout_mode
+        ).obj
+        mapping = out.layout_model_mapping
+        operator_to_operator = []
+        for element in out.layout.layout_elements:
+            if isinstance(element, momapy.sbgn.af.LogicArcLayout):
+                source = mapping.get_mapping(element.source)
+                target = mapping.get_mapping(element.target)
+                if isinstance(source, momapy.sbgn.af.LogicalOperator) and isinstance(
+                    target, momapy.sbgn.af.LogicalOperator
+                ):
+                    operator_to_operator.append(element)
+        assert len(operator_to_operator) == 1
+
+    def test_provenance_carries_operator_origins(self, nested_map):
+        result = pd2af.transform(nested_map, mode="keep-species", layout_mode=None)
+        for operator in result.obj.model.logical_operators:
+            origins = result.output_element_to_input_elements.get(operator)
+            assert origins
+            assert any(
+                isinstance(origin, momapy.sbgn.pd.LogicalOperator) for origin in origins
+            )

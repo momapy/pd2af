@@ -1058,8 +1058,7 @@ _INFLUENCES_OUTPUT = RuleGroup(
 # path unchanged.
 _GATES_CORE = RuleGroup(
     identifier="gates:core",
-    depends_on=frozenset({"activity:core", "paths:core", "preparation"}),
-    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The node and influence rules are guarded on the input edges, so an operator with zero resolved inputs emits neither a node nor a sourced influence, and one with some resolved inputs keeps them all. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influences:output` fan these out with no change. Provenance-agnostic.",
+    docs="Authored logical operators (CellDesigner `BooleanLogicGate`, SBGN-PD `LogicalOperator`): emits the operator node (`logicalOperator/2`, token-typed), its input edges (`logicalOperatorInput/2`, each input resolved through carrier/key -- or, for SBGN-PD, through the referred operator's own key when the input refers to another logical operator), and the operator-sourced influence written straight into the internal `influences/3` relation by reusing the existing `propagatesInfluence(OPERATOR, TARGET, INFLUENCE_KIND)` closure. The node and influence rules are guarded on the input edges, so an operator with zero resolved inputs emits neither a node nor a sourced influence, and one with some resolved inputs keeps them all. The widened influence `source` union (`predicates._INFLUENCE_SOURCE`) lets `influences:output` fan these out with no change. Provenance-agnostic.",
     rules=(),
     variants={
         Language.CELLDESIGNER: (
@@ -1153,6 +1152,17 @@ _GATES_CORE = RuleGroup(
                         hasActivityCarrier(INPUT_ENTITY_POOL, INPUT_CARRIER),
                         hasActivityKey(INPUT_CARRIER, INPUT_KEY)."""),
                 docs="SBGN-PD parallel of the CellDesigner input-edge rule, guarded on the `logicalOperator` umbrella (derived from the per-type operators via the ontology isa rules).",
+            ),
+            Rule(
+                identifier="gates:core:sbgn_pd:input_edge_operator",
+                text=dedent("""\
+                    new(logicalOperatorInput(logicalOperatorKey(OPERATOR), logicalOperatorKey(INPUT_OPERATOR))) :-
+                        logicalOperator(OPERATOR),
+                        hasInput(OPERATOR, INPUT),
+                        hasReferredElement(INPUT, INPUT_OPERATOR),
+                        logicalOperator(INPUT_OPERATOR),
+                        new(logicalOperator(logicalOperatorKey(INPUT_OPERATOR), _))."""),
+                docs="An SBGN-PD operator input whose referred element is itself a logical operator resolves through that operator's key instead of through an activity candidate. Guarded on the input operator emitting a node, so an input operator that is itself dropped contributes no edge. This rule and the node rules are mutually recursive, positively so: an operator emits a node when it has an input edge, and an operator input contributes an edge when the input operator emits a node. The least fixpoint is exactly the intended reading -- an operator survives when at least one of its inputs is an activity or is itself a surviving operator -- and a cyclic operator graph with no activity underneath it emits nothing. (CellDesigner has no parallel: a `BooleanLogicGateInput` always refers to a species, so its gates cannot nest.)",
             ),
             Rule(
                 identifier="gates:core:sbgn_pd:influence",

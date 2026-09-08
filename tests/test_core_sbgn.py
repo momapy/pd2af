@@ -425,6 +425,47 @@ class TestCompartments:
         assert len(back.model.compartments) == len(out.model.compartments) == 1
 
 
+class TestNestedOperators:
+    """SBGN-PD logical operators may feed other logical operators; the nested
+    logic reaches the output instead of collapsing into an input-less
+    operator. The committed nested_operators map is the stat1 map with an OR
+    inserted between the AND's inputs and the AND."""
+
+    @pytest.fixture(scope="class")
+    def nested_map(self):
+        return read_sbgn_map(os.path.join(SBGN_MAPS_DIR, "nested_operators.sbgn"))
+
+    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
+    def test_nested_operators_reach_model_and_layout(self, nested_map, mode):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(nested_map, mode=mode, layout_mode="auto").obj
+        operators = {type(o).__name__ for o in out.model.logical_operators}
+        assert operators == {"AndOperator", "OrOperator"}
+        and_operator = next(
+            o
+            for o in out.model.logical_operators
+            if isinstance(o, momapy.sbgn.af.AndOperator)
+        )
+        assert any(
+            isinstance(i.referred_element, momapy.sbgn.af.LogicalOperator)
+            for i in and_operator.inputs
+        )
+        operator_layouts = [
+            element
+            for element in out.layout.layout_elements
+            if isinstance(
+                element,
+                (
+                    momapy.sbgn.af.AndOperatorLayout,
+                    momapy.sbgn.af.OrOperatorLayout,
+                    momapy.sbgn.af.NotOperatorLayout,
+                ),
+            )
+        ]
+        assert len(operator_layouts) == 2
+
+
 class TestTransformModelInput:
     """A bare SBGN-PD model in `normal` mode returns a bare SBGN-AF model with
     `layout_mode` forced to None -- so no graphviz `dot` is required."""

@@ -148,11 +148,14 @@ class logicalOperator(clorm.Predicate):
 class logicalOperatorInput(clorm.Predicate):
     """An input edge of a logical operator: one activity feeding it.
 
-    Always wrapped by ``new(...)`` in rule heads.
+    Always wrapped by ``new(...)`` in rule heads. The input is an activity
+    key, or -- for SBGN-PD, where a logical operator's input may refer to
+    another logical operator -- the key of that operator, mirroring how
+    ``_INFLUENCE_SOURCE`` widens an influence source.
     """
 
     operator: logicalOperatorKey
-    input: _ACTIVITY_KEY
+    input: _ACTIVITY_KEY | logicalOperatorKey
 
 
 class new(clorm.Predicate):
