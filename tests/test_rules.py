@@ -262,6 +262,17 @@ class TestInfluencesConsumptionGroup:
         assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
         assert len(pruned.splitlines()) < len(full.splitlines())
 
+    def test_sbgn_pd_variant_walks_modulation_to_reactant(self):
+        # The SBGN-PD variant follows a modulation arc onto a process down to
+        # its reactants: stimulation consumes (negative), inhibition spares.
+        program = build_program_for_mode_name("keep-species", "sbgn_pd")
+        assert "stimulation(MODULATION)" in program
+        assert "influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences)" in program
+        assert "inhibition(MODULATION)" in program
+        assert "influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences)" in program
+        assert "hasReactant(PROCESS, REACTANT)" in program
+        assert "hasSource(MODULATION, SOURCE_ENTITY_POOL)" in program
+
 
 class TestMergedModesSbgnPdVariant:
     """`normal`/`normal-no-complex` must emit working rules for SBGN-PD input:

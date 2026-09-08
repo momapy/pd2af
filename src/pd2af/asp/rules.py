@@ -875,17 +875,52 @@ _INFLUENCES_CORE = RuleGroup(
     ),
 )
 
-# The consumption/sparing rules are CellDesigner-only (they reason over reaction
-# modifiers); SBGN-PD has no analog yet, so its variant is empty. This is a known
-# gap to implement, not a deliberate design choice: the same biology in
-# CellDesigner vs SBGN-PD currently yields different AF influences.
+# The consumption/sparing reasoning follows a reaction *modifier* (CellDesigner) or a
+# *modulation arc onto a process* (SBGN-PD) from its source to every reactant that is
+# itself an activity: driving a reaction depletes its reactants, so stimulation
+# (catalysis and necessary stimulation included) consumes -- a negative influence --
+# and inhibition spares -- a positive one; a bare modulation draws no consumption edge.
+# These are direct edges, not additions to the reactant->product path closure, so they
+# do not pass through `paths:complex_traversal` and a deleted complex is not rerouted
+# to a promoted subunit.
 _INFLUENCES_CONSUMPTION = RuleGroup(
     identifier="influences:consumption",
     depends_on=frozenset({"activity:core", "preparation"}),
-    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences:consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.",
+    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. The SBGN-PD variant walks a modulation arc onto a process the same way: a stimulation (catalysis and necessary stimulation included) negatively influences each reactant activity, an inhibition positively influences each one, a bare modulation neither. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences:consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.",
     rules=(),
     variants={
-        Language.SBGN_PD: (),
+        Language.SBGN_PD: (
+            Rule(
+                identifier="influences:consumption:sbgn_pd:stimulation_consumes_reactant",
+                text=dedent("""\
+                influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences) :-
+                    stimulation(MODULATION),
+                    hasSource(MODULATION, SOURCE_ENTITY_POOL),
+                    hasTarget(MODULATION, PROCESS),
+                    hasReactant(PROCESS, REACTANT),
+                    hasReferredElement(REACTANT, TARGET_ENTITY_POOL),
+                    hasActivityCarrier(SOURCE_ENTITY_POOL, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
+                docs="A stimulation (catalysis and necessary stimulation included -- the ontology derives both from `stimulation`) onto a process negatively influences each reactant of that process that is itself an activity: running the process consumes it.",
+            ),
+            Rule(
+                identifier="influences:consumption:sbgn_pd:inhibition_spares_reactant",
+                text=dedent("""\
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
+                    inhibition(MODULATION),
+                    hasSource(MODULATION, SOURCE_ENTITY_POOL),
+                    hasTarget(MODULATION, PROCESS),
+                    hasReactant(PROCESS, REACTANT),
+                    hasReferredElement(REACTANT, TARGET_ENTITY_POOL),
+                    hasActivityCarrier(SOURCE_ENTITY_POOL, SOURCE_CARRIER),
+                    hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
+                    hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
+                docs="An inhibition onto a process positively influences each reactant of that process that is itself an activity: blocking the process spares it.",
+            ),
+        ),
         Language.CELLDESIGNER: (
             Rule(
                 identifier="influences:consumption:celldesigner:catalyzer_consumes_reactant",

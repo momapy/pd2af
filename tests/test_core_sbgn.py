@@ -24,10 +24,12 @@ from momapy.sbml.model import BQBiol, RDFAnnotation
 import pd2af
 
 from tests._helpers import (
+    MAPS_DIR,
     SBGN_EXAMPLE_MAP_PATH,
     SBGN_MAPS_DIR,
     SBGN_WITH_COMPARTMENTS_MAP_PATH,
     has_dot_binary,
+    read_cd_map,
     read_sbgn_map,
 )
 
@@ -369,8 +371,10 @@ class TestCompartments:
     def test_auto_layout_compartment_encloses_all_members(
         self, map_with_compartments, mode
     ):
-        # `set_all_active` surfaces S as an activity; nothing induces an
-        # influence on it, so it is the member-with-no-influences case.
+        # `set_all_active` surfaces S as an activity; with the consumption
+        # group excluded nothing induces an influence on it, so it is the
+        # member-with-no-influences case (this test is about layout, not
+        # influence inference).
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
@@ -378,6 +382,7 @@ class TestCompartments:
             mode=mode,
             layout_mode="auto",
             set_all_active=True,
+            exclude_groups=("influences:consumption",),
         ).obj
         mapping = out.layout_model_mapping
         (compartment_layout,) = _compartment_layouts(out.layout)
@@ -464,6 +469,189 @@ class TestNestedOperators:
             )
         ]
         assert len(operator_layouts) == 2
+
+
+def _consumption_map(modulation_class, reactant_active=True):
+    """A -> B with `modulation_class` modulation onto the process; the source
+    is a separate active entity pool E."""
+    a = momapy.sbgn.pd.Macromolecule(
+        id_="a",
+        label="A",
+        state_variables=frozenset([momapy.sbgn.pd.StateVariable(value="active")])
+        if reactant_active
+        else frozenset(),
+    )
+    b = momapy.sbgn.pd.Macromolecule(id_="b", label="B")
+    source = momapy.sbgn.pd.Macromolecule(id_="e", label="E")
+    process = momapy.sbgn.pd.GenericProcess(
+        id_="proc",
+        reactants=frozenset([momapy.sbgn.pd.Reactant(id_="r_a", referred_element=a)]),
+        products=frozenset([momapy.sbgn.pd.Product(id_="pr_b", referred_element=b)]),
+    )
+    model = momapy.sbgn.pd.SBGNPDModel(
+        id_="m",
+        entity_pools=frozenset([a, b, source]),
+        processes=frozenset([process]),
+        modulations=frozenset(
+            [modulation_class(id_="mod", source=source, target=process)]
+        ),
+    )
+    return momapy.sbgn.pd.SBGNPDMap(id_="map", model=model)
+
+
+def _influence_arrows(out):
+    return {
+        (type(influence).__name__, influence.source.label, influence.target.label)
+        for influence in out.model.influences
+    }
+
+
+class TestConsumptionInfluences:
+    """The SBGN consumption/sparing rules walk a modulation arc onto a process
+    down to each reactant that is itself an activity: a stimulation (catalysis
+    and necessary stimulation included) consumes -- negative -- and an
+    inhibition spares -- positive. Bare modulations draw no edge."""
+
+    @pytest.mark.parametrize(
+        "modulation_class,expected_name",
+        (
+            (momapy.sbgn.pd.Stimulation, "NegativeInfluence"),
+            (momapy.sbgn.pd.Catalysis, "NegativeInfluence"),
+            (momapy.sbgn.pd.NecessaryStimulation, "NegativeInfluence"),
+            (momapy.sbgn.pd.Inhibition, "PositiveInfluence"),
+        ),
+    )
+    def test_modulation_kind_drives_the_edge_sign(
+        self, modulation_class, expected_name
+    ):
+        out = pd2af.transform(
+            _consumption_map(modulation_class), mode="keep-species", layout_mode=None
+        ).obj
+        assert _influence_arrows(out) == {(expected_name, "E", "[active]A")}
+
+    def test_bare_modulation_draws_no_consumption_edge(self):
+        out = pd2af.transform(
+            _consumption_map(momapy.sbgn.pd.Modulation),
+            mode="keep-species",
+            layout_mode=None,
+        ).obj
+        assert _influence_arrows(out) == set()
+
+    def test_inactive_reactant_draws_no_consumption_edge(self):
+        out = pd2af.transform(
+            _consumption_map(momapy.sbgn.pd.Stimulation, reactant_active=False),
+            mode="keep-species",
+            layout_mode=None,
+        ).obj
+        assert _influence_arrows(out) == set()
+
+    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
+    def test_excluding_the_group_removes_only_these_edges(self, mode):
+        with_consumption = pd2af.transform(
+            _consumption_map(momapy.sbgn.pd.Stimulation),
+            mode=mode,
+            layout_mode=None,
+        )
+        without = pd2af.transform(
+            _consumption_map(momapy.sbgn.pd.Stimulation),
+            mode=mode,
+            layout_mode=None,
+            exclude_groups=("influences:consumption",),
+        )
+        expected_label = "[active]A" if mode == "keep-species" else "A"
+        assert _influence_arrows(with_consumption.obj) == {
+            ("NegativeInfluence", "E", expected_label)
+        }
+        assert _influence_arrows(without.obj) == set()
+
+    def test_self_consumption_is_a_self_edge(self):
+        # The modulation source IS the reactant: E consumes itself.
+        a = momapy.sbgn.pd.Macromolecule(
+            id_="a",
+            label="A",
+            state_variables=frozenset([momapy.sbgn.pd.StateVariable(value="active")]),
+        )
+        b = momapy.sbgn.pd.Macromolecule(id_="b", label="B")
+        process = momapy.sbgn.pd.GenericProcess(
+            id_="proc",
+            reactants=frozenset(
+                [momapy.sbgn.pd.Reactant(id_="r_a", referred_element=a)]
+            ),
+            products=frozenset(
+                [momapy.sbgn.pd.Product(id_="pr_b", referred_element=b)]
+            ),
+        )
+        model = momapy.sbgn.pd.SBGNPDModel(
+            id_="m",
+            entity_pools=frozenset([a, b]),
+            processes=frozenset([process]),
+            modulations=frozenset(
+                [momapy.sbgn.pd.Stimulation(id_="mod", source=a, target=process)]
+            ),
+        )
+        out = pd2af.transform(
+            momapy.sbgn.pd.SBGNPDMap(id_="map", model=model),
+            mode="keep-species",
+            layout_mode=None,
+        ).obj
+        assert _influence_arrows(out) == {
+            ("NegativeInfluence", "[active]A", "[active]A")
+        }
+
+    def test_deleted_complex_reactant_is_not_rerouted(self):
+        """Parity pin with CellDesigner: the direct consumption rules do not
+        pass through `paths:complex_traversal`, so a deleted complex reactant
+        yields no consumption edge to a promoted subunit in the no-complex
+        modes."""
+        subunit = momapy.sbgn.pd.MacromoleculeSubunit(id_="su", label="S")
+        complex_pool = momapy.sbgn.pd.Complex(
+            id_="c", label="C", subunits=frozenset([subunit])
+        )
+        active_subunit = momapy.sbgn.pd.Macromolecule(
+            id_="s",
+            label="S",
+            state_variables=frozenset([momapy.sbgn.pd.StateVariable(value="active")]),
+        )
+        source = momapy.sbgn.pd.Macromolecule(
+            id_="e",
+            label="E",
+            state_variables=frozenset([momapy.sbgn.pd.StateVariable(value="active")]),
+        )
+        product = momapy.sbgn.pd.Macromolecule(id_="p", label="P")
+        process = momapy.sbgn.pd.GenericProcess(
+            id_="proc",
+            reactants=frozenset(
+                [momapy.sbgn.pd.Reactant(id_="r_c", referred_element=complex_pool)]
+            ),
+            products=frozenset(
+                [momapy.sbgn.pd.Product(id_="pr_p", referred_element=product)]
+            ),
+        )
+        model = momapy.sbgn.pd.SBGNPDModel(
+            id_="m",
+            entity_pools=frozenset([complex_pool, source, product, active_subunit]),
+            processes=frozenset([process]),
+            modulations=frozenset(
+                [momapy.sbgn.pd.Stimulation(id_="mod", source=source, target=process)]
+            ),
+        )
+        sbgn_map = momapy.sbgn.pd.SBGNPDMap(id_="map", model=model)
+        for mode in ("keep-species", "keep-species-no-complex"):
+            out = pd2af.transform(sbgn_map, mode=mode, layout_mode=None).obj
+            assert _influence_arrows(out) == set()
+
+    def test_cell_designer_consumes_reactants_the_same_way(self):
+        # Parity: the same biology in CellDesigner (catalyzer modifier on a
+        # reaction with an active reactant) also yields a negative influence
+        # on the reactant.
+        creb_map = read_cd_map(os.path.join(MAPS_DIR, "CREB_activity.xml"))
+        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None).obj
+        negative = [
+            modulation
+            for modulation in out.model.modulations
+            if isinstance(modulation, momapy.celldesigner.NegativeInfluence)
+        ]
+        assert negative
 
 
 class TestTransformModelInput:
