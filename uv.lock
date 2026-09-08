@@ -954,7 +954,7 @@ wheels = [
 
 [[package]]
 name = "momapy"
-version = "0.13.0"
+version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
@@ -965,14 +965,14 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uharfbuzz" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/94/93/6ddb952aacad6d1799b3d998ef9eb5bb69cf255766eed843a570fabe8978/momapy-0.13.0.tar.gz", hash = "sha256:b2c7ef52e577a72adb47e230cd8be88f6cffa23aaa6335b97d2a17b7f85d5818", size = 1854208, upload-time = "2026-08-06T10:11:44.568Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/ba/32a743ffbf59fe0606fabd7623b7e41bdbed794dca5cda84740d077b9edd/momapy-0.14.0.tar.gz", hash = "sha256:3db7b1b418b67c8ea9435b832b1bf4baffc0fde7397c10729a0c823376e2ef2e", size = 1854959, upload-time = "2026-09-08T09:55:46.347Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/49/f9384fb8edd2967eed1c6b58e79ca7b443cc03455e6436cae3ab26971904/momapy-0.13.0-py3-none-any.whl", hash = "sha256:34c54e65808037b6a7e65af1199f0b2bbb64343dff24cc85d53f322f5dadc7db", size = 326995, upload-time = "2026-08-06T10:11:42.939Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/90/977aac14266876941ff9eb9fd5d0a25f35dffe3d6ce67efe8d5947ce7cd1/momapy-0.14.0-py3-none-any.whl", hash = "sha256:e294cab0e6c8909d1b2fc0f2a816af7e94aeef0dfc8dd62c8f09c042f43fd3f1", size = 327107, upload-time = "2026-09-08T09:55:44.064Z" },
 ]
 
 [[package]]
 name = "momapy-kb"
-version = "0.4.1"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
@@ -981,9 +981,9 @@ dependencies = [
     { name = "jinja2" },
     { name = "momapy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/53/ea/9414f3a69b3c9af276d7fba3e63622c33ee9c79e998400a8eea2a968816a/momapy_kb-0.4.1.tar.gz", hash = "sha256:e6e5a8c2568c05f98a38774837729387807de737efc071e370972877885291a1", size = 283295, upload-time = "2026-08-07T07:20:04.789Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/23/b03c4ebe98b1b39df70513e90a06dd6d4dee1ea56b082f0edd92d8f07e56/momapy_kb-0.5.0.tar.gz", hash = "sha256:3f5977ebc5d05b19c0e6706b23830bcdf6c8f3a0dc7fd7a621df0cb458428e4f", size = 285696, upload-time = "2026-09-04T09:12:46.672Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/a5/2c0565e664dbdac833f6cc89b06766d2a9c66384b2c31537946793a64712/momapy_kb-0.4.1-py3-none-any.whl", hash = "sha256:93ee3ba9ae8f5b568dae0277eb24c601f16d1be97aa5ddf666de420887b500fb", size = 30121, upload-time = "2026-08-07T07:20:03.476Z" },
+    { url = "https://files.pythonhosted.org/packages/83/74/644f85cbb5e5c29b2e9baec9b95886434424698125623814dc8a7a3150fb/momapy_kb-0.5.0-py3-none-any.whl", hash = "sha256:a2ab6c26866c7367335e106df427736d68d93f0297f82ca3b0c96f452781bc90", size = 30878, upload-time = "2026-09-04T09:12:45.407Z" },
 ]
 
 [package.optional-dependencies]
@@ -1143,8 +1143,8 @@ test = [
 requires-dist = [
     { name = "aspcompose", specifier = ">=0.1.0" },
     { name = "clorm", specifier = ">=1.6.3" },
-    { name = "momapy", specifier = ">=0.13.0" },
-    { name = "momapy-kb", extras = ["clingo"], specifier = ">=0.4.1" },
+    { name = "momapy", specifier = ">=0.14.0" },
+    { name = "momapy-kb", extras = ["clingo"], specifier = ">=0.5.0" },
     { name = "pydot", specifier = ">=4.0.1" },
 ]
 

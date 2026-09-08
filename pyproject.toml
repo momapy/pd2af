@@ -9,8 +9,8 @@ license = { text = "GPL-3.0-or-later" }
 dependencies = [
   "aspcompose>=0.1.0",
   "clorm>=1.6.3",
-  "momapy>=0.13.0",
-  "momapy-kb[clingo]>=0.4.1",
+  "momapy>=0.14.0",
+  "momapy-kb[clingo]>=0.5.0",
   "pydot>=4.0.1",
 ]
 classifiers = [
