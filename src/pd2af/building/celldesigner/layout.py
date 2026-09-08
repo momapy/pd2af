@@ -343,7 +343,7 @@ def add_modulation_mapping(
     mapping_builder.add_mapping(
         frozenset([arc]) | source_cluster | target_cluster,
         modulation,
-        anchor=arc,
+        representative=arc,
     )
 
 

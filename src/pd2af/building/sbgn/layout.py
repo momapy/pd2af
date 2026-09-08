@@ -297,7 +297,7 @@ def _make_and_add_operator_layout(
         input_layouts.append(input_layout)
     frozenset_key = frozenset([operator_layout, *logic_arcs, *input_layouts])
     context.layout_model_mapping.add_mapping(
-        frozenset_key, operator, anchor=operator_layout
+        frozenset_key, operator, representative=operator_layout
     )
     context.model_element_to_layout_elements[id(operator)] = (operator_layout,)
 
@@ -416,7 +416,9 @@ def _make_and_add_influence_layout(
         arc = _make_influence_arc(context, influence, source_layout, target_layout)
         context.layout.layout_elements.append(arc)
         context.layout_model_mapping.add_mapping(
-            frozenset([arc, source_layout, target_layout]), influence, anchor=arc
+            frozenset([arc, source_layout, target_layout]),
+            influence,
+            representative=arc,
         )
 
 
