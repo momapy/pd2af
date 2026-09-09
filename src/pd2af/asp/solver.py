@@ -164,15 +164,19 @@ def _add_activity_override_facts(
       the element active on its own; `forceActive` shields it from a
       concurrent `--set-all-inactive`.
     * `--set-inactive` ids become `suppressActivity(ELEMENT)`, which the
-      bridging rule reads to block *any* activity for that element (it wins
-      over `--set-all-active`, whose candidate is still suppressed).
+      bridging rule reads to block *any* activity for that element: the veto
+      is blanket, so it drops every candidate the element has, whichever rule
+      proposed it (active flag or state, modulation source, reaction modifier,
+      gate input, phenotype), and it wins over `--set-all-active`, whose
+      candidate is suppressed like the others.
     * `--set-all-active` emits the single fact `globalActivate.`, turning
       every top-level species / entity pool into a candidate.
     * `--set-all-inactive` emits the single fact `globalSuppress.`,
       suppressing every candidate not shielded by `forceActive`.
 
     An id passed to both `--set-active` and `--set-inactive` is
-    contradictory and raises, as is asking for both global toggles at once.
+    contradictory and raises, as is asking for both global toggles at once;
+    both raise here, before the program is grounded or solved.
     """
     set_active = set_active or []
     set_inactive = set_inactive or []

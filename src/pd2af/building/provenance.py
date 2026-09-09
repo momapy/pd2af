@@ -32,9 +32,9 @@ def record_provenance_for_subunit_trees(
     """Pair the subunits of an ``(output_species, input_species)`` pair.
 
     Each pairing is recorded, recursing to arbitrary depth for nested complexes.
-    Subunits are never activity keys -- the ASP ``topLevel`` relation resolves a
-    subunit at any depth to its outermost complex -- so they reach provenance
-    only through this walk. Pairing cannot be positional (``subunits`` is a
+    Subunits are never activity keys -- the ASP ``resolvesToTopLevel`` relation
+    resolves a subunit at any depth to its outermost complex -- so they reach
+    provenance only through this walk. Pairing cannot be positional (``subunits`` is a
     ``frozenset``) nor by identity (the merged modes rebuild every subunit while
     stripping, and the kept modes may keep a content-equal twin from another
     complex). Each input subunit resolves to an output subunit through
@@ -162,7 +162,7 @@ def carry_annotations_through_provenance(
     Args:
         provenance: the transform's ``FrozenIdentityMultiDict`` mapping each
             output element to the ``frozenset`` of input elements it derives
-            from (``TransformerResult.provenance``).
+            from (``TransformerResult.output_element_to_input_elements``).
         input_element_to_annotations: ``Mapping[input_element -> frozenset]`` of
             RDF annotations from the input ``ReaderResult`` (or ``None``).
         input_element_to_notes: ``Mapping[input_element -> frozenset[str]]`` of

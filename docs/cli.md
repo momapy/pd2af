@@ -25,6 +25,10 @@ The CLI is organised into subcommands:
 | `list-modes` | List transformation modes, layout modes, their compatibilities, and input languages |
 | `list-groups` | List the rule groups each transformation mode uses, marked excludable or mandatory |
 
+`transform` is the implicit subcommand: when the first argument is neither a
+subcommand nor `-h`/`--help`/`--version`, it is inserted, so `pd2af map.xml -m
+keep-species` runs exactly like `pd2af transform map.xml -m keep-species`.
+
 ## `transform` arguments
 
 | Argument | Description |

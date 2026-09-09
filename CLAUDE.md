@@ -57,8 +57,8 @@ applied to *every* entity in the merged modes — complexes and
 non-templated entities included, not just templated proteoforms. The
 two structural-role activity keys are `kept_species` (a top-level
 entity, or the top-level complex a subunit resolves to via the shared
-`topLevel` ASP relation) and `promoted_subunit` (a subunit lifted to top
-level when its complex is dissolved). `TransformationMode.merges_proteoforms`
+`resolvesToTopLevel` ASP relation) and `promoted_subunit` (a subunit lifted
+to top level when its complex is dissolved). `TransformationMode.merges_proteoforms`
 (`pd2af.modes`) is the single source of truth for which modes strip; the
 builder reads it off `context.mode`.
 
@@ -193,9 +193,19 @@ ad-hoc patching. See `pd2af.building.model.register_or_reuse`.
 The standard integration check for any pd2af change is:
 
 ```python
-new_map = pd2af.transform(cd_map, mode=..., layout_mode=...)
+new_map = pd2af.transform(cd_map, mode=..., layout_mode=...).obj
 momapy.io.core.write(new_map, path, writer="celldesigner")
 momapy.io.core.read(path, reader="celldesigner")  # must not raise
+```
+
+CellDesigner input gives a `CellDesignerMap`, written and read with the
+`celldesigner` writer/reader; SBGN-PD input gives an `SBGNAFMap`, written and
+read with the `sbgnml` ones:
+
+```python
+new_map = pd2af.transform(sbgn_pd_map, mode=..., layout_mode=...).obj
+momapy.io.core.write(new_map, path, writer="sbgnml")
+momapy.io.core.read(path, reader="sbgnml")  # must not raise
 ```
 
 The in-repo check is `pytest` plus the read-back above. A broader sweep over all

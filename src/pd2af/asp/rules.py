@@ -6,8 +6,8 @@ text for a named mode. The rules are organised in layers:
 
 * **topology:core** (shared) — structural helpers: ``isSubunit``,
   ``hasActiveDescendantSubunit``.
-* **topology:top_level** (the complex-keeping modes ``keep-species`` and
-  ``normal``) — ``resolvesToTopLevel(SPECIES, TOPLEVEL)`` resolves every species to its
+* **topology:top_level** (the complex-keeping modes ``normal``,
+  ``keep-species`` and ``keep-reactions``) — ``resolvesToTopLevel(SPECIES, TOPLEVEL)`` resolves every species to its
   outermost top-level entity, so a subunit is keyed by (and its
   influences routed to) its top-level complex rather than itself.
 * **preparation** (a ``slot``: exactly one filler group per mode, and

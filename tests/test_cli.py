@@ -483,3 +483,39 @@ class TestCliExpectedErrors:
         monkeypatch.setattr(pd2af.cli, "_read_input_map", raise_unexpected)
         with pytest.raises(RuntimeError, match="boom"):
             pd2af.cli.main(["transform", example_map_path])
+
+
+class TestCliImplicitTransformSubcommand:
+    """Omitting the `transform` subcommand runs it anyway."""
+
+    def test_implicit_form_matches_explicit_form(self, tmp_path, example_map_path):
+        implicit_path = tmp_path / "implicit.xml"
+        explicit_path = tmp_path / "explicit.xml"
+        pd2af.cli.main(
+            [
+                example_map_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-o",
+                str(implicit_path),
+            ]
+        )
+        pd2af.cli.main(
+            [
+                "transform",
+                example_map_path,
+                "-m",
+                "keep-species",
+                "-l",
+                "plain",
+                "-o",
+                str(explicit_path),
+            ]
+        )
+        implicit_map = momapy.io.core.read(str(implicit_path)).obj
+        explicit_map = momapy.io.core.read(str(explicit_path)).obj
+        assert sorted(species.name for species in implicit_map.model.species) == sorted(
+            species.name for species in explicit_map.model.species
+        )

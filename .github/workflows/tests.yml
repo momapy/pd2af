@@ -6,6 +6,7 @@ on:
     branches:
       - testing
       - main
+  pull_request:
 
 jobs:
   lint:
