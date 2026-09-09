@@ -61,14 +61,27 @@ One further mode steps off those axes and changes where the influences come from
 
 - **`keep-reactions`** keeps the PD topology itself. Every species is an activity — no structural signal required — and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds, and none of the inference the other modes do (multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant) is applied. Complexes and PTM decorations are kept, as in `keep-species`. CellDesigner-only.
 
+## Dropping the compartments
+
+`--no-compartment` / `no_compartment=True` merges every compartment into the default one, on top of whichever transformation mode is selected. Species that differ only by compartment become a single activity, and the influences that become equal merge in turn — the same content-based merging the `normal` modes apply to proteoforms, applied to compartments.
+
+- **CellDesigner output**: a single compartment, the `default` one every CellDesigner map declares, with every species pointing at it.
+- **SBGN-AF output**: no compartment at all, SBGN-AF having no default compartment, so every activity ends up with none.
+- **Annotations and notes**: they follow the merge, an activity merged from several compartments gathering the metadata of every species that collapsed into it. The metadata of the removed compartments is dropped with them.
+- **Layout**: because activities merge, `--layout-mode dot` (or `auto`) is required, for the same reason `normal` requires it — a merged activity has no single original position to reuse.
+
+```bash
+pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
+```
+
 ## Layout modes
 
 Selectable with `-l` / `layout_mode=`:
 
 - **`auto`** (default): pick automatically from the input — a map gets `dot`, a bare model gets `None` (no layout).
-- **`dot`**: Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`.
-- **`plain`**: reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`.
-- **`overlay`**: reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`.
+- **`dot`**: Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`, and for any mode with `--no-compartment`.
+- **`plain`**: reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`.
+- **`overlay`**: reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`.
 
 ## Documentation
 

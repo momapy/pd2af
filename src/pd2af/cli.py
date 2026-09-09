@@ -131,6 +131,7 @@ def _run(args: argparse.Namespace) -> None:
         mode=args.transformation_mode,
         layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
+        no_compartment=args.no_compartment,
         set_active=args.set_active,
         set_inactive=args.set_inactive,
         set_all_active=args.set_all_active,
@@ -395,7 +396,7 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
             "`dot`), plain (reuse original positions, model elements only), or "
             "overlay (reuse full original layout with non-model elements greyed "
             "out). 'normal' and 'normal-no-complex' transformation modes require "
-            "`dot` (or `auto`)."
+            "`dot` (or `auto`), and so does `--no-compartment`."
         ),
     )
     parser.add_argument(
@@ -409,6 +410,17 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
             "nearest (a single arc between the closest pair). 'nearest' only "
             "takes effect with `--layout-mode plain` or `overlay`, where glyph "
             "positions are real; in `dot` it is ignored."
+        ),
+    )
+    parser.add_argument(
+        "--no-compartment",
+        action="store_true",
+        dest="no_compartment",
+        help=(
+            "merge every compartment into the default one: species that differ "
+            "only by compartment become a single activity, and the influences "
+            "that become equal merge in turn. Works with every transformation "
+            "mode, and requires `--layout-mode dot` (or `auto`)."
         ),
     )
     parser.add_argument(

@@ -558,6 +558,100 @@ class TestTransformErrors:
         assert out.layout is not None
 
 
+class TestTransformNoCompartment:
+    """`no_compartment` merges every compartment into the default one.
+
+    Exercised on a committed map whose neuron and astrocyte compartments hold
+    many of the same species -- example.xml declares a single compartment, so it
+    cannot show species merging across compartments.
+    """
+
+    ALL_MODES = [
+        "normal",
+        "normal-no-complex",
+        "keep-species",
+        "keep-species-no-complex",
+        "keep-reactions",
+    ]
+
+    @pytest.fixture(scope="class")
+    def multi_compartment_map(self):
+        return read_cd_map(os.path.join(MAPS_DIR, "Glycolysis.xml"))
+
+    @pytest.mark.parametrize("mode", ALL_MODES)
+    def test_only_the_default_compartment_survives(self, multi_compartment_map, mode):
+        out = pd2af.transform(
+            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+        ).obj
+        assert len(multi_compartment_map.model.compartments) > 1
+        (compartment,) = out.model.compartments
+        assert compartment.id_ == "default"
+
+    @pytest.mark.parametrize("mode", ALL_MODES)
+    def test_every_species_is_in_the_default_compartment(
+        self, multi_compartment_map, mode
+    ):
+        out = pd2af.transform(
+            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+        ).obj
+        (compartment,) = out.model.compartments
+        assert out.model.species
+        assert all(species.compartment is compartment for species in out.model.species)
+
+    @pytest.mark.parametrize("mode", ALL_MODES)
+    def test_species_differing_only_by_compartment_merge(
+        self, multi_compartment_map, mode
+    ):
+        kept = pd2af.transform(multi_compartment_map, mode=mode, layout_mode=None).obj
+        merged = pd2af.transform(
+            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+        ).obj
+        assert len(merged.model.species) < len(kept.model.species)
+
+    @pytest.mark.parametrize("mode", ALL_MODES)
+    def test_influences_that_become_equal_merge(self, multi_compartment_map, mode):
+        kept = pd2af.transform(multi_compartment_map, mode=mode, layout_mode=None).obj
+        merged = pd2af.transform(
+            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+        ).obj
+        assert len(merged.model.modulations) < len(kept.model.modulations)
+
+    def test_compartment_free_map_is_unaffected(self, example_cd_map):
+        kept = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        ).obj
+        merged = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None, no_compartment=True
+        ).obj
+        assert species_names(merged.model) == species_names(kept.model)
+        assert modulation_set(merged.model) == modulation_set(kept.model)
+
+    @pytest.mark.parametrize("mode", ALL_MODES)
+    def test_output_round_trips(self, tmp_path, multi_compartment_map, mode):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` not available")
+        out = pd2af.transform(
+            multi_compartment_map, mode=mode, layout_mode="dot", no_compartment=True
+        ).obj
+        path = str(tmp_path / "no_compartment.xml")
+        momapy.io.core.write(out, path, writer="celldesigner")
+        back = momapy.io.core.read(path).obj
+        assert len(back.model.species) == len(out.model.species)
+        assert [c.id_ for c in back.model.compartments] == ["default"]
+
+    @pytest.mark.parametrize("mode", ["keep-species", "keep-reactions"])
+    @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
+    def test_input_derived_layout_is_rejected(self, example_cd_map, mode, layout_mode):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(
+                example_cd_map,
+                mode=mode,
+                layout_mode=layout_mode,
+                no_compartment=True,
+            )
+        assert "no_compartment" in str(error.value)
+
+
 class TestTransformIsPure:
     """transform should not mutate the input map's model."""
 

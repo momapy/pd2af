@@ -430,6 +430,51 @@ class TestCompartments:
         assert len(back.model.compartments) == len(out.model.compartments) == 1
 
 
+class TestNoCompartment:
+    """`no_compartment` leaves an SBGN-AF map with no compartment at all.
+
+    SBGN-AF has no default compartment to fall back on, so every activity ends
+    up with `compartment=None` and the model carries no compartment.
+    """
+
+    MODES = ("keep-species", "keep-species-no-complex", "normal", "normal-no-complex")
+
+    @pytest.fixture(scope="class")
+    def map_with_compartments(self):
+        return read_sbgn_map(SBGN_WITH_COMPARTMENTS_MAP_PATH)
+
+    @pytest.mark.parametrize("mode", MODES)
+    def test_model_carries_no_compartment(self, map_with_compartments, mode):
+        out = pd2af.transform(
+            map_with_compartments, mode=mode, layout_mode=None, no_compartment=True
+        ).obj
+        assert not out.model.compartments
+        assert out.model.activities
+        assert all(activity.compartment is None for activity in out.model.activities)
+
+    @pytest.mark.parametrize("mode", MODES)
+    def test_layout_renders_no_compartment(self, map_with_compartments, mode):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            map_with_compartments, mode=mode, layout_mode="auto", no_compartment=True
+        ).obj
+        assert _compartment_layouts(out.layout) == []
+
+    @pytest.mark.parametrize("mode", MODES)
+    def test_output_round_trips(self, map_with_compartments, mode):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            map_with_compartments, mode=mode, layout_mode="auto", no_compartment=True
+        ).obj
+        path = os.path.join(tempfile.gettempdir(), "pd2af_test_no_compartment.sbgn")
+        momapy.io.core.write(out, path, writer="sbgnml")
+        back = momapy.io.core.read(path, reader="sbgnml").obj
+        assert not back.model.compartments
+        assert len(back.model.activities) == len(out.model.activities)
+
+
 class TestNestedOperators:
     """SBGN-PD logical operators may feed other logical operators; the nested
     logic reaches the output instead of collapsing into an input-less

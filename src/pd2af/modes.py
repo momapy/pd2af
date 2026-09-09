@@ -203,14 +203,18 @@ class TransformationMode:
             rule_group.identifier for rule_group in self.rule_group_definitions
         )
 
-    def compatible_layout_modes(self, language: Language) -> tuple[LayoutMode, ...]:
+    def compatible_layout_modes(
+        self, language: Language, no_compartment: bool = False
+    ) -> tuple[LayoutMode, ...]:
         """The concrete layout modes valid for this mode on the given input language.
 
         Merged activities are synthesized from several input species, so they
-        have no original geometry for `plain`/`overlay` to reuse.
+        have no original geometry for `plain`/`overlay` to reuse. ``normal`` and
+        ``normal-no-complex`` merge by construction; ``no_compartment`` makes
+        any mode merge, so it narrows the answer the same way.
         """
         available_layout_modes = LAYOUT_MODES_BY_LANGUAGE[language]
-        if not self.merges_proteoforms:
+        if not (self.merges_proteoforms or no_compartment):
             return available_layout_modes
         if LayoutMode.DOT in available_layout_modes:
             return (LayoutMode.DOT,)

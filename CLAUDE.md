@@ -38,6 +38,23 @@ names.
 | `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities | inferred                                              |
 | `keep-reactions`           | kept               | kept (opaque; subunits routed to the complex)              | stated only: reactant→product positive influences + direct modulations |
 
+Compartments are a **fourth choice, and an option rather than a mode**:
+`no_compartment` (CLI `--no-compartment`) merges every compartment into the
+default one on top of whichever mode is selected. It is orthogonal to the two
+mode axes and meaningful for `keep-reactions` too, so as a mode axis it would
+double the list; and it changes nothing in the ASP program, compartments being
+a build-stage concern only. It is read off `context.no_compartment` by each
+language's "which compartment does this element go in" helper
+(`pd2af.building.celldesigner.model._compartment_for_input_species`,
+`pd2af.building.sbgn.model._compartment_for_input_element`): the answer becomes
+the input map's `default` compartment for CellDesigner (`find_default_compartment`,
+so the output still declares the compartment its species refer to) and `None`
+for SBGN-AF. Everything downstream follows from content interning: species that
+become equal collapse through `register_or_reuse`, the influences built from
+them collapse in turn, and provenance unions their annotations. Because
+activities merge, `TransformationMode.compatible_layout_modes` narrows to `dot`
+under the option, exactly as it does for `merges_proteoforms`.
+
 `normal` is the canonical AF mode and will be the default for the
 future SBGN-AF output. `keep-species*` and `keep-reactions`
 deliberately deviate: they preserve PD proteoform structure for users

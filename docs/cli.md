@@ -11,7 +11,7 @@ An unreadable input file, an unknown element id, or a mode the input or the layo
 ## Synopsis
 
 ```bash
-pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [-a <id> ...] [-i <id> ...] [-A | -I] [--exclude-group <group> ...] [--exclude-rule <rule> ...] [-o <output_file>]
+pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [--no-compartment] [-a <id> ...] [-i <id> ...] [-A | -I] [--exclude-group <group> ...] [--exclude-rule <rule> ...] [-o <output_file>]
 pd2af list-modes [--json]
 pd2af list-groups [--json]
 pd2af --version
@@ -42,6 +42,7 @@ keep-species` runs exactly like `pd2af transform map.xml -m keep-species`.
 | `--transformation-mode` | `-m` | Transformation mode (default: `normal`); see below |
 | `--layout-mode` | `-l` | Layout strategy (default: `auto`); see below |
 | `--influence-pairing` | `-p` | How to draw an influence whose source/target maps to several glyphs: `cross` (default) or `nearest` |
+| `--no-compartment` |  | Merge every compartment into the default one: species that differ only by compartment become a single activity, and the influences that become equal merge in turn. Works with every transformation mode; requires `--layout-mode dot` (or `auto`); see below |
 | `--set-active` | `-a` | Mark the element with this `id_` (a species or entity pool) as active, surfacing it as an activity even when the map gives it no structural activity signal. Repeatable: `-a sa1 -a sa2`. Wins over `--set-all-inactive` for these ids. Unknown ids raise an error |
 | `--set-inactive` | `-i` | Mark the element with this `id_` as NOT active, suppressing any activity for it and overriding the automatic discovery. Repeatable. Wins over `--set-all-active` for these ids; passing an id to both `-a` and `-i` is an error |
 | `--set-all-active` | `-A` | Mark every top-level species / entity pool as active (subunits excluded). Per-id `-i` overrides it. Mutually exclusive with `-I` |
@@ -69,14 +70,26 @@ Four of the five modes lie on two orthogonal axes — species treatment and comp
 
 The merging modes (`normal`, `normal-no-complex`) require `--layout-mode dot` because positions from the original PD map cannot be reused for synthesized merged-proteoform activities.
 
+## Dropping the compartments (`--no-compartment`)
+
+`--no-compartment` merges every compartment into the default one, on top of whichever transformation mode is selected. Species that differ only by compartment become a single activity, and the influences that become equal merge in turn.
+
+CellDesigner output keeps a single compartment, the `default` one every CellDesigner map declares, and every species points at it; SBGN-AF output carries no compartment at all, SBGN-AF having no default compartment. Annotations and notes follow the merge: an activity merged from several compartments gathers the metadata of every species that collapsed into it, and the metadata of the removed compartments is dropped with them.
+
+Like the merging modes, and for the same reason, it requires `--layout-mode dot` (or `auto`).
+
+```bash
+pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
+```
+
 ## Layout modes (`-l`)
 
 | Mode | Description |
 |------|-------------|
 | `auto` | Pick automatically from the input: a map gets `dot`, a bare model gets no layout. **Default**. |
-| `dot` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. Required for `normal` and `normal-no-complex`. |
-| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`. |
-| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`. |
+| `dot` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. Required for `normal` and `normal-no-complex`, and for any mode with `--no-compartment`. |
+| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`. |
+| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`. |
 
 ## Output writers
 

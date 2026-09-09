@@ -159,6 +159,74 @@ class TestSubunitAnnotationCarry:
         )
 
 
+class TestNoCompartmentAnnotationCarry:
+    """An activity merged from several compartments gathers the annotations of
+    every species that collapsed into it, the way a merged proteoform does."""
+
+    @pytest.fixture(scope="class")
+    def annotated_reader_result(self):
+        # Glycolysis holds the same annotated species in its neuron and
+        # astrocyte compartments.
+        return momapy.io.core.read(os.path.join(MAPS_DIR, "Glycolysis.xml"))
+
+    @pytest.mark.parametrize("mode", ["keep-species", "normal"])
+    def test_merged_activity_unions_its_sources(self, annotated_reader_result, mode):
+        reader_result = annotated_reader_result
+        result = pd2af.transform(
+            reader_result.obj,
+            mode=mode,
+            layout_mode=None,
+            no_compartment=True,
+            element_to_annotations=reader_result.element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        merged = {
+            output_element: input_elements
+            for output_element, input_elements in (
+                result.output_element_to_input_elements.items()
+            )
+            if len(input_elements) > 1 and output_element in result.obj.model.species
+        }
+        assert merged
+        annotated_merged = {
+            output_element: input_elements
+            for output_element, input_elements in merged.items()
+            if any(
+                reader_result.element_to_annotations.get(input_element)
+                for input_element in input_elements
+            )
+        }
+        assert annotated_merged
+        for output_element, input_elements in annotated_merged.items():
+            expected = frozenset().union(
+                *(
+                    reader_result.element_to_annotations.get(input_element, frozenset())
+                    for input_element in input_elements
+                )
+            )
+            assert expected <= result.element_to_annotations.get(
+                output_element, frozenset()
+            )
+
+    def test_removed_compartments_leave_provenance(self, annotated_reader_result):
+        reader_result = annotated_reader_result
+        result = pd2af.transform(
+            reader_result.obj,
+            mode="keep-species",
+            layout_mode=None,
+            no_compartment=True,
+            element_to_annotations=reader_result.element_to_annotations,
+            element_to_notes=reader_result.element_to_notes,
+        )
+        (compartment,) = result.obj.model.compartments
+        compartment_keys = [
+            output_element
+            for output_element in result.output_element_to_input_elements
+            if output_element in result.obj.model.compartments
+        ]
+        assert compartment_keys == [compartment]
+
+
 class TestDroppedOperatorProvenance:
     """Provenance covers only the elements actually included in the output: an
     operator that sources no influence never reaches the model, so it must not

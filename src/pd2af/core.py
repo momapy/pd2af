@@ -108,25 +108,31 @@ def _check_layout_mode_is_supported_by_mode(
     layout_mode: pd2af.modes.LayoutMode | None,
     mode: pd2af.modes.TransformationMode,
     language: pd2af.modes.Language,
+    no_compartment: bool = False,
 ) -> None:
     """Raise unless a layout mode fits the transformation mode and language.
 
     The `None` sentinel means "build no layout at all", so it is always valid;
     every other value must be one the mode accepts on input of this language.
+    `no_compartment` narrows what the mode accepts and is named in the message,
+    so the error says which of the two refused the layout mode.
     """
     if layout_mode is None:
         return
-    compatible_layout_modes = mode.compatible_layout_modes(language)
+    compatible_layout_modes = mode.compatible_layout_modes(language, no_compartment)
     if layout_mode in compatible_layout_modes:
         return
+    description = f"transformation mode {mode.name!r}"
+    if no_compartment:
+        description += " with no_compartment"
     if not compatible_layout_modes:
         raise ValueError(
-            f"transformation mode {mode.name!r} on {_format_token(language)} input "
+            f"{description} on {_format_token(language)} input "
             f"supports no layout_mode other than None, got "
             f"{_format_token(layout_mode)}"
         )
     raise ValueError(
-        f"transformation mode {mode.name!r} on {_format_token(language)} input "
+        f"{description} on {_format_token(language)} input "
         f"supports layout_mode "
         f"{', '.join(_format_token(candidate) for candidate in compatible_layout_modes)}"
         f" or None, got {_format_token(layout_mode)}"
@@ -171,6 +177,7 @@ def _build_map(
     influence_pairing: pd2af.modes.InfluencePairingMode = (
         pd2af.modes.InfluencePairingMode.CROSS
     ),
+    no_compartment: bool = False,
     element_to_annotations: dict | None = None,
     element_to_notes: dict | None = None,
 ) -> TransformerResult:
@@ -188,6 +195,7 @@ def _build_map(
         layout_mode: The concrete layout mode, or ``None`` to build no layout.
         influence_pairing: How to draw an influence whose source or target maps
             to several glyphs.
+        no_compartment: Whether to merge every compartment into the default one.
         element_to_annotations: The reader's ``element -> annotations``
             side-table, to be carried onto the output elements.
         element_to_notes: The reader's ``element -> notes`` side-table, to be
@@ -202,6 +210,7 @@ def _build_map(
         layout_mode=layout_mode,
         clingo_id_to_model_element=clingo_id_to_model_element,
         influence_pairing=influence_pairing,
+        no_compartment=no_compartment,
         mode=mode,
     )
     _make_model_and_layout_in_context(context, clingo_model, language)
@@ -242,6 +251,7 @@ def transform(
     influence_pairing: pd2af.modes.InfluencePairingMode = (
         pd2af.modes.InfluencePairingMode.CROSS
     ),
+    no_compartment: bool = False,
     set_active: list[str] | None = None,
     set_inactive: list[str] | None = None,
     set_all_active: bool = False,
@@ -266,6 +276,11 @@ def transform(
         influence_pairing: How to draw an influence whose source or target maps
             to several glyphs: ``"cross"`` (one arc per pair) or ``"nearest"``
             (a single arc between the closest pair).
+        no_compartment: Merge every compartment into the default one, so that
+            species differing only by compartment become a single activity and
+            the influences that become equal merge in turn. Works with every
+            mode; because activities merge, it requires ``layout_mode`` ``"dot"``
+            (or ``"auto"``) or ``None``.
         set_active: Ids of elements to surface as activities whatever the map's
             structural signals say.
         set_inactive: Ids of elements to suppress, overriding the automatic
@@ -314,7 +329,9 @@ def transform(
                 for candidate in sorted(transformation_mode.compatible_languages)
             )
         )
-    _check_layout_mode_is_supported_by_mode(layout_mode, transformation_mode, language)
+    _check_layout_mode_is_supported_by_mode(
+        layout_mode, transformation_mode, language, no_compartment
+    )
     clingo_model, clingo_id_to_model_element = pd2af.asp.solver.solve(
         input_map,
         transformation_mode,
@@ -333,6 +350,7 @@ def transform(
         language=language,
         layout_mode=layout_mode,
         influence_pairing=influence_pairing,
+        no_compartment=no_compartment,
         element_to_annotations=element_to_annotations,
         element_to_notes=element_to_notes,
     )

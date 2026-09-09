@@ -298,6 +298,55 @@ class TestGlobalActivityFlags:
         assert not roundtrip.model.species
 
 
+class TestNoCompartmentFlag:
+    def test_flag_defaults_to_false(self):
+        args = _parse_transform_args(["transform", "map.xml"])
+        assert args.no_compartment is False
+
+    def test_flag_sets_the_option(self):
+        args = _parse_transform_args(["transform", "map.xml", "--no-compartment"])
+        assert args.no_compartment is True
+
+    def test_flag_merges_the_compartments(self, tmp_path):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        map_path = os.path.join(MAPS_DIR, "Glycolysis.xml")
+        out_path = tmp_path / "out.xml"
+        pd2af.cli.main(
+            [
+                "transform",
+                map_path,
+                "-m",
+                "keep-species",
+                "--no-compartment",
+                "-o",
+                str(out_path),
+            ]
+        )
+        out_map = momapy.io.core.read(str(out_path)).obj
+        assert [c.id_ for c in out_map.model.compartments] == ["default"]
+
+    def test_flag_with_plain_layout_exits_with_a_message(
+        self, example_map_path, capsys
+    ):
+        with pytest.raises(SystemExit) as error:
+            pd2af.cli.main(
+                [
+                    "transform",
+                    example_map_path,
+                    "-m",
+                    "keep-species",
+                    "--no-compartment",
+                    "-l",
+                    "plain",
+                ]
+            )
+        assert error.value.code == 1
+        captured = capsys.readouterr()
+        assert captured.err.startswith("error: ")
+        assert "no_compartment" in captured.err
+
+
 class TestListModes:
     def test_text_output_lists_modes_and_layouts(self, capsys):
         pd2af.cli.main(["list-modes"])

@@ -118,7 +118,13 @@ def _compartment_for_input_element(
     SBGN-PD subunit classes have no ``compartment`` field, so a subunit inherits
     its top-level entity pool's: otherwise a promoted subunit activity would get
     ``compartment=None`` and never merge with a top-level twin.
+
+    With the ``no_compartment`` option every element belongs to no compartment:
+    SBGN-AF has no default compartment, so the output model carries none and
+    activities differing only by compartment merge.
     """
+    if context.no_compartment:
+        return None
     compartment = getattr(input_element, "compartment", None)
     if compartment is not None:
         return compartment

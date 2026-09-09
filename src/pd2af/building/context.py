@@ -24,6 +24,7 @@ class BuilderContext:
     influence_pairing: pd2af.modes.InfluencePairingMode = (
         pd2af.modes.InfluencePairingMode.CROSS
     )
+    no_compartment: bool = False
 
     # --- outputs being built ---
     model: object = None
@@ -41,6 +42,9 @@ class BuilderContext:
 
     # --- Pass-1 scratch ---
     cache: dict = dataclasses.field(default_factory=dict)
+    # The compartment every activity is put in when `no_compartment` is on: the
+    # input map's default compartment for CellDesigner, `None` for SBGN-AF.
+    default_compartment: object = None
     subunit_to_top_level: dict = None
     activity_atoms: list = dataclasses.field(default_factory=list)
     influence_atoms: list = dataclasses.field(default_factory=list)

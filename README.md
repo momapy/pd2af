@@ -13,6 +13,7 @@ Features of pd2af include the following:
 
 * CellDesigner and SBGN-PD input, with the output language following the input
 * five transformation modes, from a true PD→AF reduction to a CellDesigner-native one that keeps the PD topology
+* an option to drop the compartments, merging the species and influences that become equal
 * activities discovered from the structure of the map: phenotypes, explicit active markers, modulation sources and logical-gate inputs
 * influences inferred beyond the stated modulations: multi-hop chaining across reactions, catalyst-consumes-reactant and inhibitor-spares-reactant
 * three layout modes: Graphviz `dot` auto-layout, reuse of the original positions, and an overlay on the original layout
@@ -64,6 +65,14 @@ Selectable with `-m` / `mode=`. Four of the five modes lie on two orthogonal axe
 * **merge proteoforms** modes (`normal`, `normal-no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants.
 * **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
 * **`keep-reactions`** keeps the PD topology itself: every species is an activity, and every reaction becomes one positive influence per (reactant, product) pair. CellDesigner-only.
+
+## Dropping the compartments
+
+`--no-compartment` / `no_compartment=True` merges every compartment into the default one, whatever the transformation mode: species that differ only by compartment become a single activity, and the influences that become equal merge in turn. The output holds one compartment for CellDesigner (the `default` one every CellDesigner map declares) and none for SBGN-AF. Because activities merge, it requires `--layout-mode dot` (or `auto`).
+
+```bash
+pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
+```
 
 ## Documentation
 
