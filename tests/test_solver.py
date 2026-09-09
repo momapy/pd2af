@@ -2,6 +2,7 @@ import clorm
 import pytest
 
 import momapy.celldesigner
+import momapy_kb.clingo.core
 
 import pd2af
 import pd2af.modes
@@ -9,7 +10,12 @@ import pd2af.asp.rules
 import pd2af.asp.predicates
 import pd2af.asp.solver
 
-from tests._helpers import solve_map_in_mode_name
+from tests._helpers import (
+    SBGN_EXAMPLE_MAP_PATH,
+    read_sbgn_map,
+    solve_map_in_mode_name,
+    species_names,
+)
 
 
 _INFLUENCE_PREDICATES = (
@@ -343,3 +349,78 @@ class TestSolveResult:
         clingo_model, _ = solve_map_in_mode_name(input_map, mode_name="keep-species")
         assert isinstance(clingo_model, clorm.FactBase)
         assert _activity_atoms(clingo_model) == []
+
+
+def _input_identities(result):
+    return {
+        id(input_element)
+        for input_elements in result.output_element_to_input_elements.values()
+        for input_element in input_elements
+    }
+
+
+class TestOntologyRulesCache:
+    """The ontology rules of a language are generated once and reused, while
+    every solve still gets its own session, facts and element registry."""
+
+    def test_rules_are_generated_once_per_language(self):
+        pd2af.asp.solver._get_ontology_rules_for_language.cache_clear()
+        first = pd2af.asp.solver._get_ontology_rules_for_language(
+            pd2af.modes.Language.CELLDESIGNER
+        )
+        second = pd2af.asp.solver._get_ontology_rules_for_language(
+            pd2af.modes.Language.CELLDESIGNER
+        )
+        assert isinstance(first, tuple)
+        assert first is second
+        assert first != pd2af.asp.solver._get_ontology_rules_for_language(
+            pd2af.modes.Language.SBGN_PD
+        )
+
+    def test_cached_rules_match_freshly_generated_ones(self):
+        pd2af.asp.solver._get_ontology_rules_for_language.cache_clear()
+        for language in pd2af.modes.Language:
+            with momapy_kb.clingo.core.Session() as session:
+                expected = pd2af.asp.solver._make_ontology_rules(session, language)
+            assert (
+                list(pd2af.asp.solver._get_ontology_rules_for_language(language))
+                == expected
+            )
+
+    def test_repeated_transforms_of_different_models_stay_independent(
+        self, example_cd_map
+    ):
+        pd2af.asp.solver._get_ontology_rules_for_language.cache_clear()
+        other_map = _map_from(
+            [_species("A", active=True), _species("B", active=True)],
+            [],
+        )
+        first = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
+        second = pd2af.transform(other_map, mode="keep-species", layout_mode=None)
+        third = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
+        assert species_names(first.obj.model) == species_names(third.obj.model)
+        assert species_names(second.obj.model) == ["A", "B"]
+        other_species_identities = {id(species) for species in other_map.model.species}
+        assert _input_identities(second) == other_species_identities
+        assert not _input_identities(first) & other_species_identities
+        assert not _input_identities(third) & other_species_identities
+
+    def test_alternating_languages_give_stable_output(self, example_cd_map):
+        pd2af.asp.solver._get_ontology_rules_for_language.cache_clear()
+        sbgn_map = read_sbgn_map(SBGN_EXAMPLE_MAP_PATH)
+        first_cd = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        ).obj
+        first_sbgn = pd2af.transform(
+            sbgn_map, mode="keep-species", layout_mode=None
+        ).obj
+        second_cd = pd2af.transform(
+            example_cd_map, mode="keep-species", layout_mode=None
+        ).obj
+        second_sbgn = pd2af.transform(
+            sbgn_map, mode="keep-species", layout_mode=None
+        ).obj
+        assert species_names(second_cd.model) == species_names(first_cd.model)
+        assert sorted(
+            activity.label for activity in second_sbgn.model.activities
+        ) == sorted(activity.label for activity in first_sbgn.model.activities)

@@ -1,6 +1,7 @@
 """Clingo glue: build a control, solve, return the model + element registry."""
 
 import collections.abc
+import functools
 import types
 import typing
 
@@ -46,6 +47,21 @@ def _make_ontology_rules(
     return sorted(rules)
 
 
+@functools.lru_cache(maxsize=None)
+def _get_ontology_rules_for_language(
+    language: pd2af.modes.Language,
+) -> tuple[str, ...]:
+    """The ontology rules of ``language``, generated once and reused.
+
+    The rules depend on the language's model classes only, so they are cached
+    as an immutable tuple. They are generated in their own short-lived session:
+    a session also holds the element-id counter and the predicate classes of
+    the objects it converted, and neither may be shared between transforms.
+    """
+    with momapy_kb.clingo.core.Session() as session:
+        return tuple(_make_ontology_rules(session, language))
+
+
 def _make_control(
     model: momapy.core.model.Model,
     clingo_id_to_model_element: dict,
@@ -62,8 +78,8 @@ def _make_control(
         ["--warn=no-atom-undefined"],
         unifier=[pd2af.asp.predicates.new],
     )
+    ontology_rules = _get_ontology_rules_for_language(language)
     with momapy_kb.clingo.core.Session() as session:
-        ontology_rules = _make_ontology_rules(session, language)
         facts = session.make_facts_from_object(
             model, id_to_object=clingo_id_to_model_element
         )
