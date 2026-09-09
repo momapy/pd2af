@@ -119,9 +119,16 @@ class TestCliMainOutputFile:
         assert "D" not in names
 
     @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
-    def test_merged_modes_with_plain_layout_raise(self, example_map_path, mode):
-        with pytest.raises(ValueError):
+    def test_merged_modes_with_plain_layout_exit_with_a_message(
+        self, example_map_path, mode, capsys
+    ):
+        with pytest.raises(SystemExit) as error:
             pd2af.cli.main(["transform", example_map_path, "-m", mode, "-l", "plain"])
+        assert error.value.code == 1
+        captured = capsys.readouterr()
+        assert captured.err.startswith("error: ")
+        assert "'plain'" in captured.err
+        assert captured.out == ""
 
     @pytest.mark.parametrize(
         "mode",
@@ -402,3 +409,77 @@ class TestAnnotationCarryCli:
             ]
         )
         assert expected_resource in out_path.read_text()
+
+
+class TestCliExpectedErrors:
+    """Expected failures print a short message and exit nonzero, leaving no
+    output file behind; unexpected ones keep their traceback."""
+
+    def test_missing_input_file_exits_with_a_message(self, tmp_path, capsys):
+        out_path = tmp_path / "out.xml"
+        with pytest.raises(SystemExit) as error:
+            pd2af.cli.main(
+                [
+                    "transform",
+                    str(tmp_path / "does-not-exist.xml"),
+                    "-o",
+                    str(out_path),
+                ]
+            )
+        assert error.value.code == 1
+        assert capsys.readouterr().err.startswith("error: ")
+        assert not out_path.exists()
+
+    def test_unknown_set_active_id_exits_with_a_message(
+        self, tmp_path, example_map_path, capsys
+    ):
+        out_path = tmp_path / "out.xml"
+        with pytest.raises(SystemExit) as error:
+            pd2af.cli.main(
+                [
+                    "transform",
+                    example_map_path,
+                    "-m",
+                    "keep-species",
+                    "-l",
+                    "plain",
+                    "-a",
+                    "not-an-id",
+                    "-o",
+                    str(out_path),
+                ]
+            )
+        assert error.value.code == 1
+        assert "--set-active" in capsys.readouterr().err
+        assert not out_path.exists()
+
+    def test_unknown_exclude_group_exits_with_a_message(
+        self, tmp_path, example_map_path, capsys
+    ):
+        out_path = tmp_path / "out.xml"
+        with pytest.raises(SystemExit) as error:
+            pd2af.cli.main(
+                [
+                    "transform",
+                    example_map_path,
+                    "-m",
+                    "keep-species",
+                    "-l",
+                    "plain",
+                    "--exclude-group",
+                    "not-a-group",
+                    "-o",
+                    str(out_path),
+                ]
+            )
+        assert error.value.code == 1
+        assert capsys.readouterr().err.startswith("error: ")
+        assert not out_path.exists()
+
+    def test_unexpected_error_keeps_its_traceback(self, example_map_path, monkeypatch):
+        def raise_unexpected(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(pd2af.cli, "_read_input_map", raise_unexpected)
+        with pytest.raises(RuntimeError, match="boom"):
+            pd2af.cli.main(["transform", example_map_path])

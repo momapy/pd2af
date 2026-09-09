@@ -515,6 +515,32 @@ class TestTransformErrors:
                 influence_pairing="not-a-pairing",
             )
 
+    def test_layout_incompatibility_message_uses_tokens(self, example_cd_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(example_cd_map, mode="normal", layout_mode="plain")
+        message = str(error.value)
+        assert "'celldesigner'" in message
+        assert "'plain'" in message
+        assert "'dot'" in message
+        assert "LayoutMode." not in message
+        assert "Language." not in message
+
+    def test_language_incompatibility_message_uses_tokens(self, sbgn_example_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(sbgn_example_map, mode="keep-reactions")
+        message = str(error.value)
+        assert "'sbgn_pd'" in message
+        assert "'celldesigner'" in message
+        assert "Language." not in message
+
+    def test_model_input_layout_message_uses_tokens(self, example_cd_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(
+                example_cd_map.model, mode="keep-species", layout_mode="plain"
+            )
+        assert "'plain'" in str(error.value)
+        assert "LayoutMode." not in str(error.value)
+
     @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
     @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
     def test_merged_modes_reject_input_derived_layout(

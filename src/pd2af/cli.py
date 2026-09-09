@@ -495,7 +495,11 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
         "--output",
         default=None,
         help=(
-            "write output to this file instead of stdout. Input RDF "
+            "write output to this file instead of stdout. The writer comes "
+            "from the extension (.xml/.sbml -> CellDesigner XML, "
+            ".sbgn/.sbgnml -> SBGN-ML, .pickle/.pkl -> pickle); any other "
+            "extension, including .svg, writes a pickle and never renders an "
+            "image. Input RDF "
             "annotations and notes are carried onto the corresponding output "
             "elements only for file output (.xml/.sbml/.sbgn/.sbgnml); the "
             "stdout pickle cannot carry them and drops them."
@@ -540,7 +544,13 @@ def _add_list_groups_parser(subparsers: argparse._SubParsersAction) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Parse ``argv`` (``sys.argv`` by default) and run the named subcommand."""
+    """Parse ``argv`` (``sys.argv`` by default) and run the named subcommand.
+
+    Expected input, compatibility and file-access failures are reported as a
+    short message on stderr with a nonzero exit status; any other exception
+    keeps its traceback, and library callers of :func:`pd2af.transform` still
+    see the exception itself.
+    """
     if argv is None:
         argv = sys.argv[1:]
     else:
@@ -570,7 +580,11 @@ def main(argv: list[str] | None = None) -> None:
     ):
         argv = ["transform", *argv]
     args = parser.parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except (ValueError, OSError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

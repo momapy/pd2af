@@ -5,6 +5,7 @@ import momapy.celldesigner
 
 import pd2af
 import pd2af.modes
+import pd2af.asp.rules
 import pd2af.asp.predicates
 import pd2af.asp.solver
 
@@ -321,3 +322,24 @@ class TestSetAllInactive:
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
         assert names == {"A"}
+
+
+class TestSolveResult:
+    def test_unsatisfiable_program_raises(self, monkeypatch):
+        original_build_program = pd2af.asp.rules.build_program
+
+        def build_unsatisfiable_program(*args, **kwargs):
+            return original_build_program(*args, **kwargs) + "\n:- #true.\n"
+
+        monkeypatch.setattr(
+            pd2af.asp.rules, "build_program", build_unsatisfiable_program
+        )
+        input_map = _map_from([_species("A", active=True)], [])
+        with pytest.raises(ValueError, match="no answer set"):
+            solve_map_in_mode_name(input_map, mode_name="keep-species")
+
+    def test_satisfiable_program_without_activities_returns_empty_model(self):
+        input_map = _map_from([_species("A")], [])
+        clingo_model, _ = solve_map_in_mode_name(input_map, mode_name="keep-species")
+        assert isinstance(clingo_model, clorm.FactBase)
+        assert _activity_atoms(clingo_model) == []

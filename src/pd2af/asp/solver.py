@@ -207,6 +207,8 @@ def solve(
 
     Returns the single clingo model of derived atoms together with the
     ``clingo_id -> model_element`` map the build pass resolves keys through.
+    A satisfiable program deriving no atom returns an empty fact base; a
+    program with no answer set raises ``ValueError``.
     """
     clingo_id_to_model_element = {}
     language = pd2af.modes.get_language_from_map_or_model(input_map)
@@ -224,5 +226,12 @@ def solve(
     )
     control.ground([("base", [])])
     clingo_models = []
-    control.solve(on_model=lambda model: clingo_models.append(model.facts(atoms=True)))
+    solve_result = control.solve(
+        on_model=lambda model: clingo_models.append(model.facts(atoms=True))
+    )
+    if not clingo_models:
+        raise ValueError(
+            f"the ASP program has no answer set (solve result: {solve_result}); "
+            f"an unsatisfiable program cannot be built into a map"
+        )
     return clingo_models[0], clingo_id_to_model_element

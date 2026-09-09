@@ -6,6 +6,8 @@ The `pd2af` command-line interface transforms a process-description (PD) map —
 
 The output map is written to stdout as a [momapy](https://github.com/adrienrougny/momapy) pickle (preserving layout styling) so it can be piped into `momapy visualize`. With `-o`, the writer is chosen from the output file extension.
 
+An unreadable input file, an unknown element id, or a mode the input or the layout does not support is reported as a short `error: ...` message on stderr, with exit status 1 and no output file written.
+
 ## Synopsis
 
 ```bash
@@ -82,6 +84,9 @@ The writer used with `-o` is selected from the file extension:
 | `.sbgn`, `.sbgnml` | SBGN-ML |
 | `.pickle`, `.pkl` | momapy pickle |
 | (other) | momapy pickle |
+
+Any other extension, including `.svg`, writes a momapy pickle: an extension
+is a writer choice, never a request to render an image.
 
 When `-o` is omitted, the map is always written to stdout as a momapy pickle.
 

@@ -99,6 +99,11 @@ class TransformerResult:
     element_to_notes: dict | None = None
 
 
+def _format_token(value: typing.Any) -> str:
+    """Quote a mode or language value as the token a user passes, not as an enum."""
+    return repr(str(value))
+
+
 def _check_layout_mode_is_supported_by_mode(
     layout_mode: pd2af.modes.LayoutMode | None,
     mode: pd2af.modes.TransformationMode,
@@ -116,13 +121,15 @@ def _check_layout_mode_is_supported_by_mode(
         return
     if not compatible_layout_modes:
         raise ValueError(
-            f"transformation mode {mode.name!r} on {language!r} input supports "
-            f"no layout_mode other than None, got {layout_mode!r}"
+            f"transformation mode {mode.name!r} on {_format_token(language)} input "
+            f"supports no layout_mode other than None, got "
+            f"{_format_token(layout_mode)}"
         )
     raise ValueError(
-        f"transformation mode {mode.name!r} on {language!r} input supports "
-        f"layout_mode {', '.join(repr(candidate) for candidate in compatible_layout_modes)}"
-        f" or None, got {layout_mode!r}"
+        f"transformation mode {mode.name!r} on {_format_token(language)} input "
+        f"supports layout_mode "
+        f"{', '.join(_format_token(candidate) for candidate in compatible_layout_modes)}"
+        f" or None, got {_format_token(layout_mode)}"
     )
 
 
@@ -288,7 +295,7 @@ def transform(
         if layout_mode not in (None, pd2af.modes.AUTO):
             raise ValueError(
                 f"model input supports only layout_mode 'auto' or None, "
-                f"got {layout_mode!r}"
+                f"got {_format_token(layout_mode)}"
             )
         layout_mode = None
         input_map = pd2af.modes.make_map_from_model(map_or_model, language)
@@ -300,9 +307,12 @@ def transform(
             layout_mode = pd2af.modes.LayoutMode(layout_mode)
     if language not in transformation_mode.compatible_languages:
         raise ValueError(
-            f"transformation mode {mode!r} does not support {language!r} "
-            f"input; it supports "
-            + ", ".join(sorted(transformation_mode.compatible_languages))
+            f"transformation mode {mode!r} does not support "
+            f"{_format_token(language)} input; it supports "
+            + ", ".join(
+                _format_token(candidate)
+                for candidate in sorted(transformation_mode.compatible_languages)
+            )
         )
     _check_layout_mode_is_supported_by_mode(layout_mode, transformation_mode, language)
     clingo_model, clingo_id_to_model_element = pd2af.asp.solver.solve(
