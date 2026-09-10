@@ -3,15 +3,16 @@
 ``make_and_add_model`` is the model pass: it walks the activity atoms in
 layer order (keptSpeciesKey → promotedSubunitKey) and populates ``context.model``
 with canonical, content-deduped compartments, templates, species and
-modulations. In the merged modes (``normal``/``normal-no-complex``) each activity's
-species is stripped of its PTM decorations (recursively, including subunits)
-by ``get_or_make_stripped_species``; the other modes keep the input species,
-placed in its effective compartment by ``get_or_make_species_in_compartment``.
+modulations. When the forms of the same base entity merge (``keep_species``
+off) each activity's species is stripped of its PTM decorations (recursively,
+including subunits) by ``get_or_make_stripped_species``; otherwise the input
+species is kept, placed in its effective compartment by
+``get_or_make_species_in_compartment``.
 
 Which compartment a species goes in is ``_compartment_for_input_species``: its
 own, its complex's when it is a promoted subunit, or -- with the
-``no_compartment`` option -- the input map's default compartment, whatever the
-species' own. Every compartment then merges into that one, and species and
+``drop_compartments`` option -- the input map's default compartment, whatever
+the species' own. Every compartment then merges into that one, and species and
 influences that become content-equal collapse through the shared cache.
 
 The stateless ``get_or_make_*`` leaf helpers do the actual element
@@ -42,7 +43,7 @@ from pd2af.building.model import add_model_element_if_new, register_or_reuse
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
 
 # The id CellDesigner gives the compartment a species with no compartment of its
-# own belongs to, and the one every species goes in under `no_compartment`.
+# own belongs to, and the one every species goes in under `drop_compartments`.
 _DEFAULT_COMPARTMENT_ID = "default"
 
 
@@ -69,15 +70,15 @@ def get_or_make_species_in_compartment(
 ) -> typing.Any:
     """Canonical species for ``input_species`` placed in ``compartment``.
 
-    Used by the modes that keep the PD proteoforms (``keep-species``,
-    ``keep-species-no-complex``, ``keep-reactions``), for both activity-key
-    kinds. A species already in ``compartment`` — the usual ``keptSpeciesKey``
-    case — is its own canonical instance, so it is registered as is and later
+    Used with ``keep_species`` on, which keeps each PD species as its own
+    activity, for both activity-key kinds. A species already in
+    ``compartment`` — the usual ``keptSpeciesKey`` case — is its own canonical
+    instance, so it is registered as is and later
     content-equal candidates collapse onto it. Otherwise the species is rebuilt
     in ``compartment``: a promoted subunit carries ``compartment=None``
     (inherited from the parent complex) and needs its complex's compartment
-    once it stands at top level, and the ``no_compartment`` option puts every
-    species in the default compartment so that species differing only by
+    once it stands at top level, and the ``drop_compartments`` option puts
+    every species in the default compartment so that species differing only by
     compartment collapse.
 
     Two input species placed in the same compartment collapse via the cache; a
@@ -101,7 +102,7 @@ def get_or_make_species_in_compartment(
 def get_or_make_stripped_template(
     input_template: typing.Any, cache: dict
 ) -> typing.Any:
-    """Strip proteoform decorations from ``input_template`` and intern by content.
+    """Strip the PTM decorations from ``input_template`` and intern by content.
 
     Two distinct input templates that strip to the same content yield a single
     canonical stripped template.
@@ -133,8 +134,7 @@ def get_or_make_stripped_species(
 ) -> typing.Any:
     """Return a decoration-free canonical species for ``input_species``.
 
-    Used by the merged modes (``normal``/``normal-no-complex``). Clears every post-translational
-    decoration -- ``active`` (-> False), ``homomultimer`` (-> 1),
+    Used with ``keep_species`` off. Clears every post-translational decoration -- ``active`` (-> False), ``homomultimer`` (-> 1),
     ``modifications``, ``structural_states``, and, via a stripped template,
     ``modification_residues``/``regions`` -- sets the effective ``compartment``,
     and strips ``subunits`` recursively (a ``frozenset`` collapses subunits that
@@ -204,8 +204,8 @@ def find_default_compartment(input_model: typing.Any) -> typing.Any:
 
     CellDesigner declares a compartment with id ``default`` in every map, and
     it is the one the writer points a species with no compartment at. It is the
-    compartment every activity goes in under the ``no_compartment`` option, so
-    the output still declares the compartment its species refer to.
+    compartment every activity goes in under the ``drop_compartments`` option,
+    so the output still declares the compartment its species refer to.
     """
     for compartment in input_model.compartments:
         if compartment.id_ == _DEFAULT_COMPARTMENT_ID:
@@ -261,7 +261,7 @@ def make_and_add_model(
     context.subunit_to_top_level = pd2af.building.model.build_subunit_to_top_level(
         context.input_map.model.species
     )
-    if context.no_compartment:
+    if context.drop_compartments:
         context.default_compartment = find_default_compartment(context.input_map.model)
     pd2af.building.model.collect_atoms(context, clingo_model)
     _make_and_add_compartments(context)
@@ -311,11 +311,11 @@ def _compartment_for_input_species(
     """The compartment ``input_species`` becomes an activity in.
 
     Its own, or its top-level complex's when it is a subunit. With the
-    ``no_compartment`` option it is the default compartment whatever the
+    ``drop_compartments`` option it is the default compartment whatever the
     species' own, so the compartment pass collects that one alone and species
     differing only by compartment merge.
     """
-    if context.no_compartment:
+    if context.drop_compartments:
         return context.default_compartment
     if getattr(input_species, "compartment", None) is not None:
         return input_species.compartment
@@ -323,7 +323,7 @@ def _compartment_for_input_species(
 
 
 def _make_and_add_templates(context: pd2af.building.context.BuilderContext):
-    strip = context.mode.merges_proteoforms
+    strip = not context.keep_species
     seen_template_identities = set()
 
     # Register the templates each activity carries (walking subunit trees). In
@@ -370,18 +370,18 @@ def _resolve_activity_key(
 ) -> typing.Any:
     """Resolve an activity key to its output species.
 
-    In the merged modes (``normal``/``normal-no-complex``) every species is stripped of its PTM decorations
-    (recursively, including subunits) so content-equal proteoforms collapse;
-    the other modes keep the input species. Either way it goes in the
+    With ``keep_species`` off every species is stripped of its PTM decorations
+    (recursively, including subunits) so the content-equal forms of the same
+    base entity collapse; otherwise the input species is kept. Either way it goes in the
     compartment ``_compartment_for_input_species`` gives it, which is what
     lifts a promoted subunit into its complex's compartment and what puts every
-    species in the default one under the ``no_compartment`` option. A key class
+    species in the default one under the ``drop_compartments`` option. A key class
     outside ``_SPECIES_LAYER_ORDER`` never reaches here:
     ``_activity_atoms_in_layer_order`` raises on it first.
     """
     input_species = context.clingo_id_to_model_element[key.species]
     compartment = _compartment_for_input_species(context, input_species)
-    if context.mode.merges_proteoforms:
+    if not context.keep_species:
         return get_or_make_stripped_species(
             input_species,
             compartment,

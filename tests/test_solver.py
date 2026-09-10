@@ -50,7 +50,7 @@ def _influence_atoms(clingo_model):
 
 @pytest.fixture(scope="module")
 def solved_keep_species(example_cd_map):
-    return solve_map_in_mode_name(example_cd_map, mode_name="keep-species")
+    return solve_map_in_mode_name(example_cd_map, mode_name="normal")
 
 
 class TestSolve:
@@ -86,7 +86,7 @@ class TestSolve:
         self, example_cd_map
     ):
         clingo_model, id_to_model_element = solve_map_in_mode_name(
-            example_cd_map, mode_name="keep-species-no-complex"
+            example_cd_map, mode_name="no-complex"
         )
         atoms = _activity_atoms(clingo_model)
         names = sorted(id_to_model_element[atom.key.species].name for atom in atoms)
@@ -99,26 +99,24 @@ class TestSolve:
 
 
 def test_supported_modes():
-    # The entry point is the only way a sixth mode can appear: pd2af itself
-    # declares exactly these five, and every mode it offers is one of them
+    # The entry point is the only way a fourth mode can appear: pd2af itself
+    # declares exactly these three, and every mode it offers is one of them
     # unless something contributed it.
     builtin_names = {mode.name for mode in pd2af.modes._BUILTIN_TRANSFORMATION_MODES}
     assert builtin_names == {
         "normal",
-        "normal-no-complex",
-        "keep-species",
-        "keep-species-no-complex",
+        "no-complex",
         "keep-reactions",
     }
     assert set(pd2af.get_transformation_modes()) >= builtin_names
 
 
-class TestSolveSbgnPdMergedModes:
-    """`normal`/`normal-no-complex` over SBGN-PD input must emit a non-empty
+class TestSolveSbgnPd:
+    """`normal`/`no-complex` over SBGN-PD input must emit a non-empty
     influence set, which takes the entity-pool carrier these modes use."""
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
-    def test_sbgn_pd_merged_mode_emits_influences(self, sbgn_example_map, mode):
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_sbgn_pd_mode_emits_influences(self, sbgn_example_map, mode):
         clingo_model, _ = solve_map_in_mode_name(sbgn_example_map, mode_name=mode)
         assert len(_activity_atoms(clingo_model)) > 0
         assert len(_influence_atoms(clingo_model)) > 0
@@ -220,7 +218,7 @@ class TestSetActive:
         baseline_model, _ = solved_keep_species
         baseline_count = len(_activity_atoms(baseline_model))
         clingo_model, id_to_model_element = solve_map_in_mode_name(
-            example_cd_map, mode_name="keep-species", set_active=["s1"]
+            example_cd_map, mode_name="normal", set_active=["s1"]
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
@@ -230,7 +228,7 @@ class TestSetActive:
     def test_unknown_set_active_id_raises(self, example_cd_map):
         with pytest.raises(ValueError):
             solve_map_in_mode_name(
-                example_cd_map, mode_name="keep-species", set_active=["not-an-id"]
+                example_cd_map, mode_name="normal", set_active=["not-an-id"]
             )
 
 
@@ -246,7 +244,7 @@ class TestSetInactive:
         baseline_model, _ = solved_keep_species
         baseline_count = len(_activity_atoms(baseline_model))
         clingo_model, id_to_model_element = solve_map_in_mode_name(
-            example_cd_map, mode_name="keep-species", set_inactive=["s2"]
+            example_cd_map, mode_name="normal", set_inactive=["s2"]
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
@@ -257,7 +255,7 @@ class TestSetInactive:
         with pytest.raises(ValueError):
             solve_map_in_mode_name(
                 example_cd_map,
-                mode_name="keep-species",
+                mode_name="normal",
                 set_active=["s1"],
                 set_inactive=["s1"],
             )
@@ -266,7 +264,7 @@ class TestSetInactive:
         with pytest.raises(ValueError):
             solve_map_in_mode_name(
                 example_cd_map,
-                mode_name="keep-species",
+                mode_name="normal",
                 set_inactive=["not-an-id"],
             )
 
@@ -278,7 +276,7 @@ class TestSetAllActive:
 
     def test_set_all_active_activates_every_top_level_species(self, example_cd_map):
         clingo_model, id_to_model_element = solve_map_in_mode_name(
-            example_cd_map, mode_name="keep-species", set_all_active=True
+            example_cd_map, mode_name="normal", set_all_active=True
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}
@@ -289,7 +287,7 @@ class TestSetAllActive:
         # Per-id > global: B is globally activated but explicitly suppressed.
         clingo_model, id_to_model_element = solve_map_in_mode_name(
             example_cd_map,
-            mode_name="keep-species",
+            mode_name="normal",
             set_all_active=True,
             set_inactive=["s2"],
         )
@@ -301,7 +299,7 @@ class TestSetAllActive:
         with pytest.raises(ValueError):
             solve_map_in_mode_name(
                 example_cd_map,
-                mode_name="keep-species",
+                mode_name="normal",
                 set_all_active=True,
                 set_all_inactive=True,
             )
@@ -313,7 +311,7 @@ class TestSetAllInactive:
 
     def test_set_all_inactive_suppresses_every_activity(self, example_cd_map):
         clingo_model, _ = solve_map_in_mode_name(
-            example_cd_map, mode_name="keep-species", set_all_inactive=True
+            example_cd_map, mode_name="normal", set_all_inactive=True
         )
         assert not _activity_atoms(clingo_model)
 
@@ -321,7 +319,7 @@ class TestSetAllInactive:
         # Per-id > global: everything is suppressed except the forced id.
         clingo_model, id_to_model_element = solve_map_in_mode_name(
             example_cd_map,
-            mode_name="keep-species",
+            mode_name="normal",
             set_all_inactive=True,
             set_active=["s1"],
         )
@@ -342,11 +340,11 @@ class TestSolveResult:
         )
         input_map = _map_from([_species("A", active=True)], [])
         with pytest.raises(ValueError, match="no answer set"):
-            solve_map_in_mode_name(input_map, mode_name="keep-species")
+            solve_map_in_mode_name(input_map, mode_name="normal")
 
     def test_satisfiable_program_without_activities_returns_empty_model(self):
         input_map = _map_from([_species("A")], [])
-        clingo_model, _ = solve_map_in_mode_name(input_map, mode_name="keep-species")
+        clingo_model, _ = solve_map_in_mode_name(input_map, mode_name="normal")
         assert isinstance(clingo_model, clorm.FactBase)
         assert _activity_atoms(clingo_model) == []
 
@@ -395,9 +393,15 @@ class TestOntologyRulesCache:
             [_species("A", active=True), _species("B", active=True)],
             [],
         )
-        first = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
-        second = pd2af.transform(other_map, mode="keep-species", layout_mode=None)
-        third = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
+        first = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
+        )
+        second = pd2af.transform(
+            other_map, mode="normal", keep_species=True, layout_mode=None
+        )
+        third = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
+        )
         assert species_names(first.obj.model) == species_names(third.obj.model)
         assert species_names(second.obj.model) == ["A", "B"]
         other_species_identities = {id(species) for species in other_map.model.species}
@@ -409,16 +413,16 @@ class TestOntologyRulesCache:
         pd2af.asp.solver._get_ontology_rules_for_language.cache_clear()
         sbgn_map = read_sbgn_map(SBGN_EXAMPLE_MAP_PATH)
         first_cd = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode=None
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         first_sbgn = pd2af.transform(
-            sbgn_map, mode="keep-species", layout_mode=None
+            sbgn_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         second_cd = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode=None
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         second_sbgn = pd2af.transform(
-            sbgn_map, mode="keep-species", layout_mode=None
+            sbgn_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         assert species_names(second_cd.model) == species_names(first_cd.model)
         assert sorted(

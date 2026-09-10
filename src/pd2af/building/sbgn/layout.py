@@ -20,7 +20,7 @@ Two layout modes:
 * ``dot`` -- build every element at a placeholder position with the default
   size, then hand the whole layout to ``pd2af.building.layout.make_auto_layout``
   (graphviz) in ``build.py`` for repositioning. Required by the merged
-  ``normal`` / ``normal-no-complex`` modes, where a merged activity has no
+  reading (``keep_species`` off), where a merged activity has no
   single input layout.
 
 ``overlay`` for SBGN-AF is unsupported (see ``pd2af.core``).

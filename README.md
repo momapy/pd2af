@@ -48,31 +48,49 @@ momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
 
 ```bash
 pd2af transform my_map.xml -o my_map_af.xml
-pd2af transform my_map.xml -m keep-species -l plain -o my_map_af.xml
+pd2af transform my_map.xml --keep-species -l plain -o my_map_af.xml
 pd2af list-modes
 pd2af list-groups
 ```
 
-## Transformation modes
+## Transformation modes and options
 
-Selectable with `-m` / `mode=`. Four of the five modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
+A mode decides what counts as an activity; an option decides which activities are treated as the same thing.
 
-|                       | keep complexes       | drop complexes (route through subunits) |
-|-----------------------|----------------------|-----------------------------------------|
-| **merge proteoforms** | `normal` *(default)* | `normal-no-complex`                     |
-| **keep each species** | `keep-species`       | `keep-species-no-complex`               |
+### Modes
 
-* **merge proteoforms** modes (`normal`, `normal-no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants.
-* **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
-* **`keep-reactions`** keeps the PD topology itself: every species is an activity, and every reaction becomes one positive influence per (reactant, product) pair. CellDesigner-only.
+Selectable with `-m` / `mode=`:
 
-## Dropping the compartments
+* **`normal`** *(default)*: keep complexes as activities of their own, routing a subunit's influences to the complex it belongs to.
+* **`no-complex`**: replace a complex that has an active subunit with those subunits, promoting them to top-level activities.
+* **`keep-reactions`**: keep the PD topology itself: every species is an activity, and every reaction becomes one positive influence per (reactant, product) pair. CellDesigner-only, and usually wanted with `--keep-species`, which it turns on by default.
 
-`--no-compartment` / `no_compartment=True` merges every compartment into the default one, whatever the transformation mode: species that differ only by compartment become a single activity, and the influences that become equal merge in turn. The output holds one compartment for CellDesigner (the `default` one every CellDesigner map declares) and none for SBGN-AF. Because activities merge, it requires `--layout-mode dot` (or `auto`).
+### Options
+
+Each option is a flag with a matching `--no-` spelling, and a matching `transform` argument:
+
+* **`--keep-species`** / `keep_species=True`: keep each species as its own activity (template + state + compartment) instead of merging the forms of the same base entity. Off by default, on for `keep-reactions`.
+* **`--drop-compartments`** / `drop_compartments=True`: drop the compartments, so that species differing only by compartment become a single activity and the influences that become equal merge in turn. The output holds one compartment for CellDesigner (the `default` one every CellDesigner map declares) and none for SBGN-AF. Off by default.
 
 ```bash
-pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
+pd2af transform my_map.xml --keep-species --drop-compartments -o my_map_af.xml
 ```
+
+A mode names the options it starts from and never overrules an explicit flag, so `-m keep-reactions --no-keep-species` gives the merged reading of that mode.
+
+| before | now |
+| --- | --- |
+| `pd2af transform map.xml` | `pd2af transform map.xml` |
+| `-m normal` | `-m normal` |
+| `-m normal-no-complex` | `-m no-complex` |
+| `-m keep-species` | `--keep-species` |
+| `-m keep-species-no-complex` | `-m no-complex --keep-species` |
+| `-m keep-reactions` | `-m keep-reactions` |
+| `--no-compartment` | `--drop-compartments` |
+
+### Layout modes
+
+`dot` is required whenever activities merge: unless `--keep-species` is set, and always under `--drop-compartments`.
 
 ## Documentation
 

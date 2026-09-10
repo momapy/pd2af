@@ -6,7 +6,7 @@ pd2af conceptually transforms an SBGN-PD map into an SBGN-AF map. SBGN-AF
 has only **activities**: opaque nodes with no internal structure. An
 activity may carry a *unit of information* labelling the type of entity
 performing it (e.g. "complex", "macromolecule"), but it has no subunits,
-no proteoform information, no template.
+no state information, no template.
 
 CellDesigner has no AF language. Its only AF-ish feature is
 *influences between species* (which roughly mimic influences between
@@ -15,50 +15,65 @@ CellDesigner, an activity is represented by a **species** that stands
 in for the entity performing it. The species type carries the
 provenance of the activity.
 
-The transformation modes encode three choices: whether to **strip
-post-translational decorations** (state variables in SBGN;
-`modifications`, `structural_states`, template `modification_residues`/
-`regions` and `homomultimer` in CellDesigner) and merge content-equal
-results, whether to **keep or dissolve complexes**, and **where the
-influences come from**. The first two are orthogonal and give the four
-`normal`/`keep-species` modes; the third is what sets `keep-reactions`
-apart. In every mode a subunit is a *structural component*,
-never an independent activity: a subunit's activity and influences are
-attributed to its outermost top-level complex (subunit-level influences
-are a CellDesigner artifact, not standard AF). The first two choices are
-decided by the **mode at build time**, not encoded in the activity key;
-the third is decided in the ASP layer by which rule groups the mode
-names.
+A transformation is three choices. **A mode decides what counts as an
+activity; an option decides which activities are treated as the same thing.**
+Deciding what is an activity is the solver's job, so a choice that changes it
+has to change the ASP program and is a mode, while a choice that only groups
+the results afterwards happens at the build stage and is an option. That leaves
+**whether to keep or dissolve complexes** and **where the influences come
+from** as the two mode axes, and **whether to strip post-translational
+decorations** (state variables in SBGN; `modifications`, `structural_states`,
+template `modification_residues`/`regions` and `homomultimer` in CellDesigner)
+and merge content-equal results as an option. In every mode a subunit is a
+*structural component*, never an independent activity: a subunit's activity and
+influences are attributed to its outermost top-level complex (subunit-level
+influences are a CellDesigner artifact, not standard AF).
 
-| mode                       | PTM decorations    | complexes                                                  | influences                                            |
-| -------------------------- | ------------------ | ---------------------------------------------------------- | ----------------------------------------------------- |
-| `normal`                   | stripped & merged  | kept (opaque; subunits carried in the label/structure, influences routed to the complex) | inferred: modulations + multi-hop chaining + consumption |
-| `normal-no-complex`               | stripped & merged  | dissolved: active subunits promoted to top-level activities | inferred                                              |
-| `keep-species`             | kept               | kept (opaque; subunits routed to the complex)              | inferred                                              |
-| `keep-species-no-complex`  | kept               | dissolved: active subunits promoted to top-level activities | inferred                                              |
-| `keep-reactions`           | kept               | kept (opaque; subunits routed to the complex)              | stated only: reactant→product positive influences + direct modulations |
+| mode              | complexes                                                  | influences                                            |
+| ----------------- | ---------------------------------------------------------- | ----------------------------------------------------- |
+| `normal`          | kept (opaque; subunits carried in the label/structure, influences routed to the complex) | inferred: modulations + multi-hop chaining + consumption |
+| `no-complex`      | dissolved: active subunits promoted to top-level activities | inferred                                              |
+| `keep-reactions`  | kept (opaque; subunits routed to the complex)              | stated only: reactant→product positive influences + direct modulations |
 
-Compartments are a **fourth choice, and an option rather than a mode**:
-`no_compartment` (CLI `--no-compartment`) merges every compartment into the
-default one on top of whichever mode is selected. It is orthogonal to the two
-mode axes and meaningful for `keep-reactions` too, so as a mode axis it would
-double the list; and it changes nothing in the ASP program, compartments being
-a build-stage concern only. It is read off `context.no_compartment` by each
-language's "which compartment does this element go in" helper
+| option              | off (the default)                                        | on                                                    |
+| ------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| `keep_species`      | PTM decorations stripped, content-equal results merged   | each species kept as its own activity                 |
+| `drop_compartments` | each compartment kept                                    | every compartment merged into the default one         |
+
+`pd2af.modes.TRANSFORMATION_OPTIONS` is the fourth vocabulary next to
+`Language`, `LayoutMode` and `InfluencePairingMode`: it holds each option's
+flag, default and description in one place, and the CLI builds its flags, its
+`list-modes` table and its `--json` payload from it, so a third option is one
+entry rather than edits in five files. A mode may name defaults, never rules:
+`TransformationMode.default_options` maps option names to the value that mode
+starts from (`keep-reactions` sets `{"keep_species": True}`), an explicit flag
+always wins, and a key outside `TRANSFORMATION_OPTIONS` fails at mode load
+alongside the name-collision and rule-group checks.
+
+Both options are build-stage concerns and change nothing in the ASP program.
+`keep_species` is read off `context.keep_species` by the two model builders and
+the CellDesigner layout builder. `drop_compartments` is read off
+`context.drop_compartments` by each language's "which compartment does this
+element go in" helper
 (`pd2af.building.celldesigner.model._compartment_for_input_species`,
 `pd2af.building.sbgn.model._compartment_for_input_element`): the answer becomes
 the input map's `default` compartment for CellDesigner (`find_default_compartment`,
 so the output still declares the compartment its species refer to) and `None`
 for SBGN-AF. Everything downstream follows from content interning: species that
 become equal collapse through `register_or_reuse`, the influences built from
-them collapse in turn, and provenance unions their annotations. Because
-activities merge, `TransformationMode.compatible_layout_modes` narrows to `dot`
-under the option, exactly as it does for `merges_proteoforms`.
+them collapse in turn, and provenance unions their annotations.
 
-`normal` is the canonical AF mode and will be the default for the
-future SBGN-AF output. `keep-species*` and `keep-reactions`
-deliberately deviate: they preserve PD proteoform structure for users
-who want a CD-native lossy reduction rather than a true AF view.
+`pd2af.modes.get_compatible_layout_modes` is the single place the "merged
+activities need `dot`" rule lives: a merged activity is synthesized from
+several input species and so has no original geometry for `plain`/`overlay` to
+reuse. It takes the language and the two options and no mode, because the mode
+does not bear on the answer — `plain` and `overlay` are available exactly when
+`keep_species` is set without `drop_compartments`.
+
+`normal` is the canonical AF mode and the default for the SBGN-AF output.
+`keep_species` and `keep-reactions` deliberately deviate: they preserve the PD
+entity structure for users who want a CD-native lossy reduction rather than a
+true AF view.
 
 `keep-reactions` also deviates on activity discovery: instead of
 requiring a structural signal, **every species is an activity**, and
@@ -70,14 +85,12 @@ CellDesigner-only.
 Stripping is a single recursive operation over the resolved entity
 (`pd2af.building.celldesigner.model.get_or_make_stripped_species`;
 `pd2af.building.sbgn.labels.make_label` with `include_state_variables=False`),
-applied to *every* entity in the merged modes — complexes and
-non-templated entities included, not just templated proteoforms. The
-two structural-role activity keys are `kept_species` (a top-level
+applied to *every* entity when `keep_species` is off — complexes and
+non-templated entities included, not just templated forms of the same base
+entity. The two structural-role activity keys are `kept_species` (a top-level
 entity, or the top-level complex a subunit resolves to via the shared
 `resolvesToTopLevel` ASP relation) and `promoted_subunit` (a subunit lifted
-to top level when its complex is dissolved). `TransformationMode.merges_proteoforms`
-(`pd2af.modes`) is the single source of truth for which modes strip; the
-builder reads it off `context.mode`.
+to top level when its complex is dissolved).
 
 ## How the package is laid out
 
@@ -135,7 +148,7 @@ A mode is a `pd2af.modes.TransformationMode`: its name, its `docs` (the prose
 the CLI lists it with), the rule groups its program is made of
 (`rule_group_references` naming registered groups, `rule_group_definitions`
 carrying groups the mode brings itself), the input languages it accepts, and
-`merges_proteoforms`. `pd2af.asp.rules` owns the groups
+its `default_options`. `pd2af.asp.rules` owns the groups
 and composes the program; the mode owns the membership, so no rule group decides
 which modes include it. A mode that brings its own groups names them after
 itself: `keep_reactions:*`, as a contributed `casq` mode would name `casq:*`.
@@ -144,7 +157,8 @@ itself: `keep_reactions:*`, as a contributed `casq` mode would name `casq:*`.
 order followed by every mode contributed through the `pd2af.modes` entry-point
 group. A contributed mode may not shadow an existing name, and any failure to
 load one — bad import, wrong type, name collision, a group that fails
-`registry.validate()` — takes down every pd2af entry point, deliberately.
+`registry.validate()`, an unknown `default_options` key — takes down every
+pd2af entry point, deliberately.
 `docs/generate_rules_reference.py` passes `_BUILTIN_TRANSFORMATION_MODES` to
 `build_registry` so a contributed mode never reaches the published reference.
 
@@ -167,7 +181,7 @@ writer. The carrier is `TransformerResult.output_element_to_input_elements`, key
 the origin direction (`output_element -> frozenset(input_elements)`); the pure
 remap lives in `pd2af.building.provenance.carry_annotations_through_provenance`,
 which unions the metadata of every input that merged into a given output
-(so a merged activity gathers the annotations of all its proteoforms).
+(so a merged activity gathers the annotations of all its forms).
 
 Coverage is species/activities, **complex subunits** at any depth (paired from
 the species provenance by `pd2af.building.provenance.record_provenance_for_subunit_trees`,

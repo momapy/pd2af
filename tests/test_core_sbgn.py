@@ -1,10 +1,10 @@
-"""SBGN-PD -> SBGN-AF transform: `normal` and `normal-no-complex` merged modes.
+"""SBGN-PD -> SBGN-AF transform: the `normal` and `no-complex` modes.
 
 Two layers of coverage:
 
 * Programmatic fixtures (built with momapy builders) pin the merged-mode
   semantics exactly: proteoform collapse, complex handling, and the
-  subunit-promotion parity between `normal` and `normal-no-complex`.
+  subunit-promotion parity between `normal` and `no-complex`.
 * Real committed SBGN-PD maps exercise the full pipeline including
   graphviz `auto` layout and `.sbgn` read-back (the strongest regression
   guard for the carrier bug, which produced zero influences).
@@ -50,7 +50,7 @@ def _has_complex_unit_of_information(model):
 def proteoform_map():
     """Two proteoforms of one macromolecule (same name, both active, different
     state) -- they must collapse to a single merged activity in the merged
-    modes and stay distinct under keep-species."""
+    reading and stay distinct under `keep_species`."""
     state_active = momapy.sbgn.pd.StateVariable(variable="r0", value="active", order=0)
     state_phosphorylated = momapy.sbgn.pd.StateVariable(
         variable="r1", value="P", order=1
@@ -75,7 +75,7 @@ def proteoform_map():
 @pytest.fixture
 def active_subunit_complex_map():
     """A complex whose single macromolecule subunit is active. The complex is
-    therefore suppressed in normal-no-complex (subunit promoted) and kept in normal
+    therefore suppressed in no-complex (subunit promoted) and kept in normal
     (complex activity + promoted subunit, in parity with CellDesigner)."""
     state_active = momapy.sbgn.pd.StateVariable(variable="r0", value="active", order=0)
     subunit = momapy.sbgn.pd.MacromoleculeSubunit(
@@ -90,7 +90,7 @@ def active_subunit_complex_map():
 def stateful_complex_map():
     """A complex carrying its *own* state variable (``tense``) plus a stateful
     subunit -- mirrors the actin:myosin case. Merged modes strip both the
-    complex's and the subunit's state (recursively); keep-species keeps them."""
+    complex's and the subunit's state (recursively); `keep_species` keeps them."""
     complex_state = momapy.sbgn.pd.StateVariable(variable="r0", value="tense", order=0)
     subunit_state = momapy.sbgn.pd.StateVariable(variable="r0", value="active", order=0)
     subunit = momapy.sbgn.pd.MacromoleculeSubunit(
@@ -107,10 +107,12 @@ def stateful_complex_map():
 
 class TestProteoformMerging:
     def test_keep_species_keeps_proteoforms_distinct(self, proteoform_map):
-        out = pd2af.transform(proteoform_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            proteoform_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         assert len(out.model.activities) == 2
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
     def test_merged_modes_collapse_proteoforms(self, proteoform_map, mode):
         out = pd2af.transform(proteoform_map, mode=mode, layout_mode=None).obj
         assert _activity_labels(out.model) == ["AKT"]
@@ -138,8 +140,10 @@ class TestProvenance:
             ] == frozenset([merged_activity])
 
     def test_keep_species_keeps_provenance_one_to_one(self, proteoform_map):
-        result = pd2af.transform(proteoform_map, mode="keep-species", layout_mode=None)
-        # keep-species keeps the proteoforms distinct: each output activity has
+        result = pd2af.transform(
+            proteoform_map, mode="normal", keep_species=True, layout_mode=None
+        )
+        # `keep_species` keeps the forms distinct: each output activity has
         # a single input source, and every provenance key is an output element.
         model_activities = set(result.obj.model.activities)
         activity_sources = [
@@ -189,7 +193,8 @@ class TestAnnotationCarry:
         element_to_annotations[reader_result.obj] = frozenset([map_annotation])
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             element_to_annotations=element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -234,14 +239,14 @@ class TestComplexHandling:
         self, active_subunit_complex_map
     ):
         out = pd2af.transform(
-            active_subunit_complex_map, mode="normal-no-complex", layout_mode=None
+            active_subunit_complex_map, mode="no-complex", layout_mode=None
         ).obj
         # The suppressed complex contributes no ComplexUnitOfInformation; only
         # the promoted subunit survives.
         assert not _has_complex_unit_of_information(out.model)
         assert _activity_labels(out.model) == ["RAF"]
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
     def test_merged_modes_strip_complex_and_subunit_state(
         self, stateful_complex_map, mode
     ):
@@ -254,7 +259,7 @@ class TestComplexHandling:
 
     def test_keep_species_retains_complex_state(self, stateful_complex_map):
         out = pd2af.transform(
-            stateful_complex_map, mode="keep-species", layout_mode=None
+            stateful_complex_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         labels = _activity_labels(out.model)
         assert any("tense" in label for label in labels)
@@ -275,14 +280,14 @@ class TestRealMapIntegration:
     def sbgn_map(self, request):
         return read_sbgn_map(os.path.join(SBGN_MAPS_DIR, f"{request.param}.sbgn"))
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
     def test_merged_mode_emits_influences(self, sbgn_map, mode):
         out = pd2af.transform(sbgn_map, mode=mode, layout_mode=None).obj
         # mapk_cascade and the others all carry modulation arcs, so a correct
         # carrier must yield at least one influence (was zero before the fix).
         assert len(out.model.influences) > 0
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
     def test_merged_mode_auto_layout_round_trips(self, sbgn_map, mode):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
@@ -296,9 +301,9 @@ class TestRealMapIntegration:
 
 class TestSbgnPhenotypeActivity:
     """An SBGN-PD phenotype is a `Process`, not an `EntityPool`. It must still
-    surface as an activity in every mode: the `keep-species`/`normal` key comes
+    surface as an activity in every mode: the complex-keeping key comes
     from `resolvesToTopLevel`, which needs a phenotype self-rule (the entity-pool
-    self-rule cannot key a process); the `*-no-complex` modes already key it via
+    self-rule cannot key a process); the `no-complex` mode already keys it via
     `not isSubunit`/`not delete`."""
 
     @pytest.fixture(scope="class")
@@ -309,12 +314,12 @@ class TestSbgnPhenotypeActivity:
             os.path.join(SBGN_MAPS_DIR, "insulin-like_growth_factor_signaling.sbgn")
         )
 
-    @pytest.mark.parametrize(
-        "mode",
-        ("keep-species", "normal", "keep-species-no-complex", "normal-no-complex"),
-    )
-    def test_phenotype_is_an_activity(self, phenotype_map, mode):
-        out = pd2af.transform(phenotype_map, mode=mode, layout_mode=None).obj
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_phenotype_is_an_activity(self, phenotype_map, mode, keep_species):
+        out = pd2af.transform(
+            phenotype_map, mode=mode, keep_species=keep_species, layout_mode=None
+        ).obj
         assert any(
             label and "transcription" in label for label in _activity_labels(out.model)
         )
@@ -339,12 +344,17 @@ class TestCompartments:
     def map_with_compartments(self):
         return read_sbgn_map(SBGN_WITH_COMPARTMENTS_MAP_PATH)
 
-    @pytest.mark.parametrize(
-        "mode",
-        ("keep-species", "keep-species-no-complex", "normal", "normal-no-complex"),
-    )
-    def test_model_carries_compartments(self, map_with_compartments, mode):
-        out = pd2af.transform(map_with_compartments, mode=mode, layout_mode=None).obj
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_model_carries_compartments(
+        self, map_with_compartments, mode, keep_species
+    ):
+        out = pd2af.transform(
+            map_with_compartments,
+            mode=mode,
+            keep_species=keep_species,
+            layout_mode=None,
+        ).obj
         assert len(out.model.compartments) == 1
         assert all(
             activity.compartment is not None for activity in out.model.activities
@@ -354,22 +364,27 @@ class TestCompartments:
         # Regression: the plain-mode input-compartment lookup used to return
         # None, so zero CompartmentLayouts were emitted.
         out = pd2af.transform(
-            map_with_compartments, mode="keep-species", layout_mode="plain"
+            map_with_compartments, mode="normal", keep_species=True, layout_mode="plain"
         ).obj
         assert len(_compartment_layouts(out.layout)) == 1
 
-    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
-    def test_auto_layout_renders_compartment(self, map_with_compartments, mode):
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_auto_layout_renders_compartment(self, map_with_compartments, keep_species):
         # Regression: auto-layout used to crash on `compartment.outside`
         # (a CellDesigner-only relation; SBGN has no outside compartment).
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(map_with_compartments, mode=mode, layout_mode="auto").obj
+        out = pd2af.transform(
+            map_with_compartments,
+            mode="normal",
+            keep_species=keep_species,
+            layout_mode="auto",
+        ).obj
         assert len(_compartment_layouts(out.layout)) == 1
 
-    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
+    @pytest.mark.parametrize("keep_species", (True, False))
     def test_auto_layout_compartment_encloses_all_members(
-        self, map_with_compartments, mode
+        self, map_with_compartments, keep_species
     ):
         # `set_all_active` surfaces S as an activity; with the consumption
         # group excluded nothing induces an influence on it, so it is the
@@ -379,7 +394,8 @@ class TestCompartments:
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
             map_with_compartments,
-            mode=mode,
+            mode="normal",
+            keep_species=keep_species,
             layout_mode="auto",
             set_all_active=True,
             exclude_groups=("influences:consumption",),
@@ -415,14 +431,19 @@ class TestCompartments:
             )
 
     @pytest.mark.parametrize(
-        "mode,layout_mode",
-        (("keep-species", "plain"), ("normal", "auto"), ("keep-species", "auto")),
+        "keep_species,layout_mode",
+        ((True, "plain"), (False, "auto"), (True, "auto")),
     )
-    def test_compartments_round_trip(self, map_with_compartments, mode, layout_mode):
+    def test_compartments_round_trip(
+        self, map_with_compartments, keep_species, layout_mode
+    ):
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            map_with_compartments, mode=mode, layout_mode=layout_mode
+            map_with_compartments,
+            mode="normal",
+            keep_species=keep_species,
+            layout_mode=layout_mode,
         ).obj
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_compartments.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
@@ -430,34 +451,34 @@ class TestCompartments:
         assert len(back.model.compartments) == len(out.model.compartments) == 1
 
 
-class TestNoCompartment:
-    """`no_compartment` leaves an SBGN-AF map with no compartment at all.
+class TestDropCompartments:
+    """`drop_compartments` leaves an SBGN-AF map with no compartment at all.
 
     SBGN-AF has no default compartment to fall back on, so every activity ends
     up with `compartment=None` and the model carries no compartment.
     """
 
-    MODES = ("keep-species", "keep-species-no-complex", "normal", "normal-no-complex")
+    MODES = ("normal", "no-complex")
 
     @pytest.fixture(scope="class")
     def map_with_compartments(self):
         return read_sbgn_map(SBGN_WITH_COMPARTMENTS_MAP_PATH)
 
     @pytest.mark.parametrize("mode", MODES)
-    def test_model_carries_no_compartment(self, map_with_compartments, mode):
+    def test_model_carries_no_compartment_at_all(self, map_with_compartments, mode):
         out = pd2af.transform(
-            map_with_compartments, mode=mode, layout_mode=None, no_compartment=True
+            map_with_compartments, mode=mode, layout_mode=None, drop_compartments=True
         ).obj
         assert not out.model.compartments
         assert out.model.activities
         assert all(activity.compartment is None for activity in out.model.activities)
 
     @pytest.mark.parametrize("mode", MODES)
-    def test_layout_renders_no_compartment(self, map_with_compartments, mode):
+    def test_layout_renders_no_compartment_at_all(self, map_with_compartments, mode):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            map_with_compartments, mode=mode, layout_mode="auto", no_compartment=True
+            map_with_compartments, mode=mode, layout_mode="auto", drop_compartments=True
         ).obj
         assert _compartment_layouts(out.layout) == []
 
@@ -466,9 +487,9 @@ class TestNoCompartment:
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            map_with_compartments, mode=mode, layout_mode="auto", no_compartment=True
+            map_with_compartments, mode=mode, layout_mode="auto", drop_compartments=True
         ).obj
-        path = os.path.join(tempfile.gettempdir(), "pd2af_test_no_compartment.sbgn")
+        path = os.path.join(tempfile.gettempdir(), "pd2af_test_drop_compartments.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
         back = momapy.io.core.read(path, reader="sbgnml").obj
         assert not back.model.compartments
@@ -485,11 +506,16 @@ class TestNestedOperators:
     def nested_map(self):
         return read_sbgn_map(os.path.join(SBGN_MAPS_DIR, "nested_operators.sbgn"))
 
-    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
-    def test_nested_operators_reach_model_and_layout(self, nested_map, mode):
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_nested_operators_reach_model_and_layout(self, nested_map, keep_species):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(nested_map, mode=mode, layout_mode="auto").obj
+        out = pd2af.transform(
+            nested_map,
+            mode="normal",
+            keep_species=keep_species,
+            layout_mode="auto",
+        ).obj
         operators = {type(o).__name__ for o in out.model.logical_operators}
         assert operators == {"AndOperator", "OrOperator"}
         and_operator = next(
@@ -570,14 +596,18 @@ class TestConsumptionInfluences:
         self, modulation_class, expected_name
     ):
         out = pd2af.transform(
-            _consumption_map(modulation_class), mode="keep-species", layout_mode=None
+            _consumption_map(modulation_class),
+            mode="normal",
+            keep_species=True,
+            layout_mode=None,
         ).obj
         assert _influence_arrows(out) == {(expected_name, "E", "[active]A")}
 
     def test_bare_modulation_draws_no_consumption_edge(self):
         out = pd2af.transform(
             _consumption_map(momapy.sbgn.pd.Modulation),
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
         ).obj
         assert _influence_arrows(out) == set()
@@ -585,25 +615,28 @@ class TestConsumptionInfluences:
     def test_inactive_reactant_draws_no_consumption_edge(self):
         out = pd2af.transform(
             _consumption_map(momapy.sbgn.pd.Stimulation, reactant_active=False),
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
         ).obj
         assert _influence_arrows(out) == set()
 
-    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
-    def test_excluding_the_group_removes_only_these_edges(self, mode):
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_excluding_the_group_removes_only_these_edges(self, keep_species):
         with_consumption = pd2af.transform(
             _consumption_map(momapy.sbgn.pd.Stimulation),
-            mode=mode,
+            mode="normal",
+            keep_species=keep_species,
             layout_mode=None,
         )
         without = pd2af.transform(
             _consumption_map(momapy.sbgn.pd.Stimulation),
-            mode=mode,
+            mode="normal",
+            keep_species=keep_species,
             layout_mode=None,
             exclude_groups=("influences:consumption",),
         )
-        expected_label = "[active]A" if mode == "keep-species" else "A"
+        expected_label = "[active]A" if keep_species else "A"
         assert _influence_arrows(with_consumption.obj) == {
             ("NegativeInfluence", "E", expected_label)
         }
@@ -636,7 +669,8 @@ class TestConsumptionInfluences:
         )
         out = pd2af.transform(
             momapy.sbgn.pd.SBGNPDMap(id_="map", model=model),
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
         ).obj
         assert _influence_arrows(out) == {
@@ -681,8 +715,10 @@ class TestConsumptionInfluences:
             ),
         )
         sbgn_map = momapy.sbgn.pd.SBGNPDMap(id_="map", model=model)
-        for mode in ("keep-species", "keep-species-no-complex"):
-            out = pd2af.transform(sbgn_map, mode=mode, layout_mode=None).obj
+        for mode in ("normal", "no-complex"):
+            out = pd2af.transform(
+                sbgn_map, mode=mode, keep_species=True, layout_mode=None
+            ).obj
             assert _influence_arrows(out) == set()
 
     def test_cell_designer_consumes_reactants_the_same_way(self):
@@ -690,7 +726,9 @@ class TestConsumptionInfluences:
         # reaction with an active reactant) also yields a negative influence
         # on the reactant.
         creb_map = read_cd_map(os.path.join(MAPS_DIR, "CREB_activity.xml"))
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            creb_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         negative = [
             modulation
             for modulation in out.model.modulations
@@ -730,3 +768,46 @@ class TestLanguageCompatibility:
         message = str(excinfo.value)
         assert "keep-reactions" in message
         assert "sbgn_pd" in message
+
+
+class TestMergingIsNotProteinOnly:
+    """The merging applies to every entity class, not only macromolecules: two
+    nucleic acid features differing by a state variable merge just as two
+    macromolecule forms do."""
+
+    @pytest.fixture
+    def nucleic_acid_feature_map(self):
+        state_active = momapy.sbgn.pd.StateVariable(
+            variable="r0", value="active", order=0
+        )
+        state_methylated = momapy.sbgn.pd.StateVariable(
+            variable="r1", value="Me", order=1
+        )
+        state_unmethylated = momapy.sbgn.pd.StateVariable(
+            variable="r1", value=None, order=1
+        )
+        feature_one = momapy.sbgn.pd.NucleicAcidFeature(
+            label="MYC", state_variables=frozenset([state_active, state_methylated])
+        )
+        feature_two = momapy.sbgn.pd.NucleicAcidFeature(
+            label="MYC", state_variables=frozenset([state_active, state_unmethylated])
+        )
+        model = momapy.sbgn.pd.SBGNPDModel(
+            entity_pools=frozenset([feature_one, feature_two])
+        )
+        return momapy.sbgn.pd.SBGNPDMap(model=model)
+
+    def test_merged_by_default(self, nucleic_acid_feature_map):
+        out = pd2af.transform(
+            nucleic_acid_feature_map, mode="normal", layout_mode=None
+        ).obj
+        assert _activity_labels(out.model) == ["MYC"]
+
+    def test_kept_apart_under_keep_species(self, nucleic_acid_feature_map):
+        out = pd2af.transform(
+            nucleic_acid_feature_map,
+            mode="normal",
+            keep_species=True,
+            layout_mode=None,
+        ).obj
+        assert len(out.model.activities) == 2

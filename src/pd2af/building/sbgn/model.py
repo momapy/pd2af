@@ -9,13 +9,14 @@ activities and influences.
 Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
 :class:`UnitOfInformation` (the entity class) and a label that is the canonical
 serialization of the whole entity pool (:mod:`pd2af.building.sbgn.labels`). In
-the merged modes (``normal``/``normal-no-complex``) the label is built with state
-variables stripped, so distinct proteoforms collapse to one merged activity,
-and the entity's unit-of-information block is moved off the label onto the typed
+the merged reading (``keep_species`` off) the label is built with state
+variables stripped, so the distinct forms of the same base entity collapse to
+one merged activity, and the entity's unit-of-information block is moved off
+the label onto the typed
 :class:`UnitOfInformation` glyph (a curator's AF map carries ``ct:mRNA`` on the
 glyph -- no brackets -- not ``[ct:mRNA]`` in the label); otherwise the label
-keeps both blocks and
-distinct proteoforms stay distinct under content-based model equality. A PD
+keeps both blocks and distinct forms stay distinct under content-based model
+equality. A PD
 :class:`Phenotype` process becomes an AF :class:`Phenotype` activity. Dedup is
 honoured by interning every constructed element through the shared content
 cache (``register_or_reuse``) and resolving influence endpoints through the
@@ -48,7 +49,7 @@ _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
     momapy.sbgn.pd.UnspecifiedEntity: momapy.sbgn.af.UnspecifiedEntityUnitOfInformation,
     momapy.sbgn.pd.PerturbingAgent: momapy.sbgn.af.PerturbationUnitOfInformation,
     # Subunit classes (a promoted subunit becomes a top-level activity in the
-    # normal-no-complex modes) map to the same unit of information as their entity-pool
+    # no-complex mode) map to the same unit of information as their entity-pool
     # counterpart.
     momapy.sbgn.pd.MacromoleculeSubunit: momapy.sbgn.af.MacromoleculeUnitOfInformation,
     momapy.sbgn.pd.MacromoleculeMultimerSubunit: momapy.sbgn.af.MacromoleculeUnitOfInformation,
@@ -119,11 +120,12 @@ def _compartment_for_input_element(
     its top-level entity pool's: otherwise a promoted subunit activity would get
     ``compartment=None`` and never merge with a top-level twin.
 
-    With the ``no_compartment`` option every element belongs to no compartment:
-    SBGN-AF has no default compartment, so the output model carries none and
+    With the ``drop_compartments`` option every element belongs to no
+    compartment: SBGN-AF has no default compartment, so the output model carries
+    none and
     activities differing only by compartment merge.
     """
-    if context.no_compartment:
+    if context.drop_compartments:
         return None
     compartment = getattr(input_element, "compartment", None)
     if compartment is not None:
@@ -174,7 +176,7 @@ def _get_or_make_compartment(
 
 
 def _make_and_add_activities(context: pd2af.building.context.BuilderContext):
-    strip = context.mode.merges_proteoforms
+    strip = not context.keep_species
     seen_activity_identities = set()
     for atom in context.activity_atoms:
         if atom.key in context.key_to_activity:
@@ -195,9 +197,10 @@ def _make_activity(
 ) -> typing.Any:
     """Build (and intern) the AF activity for ``input_element``.
 
-    ``strip=True`` (the merged modes ``normal``/``normal-no-complex``) drops state
-    variables from the label so distinct proteoforms collapse into one merged
-    activity under content-based model equality, and relocates the entity's
+    ``strip=True`` (the merged reading, ``keep_species`` off) drops state
+    variables from the label so the distinct forms of the same base entity
+    collapse into one merged activity under content-based model equality, and
+    relocates the entity's
     unit-of-information block off the label and onto the typed unit-of-information
     glyph (where a curator drawing AF from scratch would put it -- ``ct:mRNA`` on
     a nucleic-acid-feature glyph, no brackets, rather than inline in the label).
@@ -205,7 +208,7 @@ def _make_activity(
     units still keep activities distinct: ``UnitOfInformation.label`` is part of
     its content, so the dedup granularity is unchanged, only relocated.
     ``strip=False`` keeps the full label and a bare typed glyph, so distinct
-    proteoforms stay distinct (keep-species behaviour).
+    forms stay distinct (the ``keep_species`` behaviour).
     """
     if isinstance(input_element, momapy.sbgn.pd.Phenotype):
         candidate = momapy.sbgn.af.Phenotype(label=input_element.label)

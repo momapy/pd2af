@@ -11,7 +11,7 @@ An unreadable input file, an unknown element id, or a mode the input or the layo
 ## Synopsis
 
 ```bash
-pd2af transform <input_file> [-m {normal,normal-no-complex,keep-species,keep-species-no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [--no-compartment] [-a <id> ...] [-i <id> ...] [-A | -I] [--exclude-group <group> ...] [--exclude-rule <rule> ...] [-o <output_file>]
+pd2af transform <input_file> [-m {normal,no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [--keep-species | --no-keep-species] [--drop-compartments | --no-drop-compartments] [-a <id> ...] [-i <id> ...] [-A | -I] [--exclude-group <group> ...] [--exclude-rule <rule> ...] [-o <output_file>]
 pd2af list-modes [--json]
 pd2af list-groups [--json]
 pd2af --version
@@ -27,7 +27,7 @@ The CLI is organised into subcommands:
 
 `transform` is the implicit subcommand: when the first argument is neither a
 subcommand nor `-h`/`--help`/`--version`, it is inserted, so `pd2af map.xml -m
-keep-species` runs exactly like `pd2af transform map.xml -m keep-species`.
+no-complex` runs exactly like `pd2af transform map.xml -m no-complex`.
 
 ## `transform` arguments
 
@@ -42,7 +42,8 @@ keep-species` runs exactly like `pd2af transform map.xml -m keep-species`.
 | `--transformation-mode` | `-m` | Transformation mode (default: `normal`); see below |
 | `--layout-mode` | `-l` | Layout strategy (default: `auto`); see below |
 | `--influence-pairing` | `-p` | How to draw an influence whose source/target maps to several glyphs: `cross` (default) or `nearest` |
-| `--no-compartment` |  | Merge every compartment into the default one: species that differ only by compartment become a single activity, and the influences that become equal merge in turn. Works with every transformation mode; requires `--layout-mode dot` (or `auto`); see below |
+| `--keep-species` |  | Keep each species as its own activity instead of merging the forms of the same base entity. Off by default, on for `keep-reactions`; `--no-keep-species` forces it off; see below |
+| `--drop-compartments` |  | Drop the compartments, so that species differing only by compartment become a single activity and the influences that become equal merge in turn. Off by default; works with every transformation mode; requires `--layout-mode dot` (or `auto`); see below |
 | `--set-active` | `-a` | Mark the element with this `id_` (a species or entity pool) as active, surfacing it as an activity even when the map gives it no structural activity signal. Repeatable: `-a sa1 -a sa2`. Wins over `--set-all-inactive` for these ids. Unknown ids raise an error |
 | `--set-inactive` | `-i` | Mark the element with this `id_` as NOT active, suppressing any activity for it and overriding the automatic discovery. Repeatable. Wins over `--set-all-active` for these ids; passing an id to both `-a` and `-i` is an error |
 | `--set-all-active` | `-A` | Mark every top-level species / entity pool as active (subunits excluded). Per-id `-i` overrides it. Mutually exclusive with `-I` |
@@ -53,33 +54,30 @@ keep-species` runs exactly like `pd2af transform map.xml -m keep-species`.
 
 ## Transformation modes (`-m`)
 
-Four of the five modes lie on two orthogonal axes — species treatment and complex treatment. The fifth, `keep-reactions`, changes where the influences come from.
-
-|                       | keep complexes            | drop complexes (route through subunits) |
-|-----------------------|---------------------------|------------------------------------------|
-| **merge proteoforms** | `normal` *(default)*      | `normal-no-complex`                             |
-| **keep each species** | `keep-species`            | `keep-species-no-complex`                |
+A mode decides what counts as an activity; an option decides which activities are treated as the same thing.
 
 | Mode | Description |
 |------|-------------|
-| `normal` | Merge proteoforms of the same template (and compartment) into a single activity, but keep complexes. Influences involving an active complex route through the complex; active subunits of an activity-bearing complex are subsumed into the complex. True PD→AF transform — the only style expressible in SBGN PD. Requires `--layout-mode dot` (or `auto`). |
-| `normal-no-complex` | Like `normal`, but drop any complex that has an active subunit and route influences through the subunits. Requires `--layout-mode dot` (or `auto`). |
-| `keep-species` | Emit one activity per distinct PD species (template + state + compartment). Keep complexes; active subunits of an activity-bearing complex are subsumed into the complex. |
-| `keep-species-no-complex` | Like `keep-species`, but drop complexes with an active subunit. |
-| `keep-reactions` | Keep the PD topology itself: every species is an activity (no structural activity signal required), and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds; no multi-hop chaining and no consumption/sparing inference. Complexes and PTM decorations are kept, as in `keep-species`. CellDesigner-only. |
+| `normal` | Keep complexes as activities of their own, routing a subunit's influences to the complex it belongs to. An active subunit of an activity-bearing complex is subsumed into the complex. **Default**. |
+| `no-complex` | Replace a complex that has an active subunit with those subunits, promoted to top-level activities, and route the influences through them. |
+| `keep-reactions` | Keep the PD topology itself: every species is an activity (no structural activity signal required), and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds; no multi-hop chaining and no consumption/sparing inference. CellDesigner-only; starts from `--keep-species`. |
 
-The merging modes (`normal`, `normal-no-complex`) require `--layout-mode dot` because positions from the original PD map cannot be reused for synthesized merged-proteoform activities.
+## Transformation options
 
-## Dropping the compartments (`--no-compartment`)
+Each option is a flag with a matching `--no-` spelling. A mode names the options it starts from and never overrules an explicit flag, so `-m keep-reactions --no-keep-species` gives the merged reading of that mode.
 
-`--no-compartment` merges every compartment into the default one, on top of whichever transformation mode is selected. Species that differ only by compartment become a single activity, and the influences that become equal merge in turn.
+### `--keep-species`
+
+Keep each species as its own activity (template + state + compartment) instead of merging the forms of the same base entity. Off by default: the forms of the same base entity within the same compartment collapse into a single activity, which is a true PD→AF transform with no PD remnants — the only style expressible in SBGN-AF. On by default for `keep-reactions`.
+
+### `--drop-compartments`
+
+Drop the compartments, so that species differing only by compartment become a single activity and the influences that become equal merge in turn.
 
 CellDesigner output keeps a single compartment, the `default` one every CellDesigner map declares, and every species points at it; SBGN-AF output carries no compartment at all, SBGN-AF having no default compartment. Annotations and notes follow the merge: an activity merged from several compartments gathers the metadata of every species that collapsed into it, and the metadata of the removed compartments is dropped with them.
 
-Like the merging modes, and for the same reason, it requires `--layout-mode dot` (or `auto`).
-
 ```bash
-pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
+pd2af transform my_map.xml --keep-species --drop-compartments -o my_map_af.xml
 ```
 
 ## Layout modes (`-l`)
@@ -87,9 +85,9 @@ pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
 | Mode | Description |
 |------|-------------|
 | `auto` | Pick automatically from the input: a map gets `dot`, a bare model gets no layout. **Default**. |
-| `dot` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. Required for `normal` and `normal-no-complex`, and for any mode with `--no-compartment`. |
-| `plain` | Reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`. |
-| `overlay` | Reuse the full original layout; non-model elements greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`. |
+| `dot` | Graphviz `dot` auto-layout. Requires `dot` on `PATH`. Required whenever activities merge: unless `--keep-species` is set, and always under `--drop-compartments`. |
+| `plain` | Reuse original positions; only model elements are kept. Available exactly when `--keep-species` is set without `--drop-compartments`. |
+| `overlay` | Reuse the full original layout; non-model elements greyed out. Available exactly when `--keep-species` is set without `--drop-compartments`, and for CellDesigner output only. |
 
 ## Output writers
 
@@ -150,22 +148,22 @@ pd2af transform my_map.xml | momapy visualize -
 pd2af transform my_map.xml -o my_map_af.xml
 ```
 
-### Drop complexes via the normal-no-complex mode
+### Drop complexes via the no-complex mode
 
 ```bash
-pd2af transform my_map.xml -m normal-no-complex -o my_map_af.xml
+pd2af transform my_map.xml -m no-complex -o my_map_af.xml
 ```
 
 ### Keep each PD species as its own activity, reusing original layout
 
 ```bash
-pd2af transform my_map.xml -m keep-species -l plain -o my_map_af.xml
+pd2af transform my_map.xml --keep-species -l plain -o my_map_af.xml
 ```
 
 ### Drop complexes but keep each remaining species, with overlay layout
 
 ```bash
-pd2af transform my_map.xml -m keep-species-no-complex -l overlay -o my_map_af.xml
+pd2af transform my_map.xml -m no-complex --keep-species -l overlay -o my_map_af.xml
 ```
 
 ### Transform an SBGN-PD map into an SBGN-AF map

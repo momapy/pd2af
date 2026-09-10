@@ -36,52 +36,65 @@ input has no geometry, so `layout_mode` is forced to `None`.
 
 ```bash
 pd2af transform my_map.xml -o my_map_af.xml
-pd2af transform my_map.xml -m keep-species -l plain -o my_map_af.xml
+pd2af transform my_map.xml --keep-species -l plain -o my_map_af.xml
 pd2af list-modes
 pd2af list-groups
 ```
 
 See [CLI reference](cli.md) for all options.
 
-## Transformation modes
+## Transformation modes and options
 
-Selectable with `-m` / `mode=`. Four of the five modes lie on two orthogonal axes — how species are mapped to activities, and how complexes are handled:
+A mode decides what counts as an activity; an option decides which activities are treated as the same thing.
 
-|                       | keep complexes            | drop complexes (route through subunits) |
-|-----------------------|---------------------------|------------------------------------------|
-| **merge proteoforms** | `normal` *(default)*      | `normal-no-complex`                             |
-| **keep each species** | `keep-species`            | `keep-species-no-complex`                |
+### Modes
 
-- **merge proteoforms** modes (`normal`, `normal-no-complex`) collapse all proteoforms of the same template within the same compartment into a single activity. The result is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN PD, which forbids influences between EPNs. These modes require `--layout-mode dot` (or `auto`).
-- **keep each species** modes (`keep-species`, `keep-species-no-complex`) emit one activity per distinct PD species (template + state + compartment), which is only meaningful for CellDesigner.
-- **drop complexes** variants (`normal-no-complex`, `keep-species-no-complex`) drop a complex when one of its subunits is independently active, routing influences through the active subunits.
-- **keep complexes** variants (`normal`, `keep-species`) emit complexes as their own activities, and influences involving an active complex go through the complex. Active subunits of an activity-bearing complex are subsumed into the complex and do not appear as separate top-level activities.
+Selectable with `-m` / `mode=`:
 
-One further mode steps off those axes and changes where the influences come from:
+- **`normal`** *(default)*: complexes are activities of their own, and a subunit's influences are routed to the complex it belongs to. An active subunit of an activity-bearing complex is subsumed into the complex and does not appear as a separate top-level activity.
+- **`no-complex`**: a complex with an active subunit is replaced by those subunits, promoted to top-level activities, and the influences run through them.
+- **`keep-reactions`**: the PD topology itself is kept. Every species is an activity — no structural signal required — and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds, and none of the inference the other modes do (multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant) is applied. CellDesigner-only, and usually wanted with `--keep-species`, which it starts from by default.
 
-- **`keep-reactions`** keeps the PD topology itself. Every species is an activity — no structural signal required — and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds, and none of the inference the other modes do (multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant) is applied. Complexes and PTM decorations are kept, as in `keep-species`. CellDesigner-only.
+### Options
 
-## Dropping the compartments
+Each option is a flag with a matching `--no-` spelling, and a matching `transform` argument. A mode names the options it starts from and never overrules an explicit flag, so `-m keep-reactions --no-keep-species` gives the merged reading of that mode.
 
-`--no-compartment` / `no_compartment=True` merges every compartment into the default one, on top of whichever transformation mode is selected. Species that differ only by compartment become a single activity, and the influences that become equal merge in turn — the same content-based merging the `normal` modes apply to proteoforms, applied to compartments.
+#### `--keep-species` / `keep_species=True`
+
+Keep each species as its own activity (template + state + compartment) instead of merging the forms of the same base entity. Off by default: the forms of the same base entity within the same compartment collapse into a single activity, which is a true PD→AF transform with no PD remnants — and the only style expressible in SBGN-AF, which forbids influences between decorated entity pools.
+
+#### `--drop-compartments` / `drop_compartments=True`
+
+Drop the compartments, so that species differing only by compartment become a single activity and the influences that become equal merge in turn. Off by default.
 
 - **CellDesigner output**: a single compartment, the `default` one every CellDesigner map declares, with every species pointing at it.
 - **SBGN-AF output**: no compartment at all, SBGN-AF having no default compartment, so every activity ends up with none.
 - **Annotations and notes**: they follow the merge, an activity merged from several compartments gathering the metadata of every species that collapsed into it. The metadata of the removed compartments is dropped with them.
-- **Layout**: because activities merge, `--layout-mode dot` (or `auto`) is required, for the same reason `normal` requires it — a merged activity has no single original position to reuse.
 
 ```bash
-pd2af transform my_map.xml -m keep-species --no-compartment -o my_map_af.xml
+pd2af transform my_map.xml --keep-species --drop-compartments -o my_map_af.xml
 ```
+
+### Finding the new spelling
+
+| before | now |
+| --- | --- |
+| `pd2af transform map.xml` | `pd2af transform map.xml` |
+| `-m normal` | `-m normal` |
+| `-m normal-no-complex` | `-m no-complex` |
+| `-m keep-species` | `--keep-species` |
+| `-m keep-species-no-complex` | `-m no-complex --keep-species` |
+| `-m keep-reactions` | `-m keep-reactions` |
+| `--no-compartment` | `--drop-compartments` |
 
 ## Layout modes
 
 Selectable with `-l` / `layout_mode=`:
 
 - **`auto`** (default): pick automatically from the input — a map gets `dot`, a bare model gets `None` (no layout).
-- **`dot`**: Graphviz `dot` auto-layout. Required for `normal` and `normal-no-complex`, and for any mode with `--no-compartment`.
-- **`plain`**: reuse original positions; only model elements are kept. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`.
-- **`overlay`**: reuse the full original layout; non-model elements are greyed out. Available for `keep-species`, `keep-species-no-complex` and `keep-reactions`, without `--no-compartment`.
+- **`dot`**: Graphviz `dot` auto-layout. Required whenever activities merge — a merged activity has no single original position to reuse — so unless `--keep-species` is set, and always under `--drop-compartments`.
+- **`plain`**: reuse original positions; only model elements are kept. Available exactly when `--keep-species` is set without `--drop-compartments`.
+- **`overlay`**: reuse the full original layout; non-model elements are greyed out. Available exactly when `--keep-species` is set without `--drop-compartments`, and for CellDesigner output only.
 
 ## Documentation
 

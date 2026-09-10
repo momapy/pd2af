@@ -1,4 +1,11 @@
-"""Everything a user chooses from: the vocabularies and the transformation modes.
+"""Everything a user chooses from: the vocabularies, the modes and the options.
+
+A mode decides what counts as an activity; an option decides which activities
+are treated as the same thing. Deciding what is an activity is the solver's
+job, so a mode is a rule group list and a choice that only groups the results
+afterwards is an option: :data:`TRANSFORMATION_OPTIONS` holds each option's
+flag, default and description, and a mode names in ``default_options`` the
+value it starts from, which an explicit flag always overrules.
 
 :class:`Language`, :class:`LayoutMode` and :class:`InfluencePairingMode` are the
 three vocabularies a transformation mode is defined against, so they live here
@@ -17,8 +24,7 @@ output.
 
 A :class:`TransformationMode` carries everything pd2af knows about a mode:
 its name, the prose the CLI lists it with, the rule groups its ASP program
-is made of, the input languages it accepts, and whether it strips
-post-translational decorations and merges the content-equal results.
+is made of, the input languages it accepts, and the options it starts from.
 
 Modes are contributed from outside the package through the ``pd2af.modes``
 entry-point group. Each entry point resolves to a :class:`TransformationMode`
@@ -43,8 +49,9 @@ object::
 which :func:`pd2af.asp.rules.build_registry` registers alongside the built-in ones. A
 contributed mode may not take the name of an existing mode, and a mode that
 fails to load — a bad import, a wrong type, a name collision, a group that
-fails registry validation — takes down every pd2af entry point rather than
-just its own: a mode that half-loads is worse than one that refuses to.
+fails registry validation, an unknown ``default_options`` key — takes down
+every pd2af entry point rather than just its own: a mode that half-loads is
+worse than one that refuses to.
 """
 
 import dataclasses
@@ -126,6 +133,53 @@ LAYOUT_MODES_BY_LANGUAGE = {
 }
 
 
+# Everything pd2af knows about each transformation option: the flag the CLI
+# adds it under, the value it takes when neither the user nor the mode says
+# anything, and the prose both the flag's help and the `list-modes` table are
+# rendered from. Both names are positive, so `argparse.BooleanOptionalAction`
+# derives `--no-keep-species` and `--no-drop-compartments` on its own.
+TRANSFORMATION_OPTIONS = {
+    "keep_species": {
+        "flag": "--keep-species",
+        "default": False,
+        "description": (
+            "keep each species as its own activity instead of merging the "
+            "forms of the same base entity"
+        ),
+    },
+    "drop_compartments": {
+        "flag": "--drop-compartments",
+        "default": False,
+        "description": (
+            "drop the compartments, so that species differing only by "
+            "compartment become a single activity"
+        ),
+    },
+}
+
+
+def get_compatible_layout_modes(
+    language: Language,
+    keep_species: bool = False,
+    drop_compartments: bool = False,
+) -> tuple[LayoutMode, ...]:
+    """The concrete layout modes valid for these options on the given language.
+
+    Merged activities are synthesized from several input species, so they have
+    no original geometry for `plain`/`overlay` to reuse. Activities merge
+    unless the species are kept apart, and `drop_compartments` makes them merge
+    whatever `keep_species` says. The transformation mode does not bear on the
+    answer.
+    """
+    available_layout_modes = LAYOUT_MODES_BY_LANGUAGE[language]
+    activities_merge = not keep_species or drop_compartments
+    if not activities_merge:
+        return available_layout_modes
+    if LayoutMode.DOT in available_layout_modes:
+        return (LayoutMode.DOT,)
+    return ()
+
+
 def get_language_from_map_or_model(
     map_or_model: momapy.core.map.Map | momapy.core.model.Model,
 ) -> Language:
@@ -185,8 +239,10 @@ class TransformationMode:
             with the built-in ones. Empty for every mode pd2af ships.
         compatible_languages: The input languages the mode accepts,
             every registered language by default.
-        merges_proteoforms: Whether the build stage strips post-translational
-            decorations and merges content-equal results.
+        default_options: The :data:`TRANSFORMATION_OPTIONS` this mode starts
+            from when the user says nothing. A mode suggests and never
+            decides: an explicit flag always wins. A key outside
+            :data:`TRANSFORMATION_OPTIONS` is an error at mode load.
     """
 
     name: str
@@ -194,7 +250,7 @@ class TransformationMode:
     rule_group_references: tuple[str, ...] = ()
     rule_group_definitions: tuple[RuleGroup, ...] = ()
     compatible_languages: frozenset[Language] = frozenset(LANGUAGES)
-    merges_proteoforms: bool = False
+    default_options: types.MappingProxyType[str, bool] = types.MappingProxyType({})
 
     @property
     def rule_group_ids(self) -> tuple[str, ...]:
@@ -203,29 +259,13 @@ class TransformationMode:
             rule_group.identifier for rule_group in self.rule_group_definitions
         )
 
-    def compatible_layout_modes(
-        self, language: Language, no_compartment: bool = False
-    ) -> tuple[LayoutMode, ...]:
-        """The concrete layout modes valid for this mode on the given input language.
-
-        Merged activities are synthesized from several input species, so they
-        have no original geometry for `plain`/`overlay` to reuse. ``normal`` and
-        ``normal-no-complex`` merge by construction; ``no_compartment`` makes
-        any mode merge, so it narrows the answer the same way.
-        """
-        available_layout_modes = LAYOUT_MODES_BY_LANGUAGE[language]
-        if not (self.merges_proteoforms or no_compartment):
-            return available_layout_modes
-        if LayoutMode.DOT in available_layout_modes:
-            return (LayoutMode.DOT,)
-        return ()
-
 
 _BUILTIN_TRANSFORMATION_MODES = (
     TransformationMode(
         name="normal",
         docs=(
-            "merge forms of the same base species or entity pool into a single activity"
+            "keep complexes as activities of their own, routing a subunit's "
+            "influences to the complex it belongs to"
         ),
         rule_group_references=(
             "activity:core",
@@ -244,61 +284,12 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "influences:output",
             "gates:core",
         ),
-        merges_proteoforms=True,
     ),
     TransformationMode(
-        name="normal-no-complex",
+        name="no-complex",
         docs=(
-            "merge forms of the same base species or entity pool into a "
-            "single activity; additionally, replace complexes with their "
-            "active subunits if any, promoting them to top-level activities"
-        ),
-        rule_group_references=(
-            "activity:core",
-            "activity:phenotype",
-            "activity:active_marker",
-            "activity:modulation_source",
-            "activity:gate_input",
-            "topology:core",
-            "preparation:no_complex",
-            "paths:core",
-            "paths:chaining",
-            "paths:complex_traversal",
-            "influences:kind",
-            "influences:core",
-            "influences:consumption",
-            "influences:output",
-            "gates:core",
-        ),
-        merges_proteoforms=True,
-    ),
-    TransformationMode(
-        name="keep-species",
-        docs="create one activity per distinct active species or entity pool",
-        rule_group_references=(
-            "activity:core",
-            "activity:phenotype",
-            "activity:active_marker",
-            "activity:modulation_source",
-            "activity:gate_input",
-            "topology:core",
-            "topology:top_level",
-            "preparation:complex",
-            "paths:core",
-            "paths:chaining",
-            "influences:kind",
-            "influences:core",
-            "influences:consumption",
-            "influences:output",
-            "gates:core",
-        ),
-    ),
-    TransformationMode(
-        name="keep-species-no-complex",
-        docs=(
-            "create one activity per distinct active species or entity pool; "
-            "additionally, replace complexes with their active subunits if "
-            "any, promoting them to top-level activities"
+            "replace a complex that has an active subunit with those "
+            "subunits, promoting them to top-level activities"
         ),
         rule_group_references=(
             "activity:core",
@@ -339,8 +330,20 @@ _BUILTIN_TRANSFORMATION_MODES = (
             "keep_reactions:influences",
         ),
         compatible_languages=frozenset({Language.CELLDESIGNER}),
+        default_options=types.MappingProxyType({"keep_species": True}),
     ),
 )
+
+
+def _check_default_options_are_known(mode: "TransformationMode") -> None:
+    """Raise unless every ``default_options`` key is a transformation option."""
+    for name in mode.default_options:
+        if name not in TRANSFORMATION_OPTIONS:
+            raise ValueError(
+                f"transformation mode {mode.name!r} names unknown "
+                f"transformation option {name!r} in its default options; "
+                "available options: " + ", ".join(TRANSFORMATION_OPTIONS)
+            )
 
 
 @functools.cache
@@ -351,7 +354,10 @@ def get_transformation_modes() -> types.MappingProxyType[str, "TransformationMod
     through the ``pd2af.modes`` entry-point group, so ``list-modes`` and the
     ``--transformation-mode`` choices read canonically.
     """
-    modes = {mode.name: mode for mode in _BUILTIN_TRANSFORMATION_MODES}
+    modes = {}
+    for mode in _BUILTIN_TRANSFORMATION_MODES:
+        _check_default_options_are_known(mode)
+        modes[mode.name] = mode
     for entry_point in importlib.metadata.entry_points(group=ENTRY_POINT_GROUP):
         mode = entry_point.load()
         if not isinstance(mode, TransformationMode):
@@ -366,6 +372,7 @@ def get_transformation_modes() -> types.MappingProxyType[str, "TransformationMod
                 f"{ENTRY_POINT_GROUP!r} contributes transformation mode "
                 f"{mode.name!r}, which already exists"
             )
+        _check_default_options_are_known(mode)
         modes[mode.name] = mode
     return types.MappingProxyType(modes)
 

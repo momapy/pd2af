@@ -104,39 +104,61 @@ def _format_token(value: typing.Any) -> str:
     return repr(str(value))
 
 
-def _check_layout_mode_is_supported_by_mode(
+def _describe_merging(keep_species: bool, drop_compartments: bool) -> str:
+    """Name the merging that restricts the layout modes, empty when none does."""
+    merged = []
+    if not keep_species:
+        merged.append("merged forms")
+    if drop_compartments:
+        merged.append("merged compartments")
+    return " and ".join(merged)
+
+
+def _check_layout_mode_is_supported(
     layout_mode: pd2af.modes.LayoutMode | None,
-    mode: pd2af.modes.TransformationMode,
     language: pd2af.modes.Language,
-    no_compartment: bool = False,
+    keep_species: bool,
+    drop_compartments: bool,
 ) -> None:
-    """Raise unless a layout mode fits the transformation mode and language.
+    """Raise unless a layout mode fits the options and the input language.
 
     The `None` sentinel means "build no layout at all", so it is always valid;
-    every other value must be one the mode accepts on input of this language.
-    `no_compartment` narrows what the mode accepts and is named in the message,
-    so the error says which of the two refused the layout mode.
+    every other value must be one the options leave available on input of this
+    language. The message names the merging that forced the restriction, and
+    names nothing when the layout mode is simply unavailable for the language.
     """
     if layout_mode is None:
         return
-    compatible_layout_modes = mode.compatible_layout_modes(language, no_compartment)
+    compatible_layout_modes = pd2af.modes.get_compatible_layout_modes(
+        language, keep_species, drop_compartments
+    )
     if layout_mode in compatible_layout_modes:
         return
-    description = f"transformation mode {mode.name!r}"
-    if no_compartment:
-        description += " with no_compartment"
+    description = _describe_merging(keep_species, drop_compartments)
+    if description:
+        description += " on "
+    description += f"{_format_token(language)} input"
     if not compatible_layout_modes:
         raise ValueError(
-            f"{description} on {_format_token(language)} input "
-            f"supports no layout_mode other than None, got "
+            f"{description} supports no layout_mode other than None, got "
             f"{_format_token(layout_mode)}"
         )
     raise ValueError(
-        f"{description} on {_format_token(language)} input "
-        f"supports layout_mode "
+        f"{description} supports layout_mode "
         f"{', '.join(_format_token(candidate) for candidate in compatible_layout_modes)}"
         f" or None, got {_format_token(layout_mode)}"
     )
+
+
+def _resolve_option(
+    name: str, value: bool | None, mode: pd2af.modes.TransformationMode
+) -> bool:
+    """The value of a transformation option: the user's, else the mode's, else the default."""
+    if value is not None:
+        return value
+    if name in mode.default_options:
+        return mode.default_options[name]
+    return pd2af.modes.TRANSFORMATION_OPTIONS[name]["default"]
 
 
 def _make_model_and_layout_in_context(
@@ -177,7 +199,8 @@ def _build_map(
     influence_pairing: pd2af.modes.InfluencePairingMode = (
         pd2af.modes.InfluencePairingMode.CROSS
     ),
-    no_compartment: bool = False,
+    keep_species: bool = False,
+    drop_compartments: bool = False,
     element_to_annotations: dict | None = None,
     element_to_notes: dict | None = None,
 ) -> TransformerResult:
@@ -195,7 +218,9 @@ def _build_map(
         layout_mode: The concrete layout mode, or ``None`` to build no layout.
         influence_pairing: How to draw an influence whose source or target maps
             to several glyphs.
-        no_compartment: Whether to merge every compartment into the default one.
+        keep_species: Whether to keep each species as its own activity.
+        drop_compartments: Whether to merge every compartment into the default
+            one.
         element_to_annotations: The reader's ``element -> annotations``
             side-table, to be carried onto the output elements.
         element_to_notes: The reader's ``element -> notes`` side-table, to be
@@ -210,7 +235,8 @@ def _build_map(
         layout_mode=layout_mode,
         clingo_id_to_model_element=clingo_id_to_model_element,
         influence_pairing=influence_pairing,
-        no_compartment=no_compartment,
+        keep_species=keep_species,
+        drop_compartments=drop_compartments,
         mode=mode,
     )
     _make_model_and_layout_in_context(context, clingo_model, language)
@@ -251,7 +277,8 @@ def transform(
     influence_pairing: pd2af.modes.InfluencePairingMode = (
         pd2af.modes.InfluencePairingMode.CROSS
     ),
-    no_compartment: bool = False,
+    keep_species: bool | None = None,
+    drop_compartments: bool | None = None,
     set_active: list[str] | None = None,
     set_inactive: list[str] | None = None,
     set_all_active: bool = False,
@@ -276,11 +303,16 @@ def transform(
         influence_pairing: How to draw an influence whose source or target maps
             to several glyphs: ``"cross"`` (one arc per pair) or ``"nearest"``
             (a single arc between the closest pair).
-        no_compartment: Merge every compartment into the default one, so that
-            species differing only by compartment become a single activity and
-            the influences that become equal merge in turn. Works with every
-            mode; because activities merge, it requires ``layout_mode`` ``"dot"``
-            (or ``"auto"``) or ``None``.
+        keep_species: Keep each species as its own activity instead of merging
+            the forms of the same base entity. ``None`` takes the value the
+            mode starts from (``True`` for ``keep-reactions``, ``False``
+            otherwise).
+        drop_compartments: Drop the compartments, so that species differing
+            only by compartment become a single activity and the influences
+            that become equal merge in turn. Works with every mode; because
+            activities merge, it requires ``layout_mode`` ``"dot"`` (or
+            ``"auto"``) or ``None``. ``None`` takes the value the mode starts
+            from.
         set_active: Ids of elements to surface as activities whatever the map's
             structural signals say.
         set_inactive: Ids of elements to suppress, overriding the automatic
@@ -303,6 +335,10 @@ def transform(
         note side-tables.
     """
     transformation_mode = pd2af.modes.get_transformation_mode(mode)
+    keep_species = _resolve_option("keep_species", keep_species, transformation_mode)
+    drop_compartments = _resolve_option(
+        "drop_compartments", drop_compartments, transformation_mode
+    )
     language = pd2af.modes.get_language_from_map_or_model(map_or_model)
     influence_pairing = pd2af.modes.InfluencePairingMode(influence_pairing)
     is_model_input = isinstance(map_or_model, momapy.core.model.Model)
@@ -329,8 +365,8 @@ def transform(
                 for candidate in sorted(transformation_mode.compatible_languages)
             )
         )
-    _check_layout_mode_is_supported_by_mode(
-        layout_mode, transformation_mode, language, no_compartment
+    _check_layout_mode_is_supported(
+        layout_mode, language, keep_species, drop_compartments
     )
     clingo_model, clingo_id_to_model_element = pd2af.asp.solver.solve(
         input_map,
@@ -350,7 +386,8 @@ def transform(
         language=language,
         layout_mode=layout_mode,
         influence_pairing=influence_pairing,
-        no_compartment=no_compartment,
+        keep_species=keep_species,
+        drop_compartments=drop_compartments,
         element_to_annotations=element_to_annotations,
         element_to_notes=element_to_notes,
     )

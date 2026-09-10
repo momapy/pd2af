@@ -6,8 +6,8 @@ text for a named mode. The rules are organised in layers:
 
 * **topology:core** (shared) — structural helpers: ``isSubunit``,
   ``hasActiveDescendantSubunit``.
-* **topology:top_level** (the complex-keeping modes ``normal``,
-  ``keep-species`` and ``keep-reactions``) — ``resolvesToTopLevel(SPECIES, TOPLEVEL)`` resolves every species to its
+* **topology:top_level** (the complex-keeping modes ``normal`` and
+  ``keep-reactions``) — ``resolvesToTopLevel(SPECIES, TOPLEVEL)`` resolves every species to its
   outermost top-level entity, so a subunit is keyed by (and its
   influences routed to) its top-level complex rather than itself.
 * **preparation** (a ``slot``: exactly one filler group per mode, and
@@ -18,8 +18,9 @@ text for a named mode. The rules are organised in layers:
   per-species wrappers: ``keptSpeciesKey/1`` (top-level species, and the
   top-level complex a subunit resolves to) or ``promotedSubunitKey/1`` (a
   subunit promoted to top level when its complex is dissolved in the
-  ``*-no-complex`` modes). Proteoform/PTM stripping for the merged modes
-  (``normal``/``normal-no-complex``) happens at the build stage, not in the key.
+  ``no-complex`` mode). PTM stripping, which merges the forms of the same
+  base entity unless ``keep_species`` is set, happens at the build stage,
+  not in the key.
 * **influences:core** (shared) — emits
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``hasActivityCarrier`` /
@@ -189,7 +190,7 @@ _ACTIVITY_ACTIVE_MARKER = _activity_feature(
                         isSubunit(SUBUNIT),
                         hasStateVariable(SUBUNIT, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
-                docs='A subunit in an active state is an activity candidate. This fires when the subunit carries a state variable whose value is "active". Its complex therefore inherits activity (keep-species), and in the ``*-no-complex`` modes the subunit can be promoted. It is the parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
+                docs='A subunit in an active state is an activity candidate. This fires when the subunit carries a state variable whose value is "active". Its complex therefore inherits activity, and in the ``no-complex`` mode the subunit can be promoted. It is the parallel of CellDesigner, where subunits are species and so the active-structural-state rule already covers them.',
             ),
         ),
     },
@@ -299,7 +300,7 @@ _TOPOLOGY_CORE = RuleGroup(
 _TOPOLOGY_TOP_LEVEL = RuleGroup(
     identifier="topology:top_level",
     depends_on=frozenset({"topology:core"}),
-    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`keep-species`, `normal`, `keep-reactions`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer).",
+    docs="Resolves every species to its outermost top-level entity: a non-subunit resolves to itself; a subunit -- at any nesting depth -- resolves to the outermost complex that contains it. The complex-keeping modes (`normal`, `keep-reactions`) key a species by its top-level entity, so a subunit is never its own activity and its influences attach to its top-level complex (a subunit is a structural component, not an independent influencer).",
     rules=(
         Rule(
             identifier="topology:top_level:recursive",
@@ -333,7 +334,7 @@ _TOPOLOGY_TOP_LEVEL = RuleGroup(
             Rule(
                 identifier="topology:top_level:sbgn_pd:phenotype_self",
                 text="resolvesToTopLevel(PHENOTYPE, PHENOTYPE) :- phenotype(PHENOTYPE).",
-                docs="SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `keep-species`/`normal` output. The `*-no-complex` modes key via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule).",
+                docs="SBGN-PD: a phenotype is a process, not an entity pool, so the entity-pool self-rule never keys it; a phenotype is never a subunit, so it is always its own top-level entity. Without this an SBGN phenotype gets `hasActivity` but no activity key and is silently dropped from `normal` output. The `no-complex` mode keys via `not isSubunit`/`not delete` and already include phenotypes; CellDesigner phenotypes are species (covered by the species self-rule).",
             ),
         ),
     },
@@ -343,7 +344,7 @@ _PREPARATION_COMPLEX = RuleGroup(
     identifier="preparation:complex",
     slot="preparation",
     depends_on=frozenset({"activity:core", "topology:core", "topology:top_level"}),
-    docs="The complex-keeping modes (`normal`, `keep-species`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `topology:top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. `normal` and `keep-species` share these keys and differ only at the build stage, where `normal` strips PTM decorations and merges content-equal results while `keep-species` keeps the decorations.",
+    docs="The complex-keeping modes (`normal`, `keep-reactions`) key a species with activity by the `keptSpeciesKey` of its top-level entity (the `topology:top_level` group): itself when top-level, its outermost complex when a subunit. A subunit therefore contributes no activity of its own -- it is a structural component of its complex, and any influence it carries attaches to the top-level complex (the active descendant directly keys the complex, so the assembly is represented without a separate inherit-activity rule). Carriers are identity; the rerouting lives entirely in the key. The `keep_species` option bears on the build stage alone, where it decides whether the PTM decorations are stripped and the content-equal results merged.",
     rules=(
         Rule(
             identifier="preparation:complex:key",
@@ -384,7 +385,7 @@ _PREPARATION_NO_COMPLEX = RuleGroup(
     identifier="preparation:no_complex",
     slot="preparation",
     depends_on=frozenset({"activity:core", "topology:core"}),
-    docs="The complex-dissolving modes (`normal-no-complex`, `keep-species-no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths:complex_traversal`). `normal-no-complex` and `keep-species-no-complex` share these keys and differ only at the build stage, where `normal-no-complex` strips PTM decorations and merges content-equal results while `keep-species-no-complex` keeps the decorations.",
+    docs="The complex-dissolving mode (`no-complex`): a complex with any (transitive) active descendant is deleted; a non-deleted top-level species with activity is keyed by `keptSpeciesKey(SELF)`; a subunit of a deleted complex is promoted to top level, keyed by `promotedSubunitKey(SELF)` (paths reach it via `paths:complex_traversal`). The `keep_species` option bears on the build stage alone, where it decides whether the PTM decorations are stripped and the content-equal results merged.",
     rules=(
         Rule(
             identifier="preparation:no_complex:deleted",
@@ -703,7 +704,7 @@ _PATHS_CHAINING = RuleGroup(
 _PATHS_COMPLEX_TRAVERSAL = RuleGroup(
     identifier="paths:complex_traversal",
     depends_on=frozenset({"paths:core"}),
-    docs="Extends paths through complex containment for the ``*-no-complex`` modes: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
+    docs="Extends paths through complex containment for the ``no-complex`` mode: a path touching a complex is propagated to/from each of its subunits so influences reach the surviving subunit activities.",
     rules=(
         Rule(
             identifier="paths:complex_traversal:into_subunits",

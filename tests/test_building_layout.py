@@ -288,12 +288,15 @@ class TestCelldesignerAutoLayoutCompartments:
     its members. Before the fix, the clusters never reached graphviz, so the
     compartments kept their curated input geometry while members moved away."""
 
-    @pytest.mark.parametrize("mode", ("keep-species", "normal"))
-    def test_compartments_enclose_their_members(self, mode):
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_compartments_enclose_their_members(self, keep_species):
         if not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            read_cd_map(_SNCA_EXPRESSION_MAP_PATH), mode=mode, layout_mode="auto"
+            read_cd_map(_SNCA_EXPRESSION_MAP_PATH),
+            mode="normal",
+            keep_species=keep_species,
+            layout_mode="auto",
         ).obj
         mapping = out.layout_model_mapping
         compartment_layouts = _celldesigner_compartment_layouts(out.layout)

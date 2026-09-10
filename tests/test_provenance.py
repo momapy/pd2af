@@ -92,10 +92,17 @@ class TestSubunitAnnotationCarry:
         )
 
     @pytest.mark.parametrize(
-        "mode",
-        ["keep-reactions", "keep-species", "normal", "normal-no-complex"],
+        "mode,keep_species",
+        [
+            ("keep-reactions", True),
+            ("normal", True),
+            ("normal", False),
+            ("no-complex", False),
+        ],
     )
-    def test_subunit_annotations_carry(self, annotated_reader_result, mode):
+    def test_subunit_annotations_carry(
+        self, annotated_reader_result, mode, keep_species
+    ):
         reader_result = annotated_reader_result
         input_subunits = _collect_subunits(reader_result.obj.model.species)
         annotated_input_subunits = {
@@ -107,6 +114,7 @@ class TestSubunitAnnotationCarry:
         result = pd2af.transform(
             reader_result.obj,
             mode=mode,
+            keep_species=keep_species,
             layout_mode=None,
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -131,7 +139,8 @@ class TestSubunitAnnotationCarry:
         reader_result = annotated_reader_result
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -169,14 +178,17 @@ class TestNoCompartmentAnnotationCarry:
         # astrocyte compartments.
         return momapy.io.core.read(os.path.join(MAPS_DIR, "Glycolysis.xml"))
 
-    @pytest.mark.parametrize("mode", ["keep-species", "normal"])
-    def test_merged_activity_unions_its_sources(self, annotated_reader_result, mode):
+    @pytest.mark.parametrize("keep_species", [True, False])
+    def test_merged_activity_unions_its_sources(
+        self, annotated_reader_result, keep_species
+    ):
         reader_result = annotated_reader_result
         result = pd2af.transform(
             reader_result.obj,
-            mode=mode,
+            mode="normal",
+            keep_species=keep_species,
             layout_mode=None,
-            no_compartment=True,
+            drop_compartments=True,
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
         )
@@ -212,9 +224,10 @@ class TestNoCompartmentAnnotationCarry:
         reader_result = annotated_reader_result
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
-            no_compartment=True,
+            drop_compartments=True,
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
         )
@@ -235,7 +248,9 @@ class TestDroppedOperatorProvenance:
 
     def test_srr_dropped_gates_are_absent_from_provenance(self):
         srr_map = momapy.io.core.read(os.path.join(MAPS_DIR, "SRR_signaling.xml")).obj
-        result = pd2af.transform(srr_map, mode="keep-species", layout_mode=None)
+        result = pd2af.transform(
+            srr_map, mode="normal", keep_species=True, layout_mode=None
+        )
         assert len(result.obj.model.boolean_logic_gates) == 0
         gate_class_names = {"AndGate", "OrGate", "NotGate", "UnknownGate"}
         assert not any(
@@ -245,7 +260,9 @@ class TestDroppedOperatorProvenance:
 
     def test_creb_surviving_gate_keeps_provenance(self):
         creb_map = momapy.io.core.read(os.path.join(MAPS_DIR, "CREB_activity.xml")).obj
-        result = pd2af.transform(creb_map, mode="keep-species", layout_mode=None)
+        result = pd2af.transform(
+            creb_map, mode="normal", keep_species=True, layout_mode=None
+        )
         (gate,) = result.obj.model.boolean_logic_gates
         gate_inputs = result.output_element_to_input_elements.get(gate)
         assert gate_inputs is not None

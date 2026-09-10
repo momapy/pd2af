@@ -44,9 +44,7 @@ class TestModeAndLayoutChoices:
     def test_mode_choices_lists_supported_modes(self):
         assert {mode.name for mode in pd2af.modes._BUILTIN_TRANSFORMATION_MODES} == {
             "normal",
-            "normal-no-complex",
-            "keep-species",
-            "keep-species-no-complex",
+            "no-complex",
             "keep-reactions",
         }
 
@@ -83,7 +81,8 @@ class TestCliMainOutputFile:
                 "transform",
                 example_map_path,
                 "-m",
-                "keep-species-no-complex",
+                "no-complex",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-o",
@@ -92,21 +91,21 @@ class TestCliMainOutputFile:
         )
         roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
         names = sorted(s.name for s in roundtrip.model.species)
-        # Under keep-species-no-complex, complex D drops out in favour of
+        # Under `no-complex`, complex D drops out in favour of
         # subunit C.
         assert "D" not in names
 
     @pytest.mark.skipif(
         not has_dot_binary(), reason="graphviz `dot` binary not on PATH"
     )
-    def test_normal_no_complex_mode_with_auto_layout(self, tmp_path, example_map_path):
+    def test_no_complex_mode_with_auto_layout(self, tmp_path, example_map_path):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
             [
                 "transform",
                 example_map_path,
                 "-m",
-                "normal-no-complex",
+                "no-complex",
                 "-l",
                 "auto",
                 "-o",
@@ -115,11 +114,11 @@ class TestCliMainOutputFile:
         )
         roundtrip = momapy.io.core.read(str(out_path), reader="pickle").obj
         names = sorted(s.name for s in roundtrip.model.species)
-        # Under normal-no-complex (merge proteoforms + drop complexes), D drops out.
+        # Under `no-complex` (merged forms + dropped complexes), D drops out.
         assert "D" not in names
 
-    @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
-    def test_merged_modes_with_plain_layout_exit_with_a_message(
+    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
+    def test_merged_forms_with_plain_layout_exit_with_a_message(
         self, example_map_path, mode, capsys
     ):
         with pytest.raises(SystemExit) as error:
@@ -132,11 +131,9 @@ class TestCliMainOutputFile:
 
     @pytest.mark.parametrize(
         "mode",
-        ["keep-species", "keep-species-no-complex", "keep-reactions"],
+        ["normal", "no-complex", "keep-reactions"],
     )
-    def test_per_species_modes_accept_plain_layout(
-        self, tmp_path, example_map_path, mode
-    ):
+    def test_keep_species_accepts_plain_layout(self, tmp_path, example_map_path, mode):
         out_path = tmp_path / "out.pickle"
         pd2af.cli.main(
             [
@@ -144,6 +141,7 @@ class TestCliMainOutputFile:
                 example_map_path,
                 "-m",
                 mode,
+                "--keep-species",
                 "-l",
                 "plain",
                 "-o",
@@ -192,7 +190,8 @@ class TestActiveFlag:
                 "transform",
                 example_map_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-a",
@@ -223,7 +222,8 @@ class TestInactiveFlag:
                 "transform",
                 example_map_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-i",
@@ -265,7 +265,8 @@ class TestGlobalActivityFlags:
                 "transform",
                 example_map_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-A",
@@ -285,7 +286,8 @@ class TestGlobalActivityFlags:
                 "transform",
                 example_map_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-I",
@@ -298,14 +300,21 @@ class TestGlobalActivityFlags:
         assert not roundtrip.model.species
 
 
-class TestNoCompartmentFlag:
-    def test_flag_defaults_to_false(self):
+class TestTransformationOptionFlags:
+    def test_flags_default_to_none(self):
         args = _parse_transform_args(["transform", "map.xml"])
-        assert args.no_compartment is False
+        for name in pd2af.modes.TRANSFORMATION_OPTIONS:
+            assert getattr(args, name) is None
 
-    def test_flag_sets_the_option(self):
-        args = _parse_transform_args(["transform", "map.xml", "--no-compartment"])
-        assert args.no_compartment is True
+    def test_every_option_has_a_flag_and_its_negation(self):
+        for name, option in pd2af.modes.TRANSFORMATION_OPTIONS.items():
+            flag = option["flag"]
+            args = _parse_transform_args(["transform", "map.xml", flag])
+            assert getattr(args, name) is True
+            args = _parse_transform_args(
+                ["transform", "map.xml", flag.replace("--", "--no-", 1)]
+            )
+            assert getattr(args, name) is False
 
     def test_flag_merges_the_compartments(self, tmp_path):
         if not has_dot_binary():
@@ -316,9 +325,8 @@ class TestNoCompartmentFlag:
             [
                 "transform",
                 map_path,
-                "-m",
-                "keep-species",
-                "--no-compartment",
+                "--keep-species",
+                "--drop-compartments",
                 "-o",
                 str(out_path),
             ]
@@ -334,9 +342,8 @@ class TestNoCompartmentFlag:
                 [
                     "transform",
                     example_map_path,
-                    "-m",
-                    "keep-species",
-                    "--no-compartment",
+                    "--keep-species",
+                    "--drop-compartments",
                     "-l",
                     "plain",
                 ]
@@ -344,7 +351,7 @@ class TestNoCompartmentFlag:
         assert error.value.code == 1
         captured = capsys.readouterr()
         assert captured.err.startswith("error: ")
-        assert "no_compartment" in captured.err
+        assert "merged compartments" in captured.err
 
 
 class TestListModes:
@@ -359,35 +366,38 @@ class TestListModes:
     def test_json_output_has_expected_structure(self, capsys):
         pd2af.cli.main(["list-modes", "--json"])
         data = json.loads(capsys.readouterr().out)
-        assert set(data) == {"transformation_modes", "layout_modes"}
+        assert set(data) == {
+            "transformation_modes",
+            "transformation_options",
+            "layout_modes",
+        }
         # One entry per table row, one key per column.
         names = {mode["transformation_mode"] for mode in data["transformation_modes"]}
         assert names == set(pd2af.modes.get_transformation_modes())
         for mode in data["transformation_modes"]:
             assert set(mode) == {
                 "transformation_mode",
-                "layout_modes",
                 "languages",
                 "description",
             }
+        option_names = {row["option"] for row in data["transformation_options"]}
+        assert option_names == {
+            option["flag"] for option in pd2af.modes.TRANSFORMATION_OPTIONS.values()
+        }
+        for option in data["transformation_options"]:
+            assert set(option) == {"option", "default", "description"}
         layout_names = {row["layout_mode"] for row in data["layout_modes"]}
         assert layout_names == set(pd2af.cli._LAYOUT_CHOICES)
 
-    def test_json_layout_modes_reflect_validation(self, capsys):
+    def test_json_options_report_the_per_mode_defaults(self, capsys):
         pd2af.cli.main(["list-modes", "--json"])
-        modes = {
-            mode["transformation_mode"]: mode
-            for mode in json.loads(capsys.readouterr().out)["transformation_modes"]
+        options = {
+            row["option"]: row
+            for row in json.loads(capsys.readouterr().out)["transformation_options"]
         }
-        # Merged-proteoform modes only accept `dot`; the per-species modes
-        # accept all three concrete layout modes.
-        assert modes["normal"]["layout_modes"] == ["dot"]
-        assert modes["normal-no-complex"]["layout_modes"] == ["dot"]
-        assert set(modes["keep-species"]["layout_modes"]) == {
-            "plain",
-            "overlay",
-            "dot",
-        }
+        # `keep-reactions` is the one mode that starts from `keep_species`.
+        assert options["--keep-species"]["default"] == "off (on for keep-reactions)"
+        assert options["--drop-compartments"]["default"] == "off"
 
     def test_json_layout_modes_reflect_language_support(self, capsys):
         pd2af.cli.main(["list-modes", "--json"])
@@ -428,7 +438,8 @@ class TestAnnotationCarryCli:
         # Compute a resource the carry places on a top-level output species.
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -450,7 +461,8 @@ class TestAnnotationCarryCli:
                 "transform",
                 jnk_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-o",
@@ -489,7 +501,8 @@ class TestCliExpectedErrors:
                     "transform",
                     example_map_path,
                     "-m",
-                    "keep-species",
+                    "normal",
+                    "--keep-species",
                     "-l",
                     "plain",
                     "-a",
@@ -512,7 +525,8 @@ class TestCliExpectedErrors:
                     "transform",
                     example_map_path,
                     "-m",
-                    "keep-species",
+                    "normal",
+                    "--keep-species",
                     "-l",
                     "plain",
                     "--exclude-group",
@@ -544,7 +558,8 @@ class TestCliImplicitTransformSubcommand:
             [
                 example_map_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-o",
@@ -556,7 +571,8 @@ class TestCliImplicitTransformSubcommand:
                 "transform",
                 example_map_path,
                 "-m",
-                "keep-species",
+                "normal",
+                "--keep-species",
                 "-l",
                 "plain",
                 "-o",

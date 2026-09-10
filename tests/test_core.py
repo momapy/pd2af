@@ -1,4 +1,5 @@
 import os
+import types
 
 import pytest
 
@@ -7,6 +8,7 @@ import momapy.io.core
 from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
+import pd2af.modes
 
 from tests._helpers import (
     MAPS_DIR,
@@ -34,13 +36,15 @@ def _assert_recursively_stripped(species_iterable):
 
 @pytest.fixture(scope="module")
 def out_keep_species(example_cd_map):
-    return pd2af.transform(example_cd_map, mode="keep-species", layout_mode="plain").obj
+    return pd2af.transform(
+        example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
+    ).obj
 
 
 @pytest.fixture(scope="module")
 def out_keep_species_no_complex(example_cd_map):
     return pd2af.transform(
-        example_cd_map, mode="keep-species-no-complex", layout_mode="plain"
+        example_cd_map, mode="no-complex", keep_species=True, layout_mode="plain"
     ).obj
 
 
@@ -55,9 +59,7 @@ def out_keep_reactions(example_cd_map):
 def out_normal_no_complex(example_cd_map):
     if not has_dot_binary():
         pytest.skip("graphviz `dot` binary not on PATH")
-    return pd2af.transform(
-        example_cd_map, mode="normal-no-complex", layout_mode="auto"
-    ).obj
+    return pd2af.transform(example_cd_map, mode="no-complex", layout_mode="auto").obj
 
 
 @pytest.fixture(scope="module")
@@ -68,7 +70,7 @@ def out_normal(example_cd_map):
 
 
 class TestTransformExampleKeepSpeciesMode:
-    """Golden test: example.xml under keep-species mode and plain layout."""
+    """Golden test: example.xml under `--keep-species` and plain layout."""
 
     def test_returns_celldesigner_map(self, out_keep_species):
         assert isinstance(out_keep_species, momapy.celldesigner.CellDesignerMap)
@@ -78,7 +80,7 @@ class TestTransformExampleKeepSpeciesMode:
 
     def test_expected_active_species(self, out_keep_species):
         # Active subunit C is subsumed into its containing complex D under
-        # keep-species (which keeps complexes), so it does not appear as a
+        # `normal` (which keeps complexes), so it does not appear as a
         # top-level activity.
         assert species_names(out_keep_species.model) == [
             "B",
@@ -102,10 +104,10 @@ class TestTransformExampleKeepSpeciesMode:
 
 
 class TestTransformExampleKeepSpeciesNoComplexMode:
-    """Golden test: example.xml under keep-species-no-complex mode."""
+    """Golden test: example.xml under `no-complex` with `--keep-species`."""
 
     def test_complex_subunits_replace_complex(self, out_keep_species_no_complex):
-        # Complex D contains subunits A and C; under keep-species-no-complex,
+        # Complex D contains subunits A and C; under `no-complex`,
         # D drops out and influences route through its active subunits
         # instead. Only C has activity, so D->F becomes C->F and B->D becomes
         # B->C.
@@ -126,7 +128,7 @@ class TestTransformExampleKeepReactionsMode:
     """Golden test: example.xml under keep-reactions mode and plain layout."""
 
     def test_every_species_becomes_an_activity(self, out_keep_reactions):
-        # All eight top-level species, unlike keep-species which keeps only the
+        # All eight top-level species, unlike `normal` which keeps only the
         # five that carry an activity signal. Subunits A and C stay folded into
         # complex D. Two species are named E: the plain form s7 and its active
         # form s7_active.
@@ -171,7 +173,7 @@ class TestTransformExampleKeepReactionsMode:
     def test_omits_inferred_influences(self, out_keep_reactions):
         modulations = modulation_set(out_keep_reactions.model)
         # B -> D needs multi-hop chaining, G -> B needs consumption reasoning;
-        # keep-species derives both, keep-reactions derives neither.
+        # `normal` derives both, keep-reactions derives neither.
         assert ("PositiveInfluence", "B", "D") not in modulations
         assert ("NegativeInfluence", "G", "B") not in modulations
 
@@ -181,14 +183,14 @@ class TestTransformExampleKeepReactionsMode:
 
 
 class TestTransformExampleNoComplexMode:
-    """Golden test: example.xml under normal-no-complex mode (merge proteoforms,
-    drop complexes)."""
+    """Golden test: example.xml under `no-complex` (merged forms, dropped
+    complexes)."""
 
     def test_returns_celldesigner_map(self, out_normal_no_complex):
         assert isinstance(out_normal_no_complex, momapy.celldesigner.CellDesignerMap)
 
     def test_complex_drops_out(self, out_normal_no_complex):
-        # Complex D has an active subunit; normal-no-complex drops D in favour of
+        # Complex D has an active subunit; `no-complex` drops D in favour of
         # the active subunit C.
         names = species_names(out_normal_no_complex.model)
         assert "D" not in names
@@ -230,7 +232,7 @@ class TestTransformExampleNormalMode:
     def test_complex_is_kept(self, out_normal):
         # Complex D is kept as its own activity. Its active subunit C is no
         # longer a separate top-level activity -- it is a structural component
-        # of D, so any influence it carries routes to D (same as keep-species).
+        # of D, so any influence it carries routes to D (same as `normal`).
         names = species_names(out_normal.model)
         assert "D" in names
         assert "C" not in names
@@ -259,10 +261,10 @@ class TestTransformExampleNormalMode:
         _assert_recursively_stripped(out_normal.model.species)
 
 
-class TestMergedModeStripping:
-    """The merged modes strip all PTM decorations (recursively); keep-species
-    keeps them. Exercised on a committed map that carries real modifications and
-    structural states -- example.xml is decoration-free, so it cannot prove the
+class TestMergedStripping:
+    """The merged reading strips all PTM decorations (recursively);
+    `--keep-species` keeps them. Exercised on a committed map that carries real
+    modifications and structural states -- example.xml is decoration-free, so it cannot prove the
     strip on its own."""
 
     @pytest.fixture(scope="class")
@@ -273,19 +275,22 @@ class TestMergedModeStripping:
         out = pd2af.transform(rich_map, mode="normal", layout_mode=None).obj
         _assert_recursively_stripped(out.model.species)
 
-    def test_normal_no_complex_strips_all_decorations(self, rich_map):
-        out = pd2af.transform(rich_map, mode="normal-no-complex", layout_mode=None).obj
+    def test_no_complex_strips_all_decorations(self, rich_map):
+        out = pd2af.transform(rich_map, mode="no-complex", layout_mode=None).obj
         _assert_recursively_stripped(out.model.species)
 
-    def test_keep_species_retains_decorations(self, rich_map):
-        out = pd2af.transform(rich_map, mode="keep-species", layout_mode=None).obj
+    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
+    def test_keep_species_retains_decorations(self, rich_map, mode):
+        out = pd2af.transform(
+            rich_map, mode=mode, keep_species=True, layout_mode=None
+        ).obj
         decorated = [
             s
             for s in out.model.species
             if getattr(s, "modifications", None)
             or getattr(s, "structural_states", None)
         ]
-        assert decorated  # keep-species preserves PTM decorations
+        assert decorated  # `keep_species` preserves PTM decorations
 
     # A map with curated residue-modification, structural-state and active-border
     # glyphs, so the auto-layout strip below has every kind of stripped PD layout
@@ -338,21 +343,23 @@ class TestMergedModeStripping:
 
     def test_keep_species_layout_retains_decoration_glyphs(self, decorated_layout_map):
         out = pd2af.transform(
-            decorated_layout_map, mode="keep-species", layout_mode="plain"
+            decorated_layout_map, mode="normal", keep_species=True, layout_mode="plain"
         ).obj
         assert self._count_decoration_glyphs(out.layout) > 0
 
 
 class TestTransformLayoutModes:
     def test_no_layout_mode_yields_map_without_layout(self, example_cd_map):
-        out = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         assert isinstance(out, momapy.celldesigner.CellDesignerMap)
         assert out.layout is None
         assert len(out.model.species) > 0
 
     def test_plain_mode_attaches_layout(self, example_cd_map):
         out = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode="plain"
+            example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
         ).obj
         assert out.layout is not None
         assert len(out.layout.layout_elements) > 0
@@ -362,7 +369,7 @@ class TestTransformLayoutModes:
     )
     def test_auto_mode_runs_with_dot(self, example_cd_map):
         out = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode="auto"
+            example_cd_map, mode="normal", keep_species=True, layout_mode="auto"
         ).obj
         assert out.layout is not None
         assert len(out.layout.layout_elements) > 0
@@ -374,14 +381,15 @@ class TestTransformSetActive:
 
     def test_set_active_surfaces_non_active_species(self, example_cd_map):
         # Species A (id `s1`) is a bare, non-active species: absent from the
-        # baseline keep-species activities.
+        # baseline `keep_species` activities.
         baseline = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode="plain"
+            example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
         ).obj
         assert "A" not in species_names(baseline.model)
         with_active = pd2af.transform(
             example_cd_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             set_active=["s1"],
         ).obj
@@ -391,7 +399,8 @@ class TestTransformSetActive:
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
-                mode="keep-species",
+                mode="normal",
+                keep_species=True,
                 layout_mode="plain",
                 set_active=["not-an-id"],
             )
@@ -402,14 +411,15 @@ class TestTransformSetInactive:
     map would otherwise surface as active."""
 
     def test_set_inactive_suppresses_default_active_species(self, example_cd_map):
-        # Species B (id `s2`) is active by default in the keep-species output.
+        # Species B (id `s2`) is active by default in the `keep_species` output.
         baseline = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode="plain"
+            example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
         ).obj
         assert "B" in species_names(baseline.model)
         with_inactive = pd2af.transform(
             example_cd_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             set_inactive=["s2"],
         ).obj
@@ -419,7 +429,8 @@ class TestTransformSetInactive:
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
-                mode="keep-species",
+                mode="normal",
+                keep_species=True,
                 layout_mode="plain",
                 set_active=["s1"],
                 set_inactive=["s1"],
@@ -429,7 +440,8 @@ class TestTransformSetInactive:
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
-                mode="keep-species",
+                mode="normal",
+                keep_species=True,
                 layout_mode="plain",
                 set_inactive=["not-an-id"],
             )
@@ -443,7 +455,8 @@ class TestTransformSetAllActive:
     def test_set_all_active_surfaces_bare_species(self, example_cd_map):
         with_all_active = pd2af.transform(
             example_cd_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             set_all_active=True,
         ).obj
@@ -453,7 +466,8 @@ class TestTransformSetAllActive:
     def test_set_inactive_overrides_set_all_active(self, example_cd_map):
         with_override = pd2af.transform(
             example_cd_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             set_all_active=True,
             set_inactive=["s2"],
@@ -464,7 +478,8 @@ class TestTransformSetAllActive:
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
-                mode="keep-species",
+                mode="normal",
+                keep_species=True,
                 layout_mode="plain",
                 set_all_active=True,
                 set_all_inactive=True,
@@ -478,7 +493,8 @@ class TestTransformSetAllInactive:
     def test_set_all_inactive_drops_every_species(self, example_cd_map):
         with_all_inactive = pd2af.transform(
             example_cd_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             set_all_inactive=True,
         ).obj
@@ -487,7 +503,8 @@ class TestTransformSetAllInactive:
     def test_set_active_overrides_set_all_inactive(self, example_cd_map):
         with_override = pd2af.transform(
             example_cd_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             set_all_inactive=True,
             set_active=["s1"],
@@ -503,14 +520,18 @@ class TestTransformErrors:
     def test_unknown_layout_mode_raises_value_error(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.transform(
-                example_cd_map, mode="keep-species", layout_mode="not-a-layout-mode"
+                example_cd_map,
+                mode="normal",
+                keep_species=True,
+                layout_mode="not-a-layout-mode",
             )
 
     def test_unknown_influence_pairing_raises_value_error(self, example_cd_map):
         with pytest.raises(ValueError):
             pd2af.transform(
                 example_cd_map,
-                mode="keep-species",
+                mode="normal",
+                keep_species=True,
                 layout_mode="plain",
                 influence_pairing="not-a-pairing",
             )
@@ -536,30 +557,36 @@ class TestTransformErrors:
     def test_model_input_layout_message_uses_tokens(self, example_cd_map):
         with pytest.raises(ValueError) as error:
             pd2af.transform(
-                example_cd_map.model, mode="keep-species", layout_mode="plain"
+                example_cd_map.model,
+                mode="normal",
+                keep_species=True,
+                layout_mode="plain",
             )
         assert "'plain'" in str(error.value)
         assert "LayoutMode." not in str(error.value)
 
-    @pytest.mark.parametrize("mode", ["normal", "normal-no-complex"])
+    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
     @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
-    def test_merged_modes_reject_input_derived_layout(
+    def test_merged_forms_reject_input_derived_layout(
         self, example_cd_map, mode, layout_mode
     ):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as error:
             pd2af.transform(example_cd_map, mode=mode, layout_mode=layout_mode)
+        assert "merged forms" in str(error.value)
 
-    @pytest.mark.parametrize("mode", ["keep-species", "keep-species-no-complex"])
+    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
     @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
-    def test_keep_species_modes_accept_non_auto_layout(
+    def test_keep_species_accepts_non_auto_layout(
         self, example_cd_map, mode, layout_mode
     ):
-        out = pd2af.transform(example_cd_map, mode=mode, layout_mode=layout_mode).obj
+        out = pd2af.transform(
+            example_cd_map, mode=mode, keep_species=True, layout_mode=layout_mode
+        ).obj
         assert out.layout is not None
 
 
-class TestTransformNoCompartment:
-    """`no_compartment` merges every compartment into the default one.
+class TestTransformDropCompartments:
+    """`drop_compartments` merges every compartment into the default one.
 
     Exercised on a committed map whose neuron and astrocyte compartments hold
     many of the same species -- example.xml declares a single compartment, so it
@@ -568,9 +595,7 @@ class TestTransformNoCompartment:
 
     ALL_MODES = [
         "normal",
-        "normal-no-complex",
-        "keep-species",
-        "keep-species-no-complex",
+        "no-complex",
         "keep-reactions",
     ]
 
@@ -581,7 +606,7 @@ class TestTransformNoCompartment:
     @pytest.mark.parametrize("mode", ALL_MODES)
     def test_only_the_default_compartment_survives(self, multi_compartment_map, mode):
         out = pd2af.transform(
-            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+            multi_compartment_map, mode=mode, layout_mode=None, drop_compartments=True
         ).obj
         assert len(multi_compartment_map.model.compartments) > 1
         (compartment,) = out.model.compartments
@@ -592,7 +617,7 @@ class TestTransformNoCompartment:
         self, multi_compartment_map, mode
     ):
         out = pd2af.transform(
-            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+            multi_compartment_map, mode=mode, layout_mode=None, drop_compartments=True
         ).obj
         (compartment,) = out.model.compartments
         assert out.model.species
@@ -604,7 +629,7 @@ class TestTransformNoCompartment:
     ):
         kept = pd2af.transform(multi_compartment_map, mode=mode, layout_mode=None).obj
         merged = pd2af.transform(
-            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+            multi_compartment_map, mode=mode, layout_mode=None, drop_compartments=True
         ).obj
         assert len(merged.model.species) < len(kept.model.species)
 
@@ -612,16 +637,20 @@ class TestTransformNoCompartment:
     def test_influences_that_become_equal_merge(self, multi_compartment_map, mode):
         kept = pd2af.transform(multi_compartment_map, mode=mode, layout_mode=None).obj
         merged = pd2af.transform(
-            multi_compartment_map, mode=mode, layout_mode=None, no_compartment=True
+            multi_compartment_map, mode=mode, layout_mode=None, drop_compartments=True
         ).obj
         assert len(merged.model.modulations) < len(kept.model.modulations)
 
     def test_compartment_free_map_is_unaffected(self, example_cd_map):
         kept = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode=None
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         merged = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode=None, no_compartment=True
+            example_cd_map,
+            mode="normal",
+            keep_species=True,
+            layout_mode=None,
+            drop_compartments=True,
         ).obj
         assert species_names(merged.model) == species_names(kept.model)
         assert modulation_set(merged.model) == modulation_set(kept.model)
@@ -631,25 +660,26 @@ class TestTransformNoCompartment:
         if not has_dot_binary():
             pytest.skip("graphviz `dot` not available")
         out = pd2af.transform(
-            multi_compartment_map, mode=mode, layout_mode="dot", no_compartment=True
+            multi_compartment_map, mode=mode, layout_mode="dot", drop_compartments=True
         ).obj
-        path = str(tmp_path / "no_compartment.xml")
+        path = str(tmp_path / "drop_compartments.xml")
         momapy.io.core.write(out, path, writer="celldesigner")
         back = momapy.io.core.read(path).obj
         assert len(back.model.species) == len(out.model.species)
         assert [c.id_ for c in back.model.compartments] == ["default"]
 
-    @pytest.mark.parametrize("mode", ["keep-species", "keep-reactions"])
+    @pytest.mark.parametrize("mode", ["normal", "keep-reactions"])
     @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
     def test_input_derived_layout_is_rejected(self, example_cd_map, mode, layout_mode):
         with pytest.raises(ValueError) as error:
             pd2af.transform(
                 example_cd_map,
                 mode=mode,
+                keep_species=True,
                 layout_mode=layout_mode,
-                no_compartment=True,
+                drop_compartments=True,
             )
-        assert "no_compartment" in str(error.value)
+        assert "merged compartments" in str(error.value)
 
 
 class TestTransformIsPure:
@@ -659,7 +689,7 @@ class TestTransformIsPure:
         cd_map = read_cd_map(example_map_path)
         before_species = sorted(s.id_ for s in cd_map.model.species)
         before_reactions = sorted(r.id_ for r in cd_map.model.reactions)
-        pd2af.transform(cd_map, mode="keep-species", layout_mode=None)
+        pd2af.transform(cd_map, mode="normal", keep_species=True, layout_mode=None)
         after_species = sorted(s.id_ for s in cd_map.model.species)
         after_reactions = sorted(r.id_ for r in cd_map.model.reactions)
         assert before_species == after_species
@@ -674,7 +704,7 @@ class TestTransformIsPure:
             t.id_: getattr(t, "modification_residues", None)
             for t in cd_map.model.species_templates
         }
-        pd2af.transform(cd_map, mode="normal-no-complex", layout_mode="auto")
+        pd2af.transform(cd_map, mode="no-complex", layout_mode="auto")
         after_template_ids = sorted(t.id_ for t in cd_map.model.species_templates)
         after_template_residues = {
             t.id_: getattr(t, "modification_residues", None)
@@ -700,7 +730,9 @@ class TestProvenance:
     round-trips."""
 
     def test_provenance_keys_are_output_model_elements(self, example_cd_map):
-        result = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
+        result = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
+        )
         model = result.obj.model
         output_elements = (
             _species_and_subunits(model.species)
@@ -714,7 +746,9 @@ class TestProvenance:
             assert output_element in output_elements
 
     def test_inverse_round_trips(self, example_cd_map):
-        result = pd2af.transform(example_cd_map, mode="keep-species", layout_mode=None)
+        result = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
+        )
         for (
             output_element,
             input_elements,
@@ -734,18 +768,20 @@ class TestTransformModelInput:
     non-None layout mode."""
 
     def test_returns_celldesigner_model(self, example_cd_map):
-        result = pd2af.transform(example_cd_map.model, mode="keep-species")
+        result = pd2af.transform(example_cd_map.model, mode="normal", keep_species=True)
         assert isinstance(result.obj, momapy.celldesigner.CellDesignerModel)
 
     def test_model_output_matches_map_output(self, example_cd_map):
-        from_model = pd2af.transform(example_cd_map.model, mode="keep-species").obj
+        from_model = pd2af.transform(
+            example_cd_map.model, mode="normal", keep_species=True
+        ).obj
         from_map = pd2af.transform(
-            example_cd_map, mode="keep-species", layout_mode=None
+            example_cd_map, mode="normal", keep_species=True, layout_mode=None
         ).obj
         assert species_names(from_model) == species_names(from_map.model)
 
     def test_provenance_available_for_model_input(self, example_cd_map):
-        result = pd2af.transform(example_cd_map.model, mode="keep-species")
+        result = pd2af.transform(example_cd_map.model, mode="normal", keep_species=True)
         output_elements = (
             _species_and_subunits(result.obj.species)
             | set(result.obj.boolean_logic_gates)
@@ -759,13 +795,19 @@ class TestTransformModelInput:
     def test_rejects_explicit_layout_mode(self, example_cd_map, layout_mode):
         with pytest.raises(ValueError):
             pd2af.transform(
-                example_cd_map.model, mode="keep-species", layout_mode=layout_mode
+                example_cd_map.model,
+                mode="normal",
+                keep_species=True,
+                layout_mode=layout_mode,
             )
 
     @pytest.mark.parametrize("layout_mode", ["auto", None])
     def test_accepts_auto_or_none_layout_mode(self, example_cd_map, layout_mode):
         result = pd2af.transform(
-            example_cd_map.model, mode="keep-species", layout_mode=layout_mode
+            example_cd_map.model,
+            mode="normal",
+            keep_species=True,
+            layout_mode=layout_mode,
         )
         assert isinstance(result.obj, momapy.celldesigner.CellDesignerModel)
 
@@ -784,7 +826,8 @@ class TestAnnotationCarry:
         reader_result = annotated_reader_result
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -821,7 +864,8 @@ class TestAnnotationCarry:
         element_to_annotations[target_compartment] = frozenset([annotation])
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             element_to_annotations=element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -837,7 +881,8 @@ class TestAnnotationCarry:
         reader_result = annotated_reader_result
         result = pd2af.transform(
             reader_result.obj,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode="plain",
             element_to_annotations=reader_result.element_to_annotations,
             element_to_notes=reader_result.element_to_notes,
@@ -864,3 +909,104 @@ class TestAnnotationCarry:
         assert (reread.element_to_annotations or {}).get(
             target_species
         ) == expected_annotations
+
+
+class TestTransformationOptions:
+    """An option is resolved from the user's value, then the mode's, then the
+    vocabulary's default -- so a mode suggests and never overrules."""
+
+    def test_keep_reactions_keeps_the_species_apart_by_default(self, example_cd_map):
+        kept = pd2af.transform(
+            example_cd_map, mode="keep-reactions", layout_mode=None
+        ).obj
+        merged = pd2af.transform(
+            example_cd_map,
+            mode="keep-reactions",
+            keep_species=False,
+            layout_mode=None,
+        ).obj
+        assert len(merged.model.species) < len(kept.model.species)
+
+    def test_explicit_value_overrules_the_mode(self, example_cd_map):
+        explicit = pd2af.transform(
+            example_cd_map,
+            mode="keep-reactions",
+            keep_species=False,
+            layout_mode=None,
+        ).obj
+        _assert_recursively_stripped(explicit.model.species)
+
+    def test_every_default_option_is_a_known_option(self):
+        for mode in pd2af.modes.get_transformation_modes().values():
+            for name in mode.default_options:
+                assert name in pd2af.modes.TRANSFORMATION_OPTIONS
+
+    def test_unknown_default_option_fails_to_load(self):
+        mode = pd2af.modes.TransformationMode(
+            name="bogus-option-mode",
+            docs="names an option that does not exist",
+            default_options=types.MappingProxyType({"not_an_option": True}),
+        )
+        with pytest.raises(ValueError) as error:
+            pd2af.modes._check_default_options_are_known(mode)
+        assert "not_an_option" in str(error.value)
+
+
+class TestOptionsDecideTheLayoutModes:
+    @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
+    def test_keep_species_puts_the_input_derived_modes_back_on_offer(
+        self, example_cd_map, layout_mode
+    ):
+        out = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode=layout_mode
+        ).obj
+        assert out.layout is not None
+
+    @pytest.mark.parametrize("layout_mode", ["plain", "overlay"])
+    def test_drop_compartments_takes_them_away_again(self, example_cd_map, layout_mode):
+        with pytest.raises(ValueError):
+            pd2af.transform(
+                example_cd_map,
+                mode="normal",
+                keep_species=True,
+                drop_compartments=True,
+                layout_mode=layout_mode,
+            )
+
+    def test_message_names_merged_forms(self, example_cd_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(example_cd_map, mode="normal", layout_mode="plain")
+        assert "merged forms on 'celldesigner' input" in str(error.value)
+
+    def test_message_names_merged_compartments(self, example_cd_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(
+                example_cd_map,
+                mode="normal",
+                keep_species=True,
+                drop_compartments=True,
+                layout_mode="plain",
+            )
+        assert "merged compartments on 'celldesigner' input" in str(error.value)
+
+    def test_message_names_both(self, example_cd_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(
+                example_cd_map,
+                mode="normal",
+                drop_compartments=True,
+                layout_mode="plain",
+            )
+        assert "merged forms and merged compartments" in str(error.value)
+
+    def test_message_names_no_merging_when_none_applies(self, sbgn_example_map):
+        with pytest.raises(ValueError) as error:
+            pd2af.transform(
+                sbgn_example_map,
+                mode="normal",
+                keep_species=True,
+                layout_mode="overlay",
+            )
+        message = str(error.value)
+        assert message.startswith("'sbgn_pd' input supports layout_mode")
+        assert "merged" not in message

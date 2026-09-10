@@ -35,25 +35,6 @@ def _compatible_language_names_for_mode(
     ]
 
 
-def _compatible_layout_mode_names_for_mode(
-    mode: pd2af.modes.TransformationMode,
-) -> list[pd2af.modes.LayoutMode]:
-    """The layout modes a transformation mode offers on *some* input language.
-
-    The per-language answer is the mode's own
-    `compatible_layout_modes(language)`; the listing table has one row per
-    mode, so it shows the union over the languages the mode accepts, in
-    display order. The languages column and the layout-modes table carry the
-    per-language detail.
-    """
-    offered = set()
-    for language in mode.compatible_languages:
-        offered.update(mode.compatible_layout_modes(language))
-    return [
-        layout_mode for layout_mode in pd2af.modes.LayoutMode if layout_mode in offered
-    ]
-
-
 def _compatible_language_names_for_layout_mode(
     layout_mode: pd2af.modes.LayoutMode | str,
 ) -> list[str]:
@@ -131,7 +112,8 @@ def _run(args: argparse.Namespace) -> None:
         mode=args.transformation_mode,
         layout_mode=args.layout_mode,
         influence_pairing=args.influence_pairing,
-        no_compartment=args.no_compartment,
+        keep_species=args.keep_species,
+        drop_compartments=args.drop_compartments,
         set_active=args.set_active,
         set_inactive=args.set_inactive,
         set_all_active=args.set_all_active,
@@ -158,6 +140,20 @@ def _run(args: argparse.Namespace) -> None:
         )
 
 
+def _describe_option_default(name: str, option: dict) -> str:
+    """An option's default, naming the modes whose `default_options` differ."""
+    default = option["default"]
+    exceptions = [
+        mode.name
+        for mode in pd2af.modes.get_transformation_modes().values()
+        if mode.default_options.get(name, default) != default
+    ]
+    description = "on" if default else "off"
+    if exceptions:
+        description += f" ({'off' if default else 'on'} for {', '.join(exceptions)})"
+    return description
+
+
 def _build_modes_data() -> dict:
     """Assemble the structured `list-modes` payload from the source-of-truth.
 
@@ -169,11 +165,18 @@ def _build_modes_data() -> dict:
     transformation_modes = [
         {
             "transformation_mode": mode.name,
-            "layout_modes": _compatible_layout_mode_names_for_mode(mode),
             "languages": _compatible_language_names_for_mode(mode),
             "description": mode.docs,
         }
         for mode in pd2af.modes.get_transformation_modes().values()
+    ]
+    transformation_options = [
+        {
+            "option": option["flag"],
+            "default": _describe_option_default(name, option),
+            "description": option["description"],
+        }
+        for name, option in pd2af.modes.TRANSFORMATION_OPTIONS.items()
     ]
     layout_modes = [
         {
@@ -185,6 +188,7 @@ def _build_modes_data() -> dict:
     ]
     return {
         "transformation_modes": transformation_modes,
+        "transformation_options": transformation_options,
         "layout_modes": layout_modes,
     }
 
@@ -280,12 +284,22 @@ def _format_modes_tables(data: dict) -> str:
             "Transformation modes (--transformation-mode, -m):",
             [
                 ("transformation mode", "transformation_mode"),
-                ("layout modes", "layout_modes"),
                 ("languages", "languages"),
                 ("description", "description"),
             ],
             data["transformation_modes"],
-            max_widths={3: 48},
+            max_widths={2: 48},
+        )
+        + "\nThe transformation options below change the layout modes on offer.",
+        _render_modes_table(
+            "Transformation options:",
+            [
+                ("option", "option"),
+                ("default", "default"),
+                ("description", "description"),
+            ],
+            data["transformation_options"],
+            max_widths={2: 48},
         ),
         _render_modes_table(
             "Layout modes (--layout-mode, -l):",
@@ -295,7 +309,9 @@ def _format_modes_tables(data: dict) -> str:
                 ("description", "description"),
             ],
             data["layout_modes"],
-        ),
+        )
+        + "\n`plain` and `overlay` are available exactly when --keep-species is "
+        "set without --drop-compartments.",
     ]
     return "\n\n".join(sections)
 
@@ -370,14 +386,12 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=tuple(pd2af.modes.get_transformation_modes()),
         default="normal",
         help=(
-            "transformation mode (default: normal). 'normal' and "
-            "'normal-no-complex' merge proteoforms of the same template and "
-            "compartment into a single activity (true PD->AF transform) "
-            "and require `--layout-mode dot` (or `auto`). 'keep-species' and "
-            "'keep-species-no-complex' keep each PD species as its own "
-            "activity. The '*-no-complex' variants drop complexes that "
-            "have an active subunit, routing influences through the "
-            "subunits. 'keep-reactions' keeps the PD topology itself: "
+            "transformation mode (default: normal). A mode decides what "
+            "counts as an activity. 'normal' keeps a complex as an activity "
+            "of its own, routing a subunit's influences to the complex it "
+            "belongs to. 'no-complex' replaces a complex that has an active "
+            "subunit with those subunits, promoting them to top-level "
+            "activities. 'keep-reactions' keeps the PD topology itself: "
             "every species is an activity and every reaction becomes a "
             "positive influence from each of its reactants to each of "
             "its products, alongside the modulation arcs and reaction "
@@ -395,8 +409,8 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
             "default; a map gets `dot`), dot (graphviz auto-layout, requires "
             "`dot`), plain (reuse original positions, model elements only), or "
             "overlay (reuse full original layout with non-model elements greyed "
-            "out). 'normal' and 'normal-no-complex' transformation modes require "
-            "`dot` (or `auto`), and so does `--no-compartment`."
+            "out). `dot` is required whenever activities merge: unless "
+            "`--keep-species` is set, and always under `--drop-compartments`."
         ),
     )
     parser.add_argument(
@@ -412,17 +426,15 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
             "positions are real; in `dot` it is ignored."
         ),
     )
-    parser.add_argument(
-        "--no-compartment",
-        action="store_true",
-        dest="no_compartment",
-        help=(
-            "merge every compartment into the default one: species that differ "
-            "only by compartment become a single activity, and the influences "
-            "that become equal merge in turn. Works with every transformation "
-            "mode, and requires `--layout-mode dot` (or `auto`)."
-        ),
-    )
+    for name, option in pd2af.modes.TRANSFORMATION_OPTIONS.items():
+        parser.add_argument(
+            option["flag"],
+            dest=name,
+            action=argparse.BooleanOptionalAction,
+            default=None,
+            help=f"{option['description']}; default: "
+            f"{_describe_option_default(name, option)}",
+        )
     parser.add_argument(
         "-a",
         "--set-active",

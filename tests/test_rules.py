@@ -9,9 +9,7 @@ from tests._helpers import build_program_for_mode_name
 
 _MODES = (
     "normal",
-    "normal-no-complex",
-    "keep-species",
-    "keep-species-no-complex",
+    "no-complex",
     "keep-reactions",
 )
 
@@ -60,12 +58,7 @@ class TestBuildProgram:
         assert "influences(SOURCE_KEY, TARGET_KEY," in program
 
     def test_path_inference_modes_carry_kind_through_composes_to(self):
-        for mode in (
-            "normal",
-            "normal-no-complex",
-            "keep-species",
-            "keep-species-no-complex",
-        ):
+        for mode in ("normal", "no-complex"):
             program = build_program_for_mode_name(mode)
             assert "composesTo(triggers, positivelyInfluences)" in program
             assert (
@@ -73,33 +66,31 @@ class TestBuildProgram:
                 in program
             )
 
-    def test_normal_no_complex_variants_promote_active_subunits(self):
-        for mode in ("normal-no-complex", "keep-species-no-complex"):
-            program = build_program_for_mode_name(mode)
-            assert "promotedSubunitKey" in program
+    def test_no_complex_promotes_active_subunits(self):
+        program = build_program_for_mode_name("no-complex")
+        assert "promotedSubunitKey" in program
 
-    def test_keep_complex_variants_omit_subunit_promotion(self):
-        for mode in ("normal", "keep-species"):
-            program = build_program_for_mode_name(mode)
-            assert "promotedSubunitKey" not in program
+    def test_normal_omits_subunit_promotion(self):
+        program = build_program_for_mode_name("normal")
+        assert "promotedSubunitKey" not in program
 
-    def test_normal_no_complex_variants_include_complex_traversal(self):
-        for mode in ("normal-no-complex", "keep-species-no-complex"):
+    def test_no_complex_includes_complex_traversal(self):
+        for mode in ("no-complex",):
             program = build_program_for_mode_name(mode)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" in program
 
-    def test_keep_complex_variants_omit_complex_traversal(self):
-        for mode in ("normal", "keep-species"):
+    def test_keep_complex_modes_omit_complex_traversal(self):
+        for mode in ("normal", "keep-reactions"):
             program = build_program_for_mode_name(mode)
             assert "propagatesInfluence(SOURCE, SUBUNIT, INFLUENCE_KIND)" not in program
             assert "propagatesInfluence(SUBUNIT, TARGET, INFLUENCE_KIND)" not in program
 
     def test_complex_keeping_modes_key_by_top_level(self):
-        # `normal`/`keep-species` route every species (including subunits) to
+        # `normal`/`keep-reactions` route every species (including subunits) to
         # its top-level complex via the shared `resolvesToTopLevel` relation, so a
         # subunit never gets its own key.
-        for mode in ("normal", "keep-species"):
+        for mode in ("normal", "keep-reactions"):
             program = build_program_for_mode_name(mode)
             assert "resolvesToTopLevel(SPECIES, TOPLEVEL)" in program
             assert "hasActivityKey(SPECIES, keptSpeciesKey(TOPLEVEL))" in program
@@ -109,8 +100,8 @@ class TestBuildProgram:
             program = build_program_for_mode_name(mode)
             assert "new_species_from_template" not in program
 
-    def test_keep_species_modes_use_kept_species_only(self):
-        for mode in ("keep-species", "keep-species-no-complex"):
+    def test_every_mode_uses_kept_species_only(self):
+        for mode in _MODES:
             program = build_program_for_mode_name(mode)
             assert "new_species_from_template" not in program
             assert "keptSpeciesKey" in program
@@ -129,9 +120,7 @@ class TestCycleAwareTransitivity:
 
     _PATH_INFERENCE = (
         "normal",
-        "normal-no-complex",
-        "keep-species",
-        "keep-species-no-complex",
+        "no-complex",
     )
 
     @pytest.mark.parametrize("mode", _PATH_INFERENCE)
@@ -162,7 +151,7 @@ class TestCycleAwareTransitivity:
         # An SBGN-PD operator input whose referred element is another logical
         # operator resolves through that operator's key, guarded on the input
         # operator emitting a node.
-        program = build_program_for_mode_name("keep-species", language="sbgn_pd")
+        program = build_program_for_mode_name("normal", language="sbgn_pd")
         assert (
             "new(logicalOperatorInput(logicalOperatorKey(OPERATOR), "
             "logicalOperatorKey(INPUT_OPERATOR)))" in program
@@ -172,7 +161,7 @@ class TestCycleAwareTransitivity:
     def test_celldesigner_has_no_operator_input_rule(self):
         # A BooleanLogicGateInput always refers to a species, so the CD
         # variant has no operator-referred input edge.
-        program = build_program_for_mode_name("keep-species", language="celldesigner")
+        program = build_program_for_mode_name("normal", language="celldesigner")
         assert "logicalOperatorKey(INPUT_OPERATOR)" not in program
 
 
@@ -244,7 +233,7 @@ class TestInfluencesConsumptionGroup:
 
     @pytest.mark.parametrize(
         "mode",
-        ("normal", "normal-no-complex", "keep-species", "keep-species-no-complex"),
+        ("normal", "no-complex"),
     )
     def test_path_inference_modes_include_it(self, mode):
         program = build_program_for_mode_name(mode, "celldesigner")
@@ -255,9 +244,9 @@ class TestInfluencesConsumptionGroup:
         assert "influences:consumption" not in _group_ids("keep-reactions")
 
     def test_excluding_it_keeps_the_rest_of_the_derivation(self):
-        full = build_program_for_mode_name("keep-species", "celldesigner")
+        full = build_program_for_mode_name("normal", "celldesigner")
         pruned = build_program_for_mode_name(
-            "keep-species", "celldesigner", exclude_groups=("influences:consumption",)
+            "normal", "celldesigner", exclude_groups=("influences:consumption",)
         )
         assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
         assert len(pruned.splitlines()) < len(full.splitlines())
@@ -265,7 +254,7 @@ class TestInfluencesConsumptionGroup:
     def test_sbgn_pd_variant_walks_modulation_to_reactant(self):
         # The SBGN-PD variant follows a modulation arc onto a process down to
         # its reactants: stimulation consumes (negative), inhibition spares.
-        program = build_program_for_mode_name("keep-species", "sbgn_pd")
+        program = build_program_for_mode_name("normal", "sbgn_pd")
         assert "stimulation(MODULATION)" in program
         assert "influences(SOURCE_KEY, TARGET_KEY, negativelyInfluences)" in program
         assert "inhibition(MODULATION)" in program
@@ -274,12 +263,12 @@ class TestInfluencesConsumptionGroup:
         assert "hasSource(MODULATION, SOURCE_ENTITY_POOL)" in program
 
 
-class TestMergedModesSbgnPdVariant:
-    """`normal`/`normal-no-complex` must emit working rules for SBGN-PD input:
+class TestSbgnPdVariant:
+    """`normal`/`no-complex` must emit working rules for SBGN-PD input:
     entity-pool carriers (not the CellDesigner `species` carrier). Keys are
     structural roles only and PTM stripping happens at the build stage."""
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
     def test_sbgn_pd_variant_uses_entity_pool_carrier(self, mode):
         program = build_program_for_mode_name(mode, language="sbgn_pd")
         assert "new_species_from_template" not in program
@@ -294,7 +283,7 @@ class TestMergedModesSbgnPdVariant:
             "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." not in program
         )
 
-    @pytest.mark.parametrize("mode", ("normal", "normal-no-complex"))
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
     def test_celldesigner_variant_uses_species_carrier(self, mode):
         program = build_program_for_mode_name(mode, language="celldesigner")
         assert "hasActivityCarrier(SPECIES, SPECIES) :- species(SPECIES)." in program
@@ -316,9 +305,9 @@ def test_registry_holds_every_group_the_modes_name():
 
 class TestExcludeGroups:
     def test_exclude_phenotype_drops_only_that_rule(self):
-        full = build_program_for_mode_name("keep-species", "celldesigner")
+        full = build_program_for_mode_name("normal", "celldesigner")
         pruned = build_program_for_mode_name(
-            "keep-species", "celldesigner", exclude_groups=("activity:phenotype",)
+            "normal", "celldesigner", exclude_groups=("activity:phenotype",)
         )
         phenotype_rule = (
             "hasActivityCandidate(PHENOTYPE, isPhenotype) :- phenotype(PHENOTYPE)."
@@ -338,7 +327,7 @@ class TestExcludeGroups:
     def test_exclude_mandatory_group_raises_friendly_error(self):
         with pytest.raises(ValueError) as excinfo:
             build_program_for_mode_name(
-                "keep-species", "celldesigner", exclude_groups=("activity:core",)
+                "normal", "celldesigner", exclude_groups=("activity:core",)
             )
         message = str(excinfo.value)
         assert "cannot exclude 'activity:core'" in message
@@ -347,7 +336,7 @@ class TestExcludeGroups:
     def test_exclude_unregistered_group_raises(self):
         with pytest.raises(ValueError):
             build_program_for_mode_name(
-                "keep-species", "celldesigner", exclude_groups=("does:not:exist",)
+                "normal", "celldesigner", exclude_groups=("does:not:exist",)
             )
 
     def test_exclude_rule_drops_one_table_entry(self):
@@ -355,9 +344,9 @@ class TestExcludeGroups:
             "hasInfluenceKind(MODULATION, positivelyInfluences) :- "
             "catalysis(MODULATION)."
         )
-        full = build_program_for_mode_name("keep-species", "celldesigner")
+        full = build_program_for_mode_name("normal", "celldesigner")
         pruned = build_program_for_mode_name(
-            "keep-species",
+            "normal",
             "celldesigner",
             exclude_rules=("influences:kind:celldesigner:catalysis",),
         )
@@ -367,7 +356,7 @@ class TestExcludeGroups:
     def test_exclude_unknown_rule_raises(self):
         with pytest.raises(ValueError):
             build_program_for_mode_name(
-                "keep-species", "celldesigner", exclude_rules=("no:such:rule",)
+                "normal", "celldesigner", exclude_rules=("no:such:rule",)
             )
 
     @pytest.mark.parametrize("mode", _MODES)

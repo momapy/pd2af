@@ -50,9 +50,7 @@ from tests._helpers import (
 
 _PATH_INFERENCE_MODES = (
     "normal",
-    "normal-no-complex",
-    "keep-species",
-    "keep-species-no-complex",
+    "no-complex",
 )
 
 _TYPED_INFLUENCE_NAMES = (
@@ -147,29 +145,27 @@ class TestGateRules:
         )
 
     def test_celldesigner_activates_gate_inputs(self):
-        program = build_program_for_mode_name("keep-species", language="celldesigner")
+        program = build_program_for_mode_name("normal", language="celldesigner")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "booleanLogicGateInput(INPUT)" in program
 
     def test_sbgn_pd_operator_input_activation_is_entity_pool_guarded(self):
-        program = build_program_for_mode_name("keep-species", language="sbgn_pd")
+        program = build_program_for_mode_name("normal", language="sbgn_pd")
         assert "hasActivityCandidate(ELEMENT, isGateInput)" in program
         assert "logicalOperatorInput(INPUT)" in program
         assert "entityPool(ELEMENT)" in program
 
     def test_not_token_dodges_reserved_keyword(self):
         # bare `not` is a reserved clingo keyword, so the NOT token is `not_`.
-        program = build_program_for_mode_name("keep-species", language="celldesigner")
+        program = build_program_for_mode_name("normal", language="celldesigner")
         assert "logicalOperator(logicalOperatorKey(OPERATOR), not_)) :-" in program
 
     def test_gates_influence_rule_guards_on_umbrella(self):
         # Without the booleanLogicGate/logicalOperator umbrella guard, every
         # path/3 source (species included) would be read as an operator key.
-        cd_program = build_program_for_mode_name(
-            "keep-species", language="celldesigner"
-        )
+        cd_program = build_program_for_mode_name("normal", language="celldesigner")
         assert "booleanLogicGate(OPERATOR)" in cd_program
-        sbgn_program = build_program_for_mode_name("keep-species", language="sbgn_pd")
+        sbgn_program = build_program_for_mode_name("normal", language="sbgn_pd")
         assert "logicalOperator(OPERATOR)" in sbgn_program
 
 
@@ -223,14 +219,18 @@ class TestCelldesignerGatesShapeA:
         return read_cd_map(_CREB_MAP_PATH)
 
     def test_emits_one_and_gate_with_two_inputs(self, creb_map):
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            creb_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         gates = list(out.model.boolean_logic_gates)
         assert len(gates) == 1
         assert isinstance(gates[0], momapy.celldesigner.AndGate)
         assert len(gates[0].inputs) == 2
 
     def test_gate_sources_exactly_one_modulation(self, creb_map):
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            creb_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         gate_modulations = [
             modulation
             for modulation in out.model.modulations
@@ -240,26 +240,30 @@ class TestCelldesignerGatesShapeA:
         assert isinstance(gate_modulations[0], momapy.celldesigner.PositiveInfluence)
 
     def test_gate_inputs_are_activities_in_the_model(self, creb_map):
-        out = pd2af.transform(creb_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            creb_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         gate = next(iter(out.model.boolean_logic_gates))
         model_species = set(out.model.species)
         for gate_input in gate.inputs:
             assert gate_input.referred_element in model_species
 
     @pytest.mark.parametrize(
-        "mode,layout_mode",
+        "mode,keep_species,layout_mode",
         (
-            ("keep-species", "plain"),
-            ("keep-species", "overlay"),
-            ("keep-species", "auto"),
-            ("normal", "auto"),
-            ("normal-no-complex", "auto"),
+            ("normal", True, "plain"),
+            ("normal", True, "overlay"),
+            ("normal", True, "auto"),
+            ("normal", False, "auto"),
+            ("no-complex", False, "auto"),
         ),
     )
-    def test_round_trips(self, creb_map, mode, layout_mode):
+    def test_round_trips(self, creb_map, mode, keep_species, layout_mode):
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(creb_map, mode=mode, layout_mode=layout_mode).obj
+        out = pd2af.transform(
+            creb_map, mode=mode, keep_species=keep_species, layout_mode=layout_mode
+        ).obj
         assert len(out.model.boolean_logic_gates) == 1
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_gate.xml")
         momapy.io.core.write(out, path, writer="celldesigner")
@@ -275,7 +279,9 @@ class TestCelldesignerGatesAreAdditive:
 
     def test_srr_emits_no_surviving_gates(self):
         srr_map = read_cd_map(_SRR_MAP_PATH)
-        out = pd2af.transform(srr_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            srr_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         assert len(out.model.boolean_logic_gates) == 0
 
 
@@ -290,7 +296,8 @@ class TestZeroInputOperators:
         operator_map = read_sbgn_map(_SBGN_OPERATOR_MAP_PATH)
         out = pd2af.transform(
             operator_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             set_inactive=["glyph14_model", "glyph13_model"],
         ).obj
@@ -304,7 +311,8 @@ class TestZeroInputOperators:
         operator_map = read_sbgn_map(_SBGN_OPERATOR_MAP_PATH)
         out = pd2af.transform(
             operator_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             set_inactive=["glyph14_model"],
         ).obj
@@ -316,7 +324,8 @@ class TestZeroInputOperators:
         creb_map = read_cd_map(_CREB_MAP_PATH)
         out = pd2af.transform(
             creb_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             set_inactive=["s_id_pdm7b7_active", "s_id_pdmc93"],
         ).obj
@@ -326,7 +335,8 @@ class TestZeroInputOperators:
         creb_map = read_cd_map(_CREB_MAP_PATH)
         out = pd2af.transform(
             creb_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             set_inactive=["s_id_pdm7b7_active"],
         ).obj
@@ -339,7 +349,9 @@ def test_every_gate_map_round_trips(path):
     """Read-back invariant over every committed CellDesigner gate map: the
     gate count survives a write -> read cycle (plain layout, no graphviz)."""
     cd_map = read_cd_map(path)
-    out = pd2af.transform(cd_map, mode="keep-species", layout_mode="plain").obj
+    out = pd2af.transform(
+        cd_map, mode="normal", keep_species=True, layout_mode="plain"
+    ).obj
     written = os.path.join(tempfile.gettempdir(), "pd2af_test_gate_map.xml")
     momapy.io.core.write(out, written, writer="celldesigner")
     back = momapy.io.core.read(written).obj
@@ -356,14 +368,18 @@ class TestSbgnOperatorsShapeB:
         return read_sbgn_map(_SBGN_OPERATOR_MAP_PATH)
 
     def test_emits_one_and_operator_with_two_inputs(self, operator_map):
-        out = pd2af.transform(operator_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            operator_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         operators = list(out.model.logical_operators)
         assert len(operators) == 1
         assert isinstance(operators[0], momapy.sbgn.af.AndOperator)
         assert len(operators[0].inputs) == 2
 
     def test_operator_sources_one_influence(self, operator_map):
-        out = pd2af.transform(operator_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            operator_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         operator_influences = [
             influence
             for influence in out.model.influences
@@ -373,18 +389,20 @@ class TestSbgnOperatorsShapeB:
         assert isinstance(operator_influences[0], momapy.sbgn.af.NecessaryStimulation)
 
     @pytest.mark.parametrize(
-        "mode,layout_mode",
+        "mode,keep_species,layout_mode",
         (
-            ("keep-species", "plain"),
-            ("keep-species", "auto"),
-            ("normal", "auto"),
-            ("normal-no-complex", "auto"),
+            ("normal", True, "plain"),
+            ("normal", True, "auto"),
+            ("normal", False, "auto"),
+            ("no-complex", False, "auto"),
         ),
     )
-    def test_round_trips(self, operator_map, mode, layout_mode):
+    def test_round_trips(self, operator_map, mode, keep_species, layout_mode):
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
-        out = pd2af.transform(operator_map, mode=mode, layout_mode=layout_mode).obj
+        out = pd2af.transform(
+            operator_map, mode=mode, keep_species=keep_species, layout_mode=layout_mode
+        ).obj
         assert len(out.model.logical_operators) == 1
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_operator.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
@@ -399,7 +417,7 @@ class TestSbgnOperatorsShapeB:
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            operator_map, mode="keep-species", layout_mode=layout_mode
+            operator_map, mode="normal", keep_species=True, layout_mode=layout_mode
         ).obj
         operator_layout = next(
             element
@@ -443,7 +461,9 @@ class TestSbgnNestedOperators:
         return read_sbgn_map(_NESTED_OPERATORS_MAP_PATH)
 
     def test_emits_both_operator_levels(self, nested_map):
-        out = pd2af.transform(nested_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            nested_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         operators = {type(o).__name__ for o in out.model.logical_operators}
         assert operators == {"AndOperator", "OrOperator"}
         and_operator = next(
@@ -456,7 +476,9 @@ class TestSbgnNestedOperators:
         ]
 
     def test_operator_sources_one_influence(self, nested_map):
-        out = pd2af.transform(nested_map, mode="keep-species", layout_mode=None).obj
+        out = pd2af.transform(
+            nested_map, mode="normal", keep_species=True, layout_mode=None
+        ).obj
         operator_influences = [
             influence
             for influence in out.model.influences
@@ -469,7 +491,8 @@ class TestSbgnNestedOperators:
         # OR keeps its other input, and the AND keeps the OR.
         out = pd2af.transform(
             nested_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             set_inactive=["glyph14_model"],
         ).obj
@@ -487,7 +510,8 @@ class TestSbgnNestedOperators:
     def test_suppressing_every_inner_input_drops_all_operators(self, nested_map):
         out = pd2af.transform(
             nested_map,
-            mode="keep-species",
+            mode="normal",
+            keep_species=True,
             layout_mode=None,
             set_inactive=["glyph14_model", "glyph13_model"],
         ).obj
@@ -498,7 +522,7 @@ class TestSbgnNestedOperators:
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            nested_map, mode="keep-species", layout_mode=layout_mode
+            nested_map, mode="normal", keep_species=True, layout_mode=layout_mode
         ).obj
         path = os.path.join(tempfile.gettempdir(), "pd2af_test_nested_operator.sbgn")
         momapy.io.core.write(out, path, writer="sbgnml")
@@ -516,7 +540,7 @@ class TestSbgnNestedOperators:
         if layout_mode == "auto" and not has_dot_binary():
             pytest.skip("graphviz `dot` binary not on PATH")
         out = pd2af.transform(
-            nested_map, mode="keep-species", layout_mode=layout_mode
+            nested_map, mode="normal", keep_species=True, layout_mode=layout_mode
         ).obj
         mapping = out.layout_model_mapping
         operator_to_operator = []
@@ -531,7 +555,9 @@ class TestSbgnNestedOperators:
         assert len(operator_to_operator) == 1
 
     def test_provenance_carries_operator_origins(self, nested_map):
-        result = pd2af.transform(nested_map, mode="keep-species", layout_mode=None)
+        result = pd2af.transform(
+            nested_map, mode="normal", keep_species=True, layout_mode=None
+        )
         for operator in result.obj.model.logical_operators:
             origins = result.output_element_to_input_elements.get(operator)
             assert origins

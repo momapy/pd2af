@@ -49,8 +49,8 @@ _SPECIES_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.Complex: momapy.celldesigner.ComplexLayout,
 }
 
-# Species-glyph child sub-glyphs the merged proteoform modes strip: the PTM
-# decorations (ModificationLayout / StructuralStateLayout) and the active-border
+# Species-glyph child sub-glyphs the merged reading strips: the PTM decorations
+# (ModificationLayout / StructuralStateLayout) and the active-border
 # sibling (a `*ActiveLayout` the reader appends to a species glyph's
 # `layout_elements` for an active species). Dropping all of them makes a stripped
 # species render plain, matching its decoration-free model (whose `active` flag
@@ -162,8 +162,8 @@ def make_decoration_stripped_layout(
     Every PTM-decoration and active-border sub-glyph is dropped, at any depth,
     and ``id(original) -> stripped`` recorded for every kept element.
 
-    The merged proteoform modes (normal/normal-no-complex) strip the model's
-    species of their decorations; this drops the matching layout glyphs
+    The merged reading (`keep_species` off) strips the model's species of their
+    decorations; this drops the matching layout glyphs
     (``ModificationLayout`` / ``StructuralStateLayout`` and the ``*ActiveLayout``
     active-border sibling -- see ``_STRIPPABLE_SPECIES_DECORATION_CLASSES``) so a
     stripped species renders plain. Subunit glyphs of kept complexes are
@@ -405,8 +405,7 @@ def _add_decoration_stripped_species_layouts(
 ):
     """Place decoration-pruned clones of ``input_layouts`` for ``species``.
 
-    Their surviving glyphs are mapped to the model (the merged proteoform
-    modes).
+    Their surviving glyphs are mapped to the model (the merged reading).
     """
     stripped_layouts = []
     for input_layout in input_layouts:
@@ -439,8 +438,8 @@ def _make_and_add_species_layout(
             # subunit structure) and let graphviz place it. plain/overlay keep
             # every clone, where the curated positions are meaningful.
             input_layouts = input_layouts[:1]
-        if context.mode.merges_proteoforms:
-            # The merged modes strip the model species of their decorations; the
+        if not context.keep_species:
+            # The merged reading strips the model species of their decorations; the
             # reused input glyph still carries the matching ModificationLayout /
             # StructuralStateLayout sub-glyphs, so prune them from a clone (the
             # frozen input layout must not be mutated) before placing it.

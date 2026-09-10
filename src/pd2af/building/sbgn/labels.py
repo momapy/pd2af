@@ -16,7 +16,7 @@ Rules:
   prefix) and sorted (they carry no order). When inlined in the activity label
   they sit in a ``[...]`` bracket; on the unit-of-information **glyph** they
   carry no brackets (the brackets are the label serialization device only). In
-  the merged ``normal`` / ``normal-no-complex`` modes
+  the merged reading (``keep_species`` off)
   (``include_units_of_information=False``) this block is *not* inlined into the
   label: a curator building an AF map from scratch writes ``ct:mRNA`` on the
   nucleic-acid-feature glyph, never ``[ct:mRNA]`` in the label. The block (see
@@ -68,7 +68,7 @@ def make_units_of_information_label(entity_pool_or_subunit: typing.Any) -> str |
     no prefix), sorted, joined by ``|`` -- or ``None`` when
     ``entity_pool_or_subunit`` carries no units of information.
 
-    The merged ``normal`` / ``normal-no-complex`` modes move this off the activity
+    The merged reading (``keep_species`` off) moves this off the activity
     *label* and onto the AF activity's typed unit-of-information glyph (see
     :func:`pd2af.building.sbgn.model._make_activity`), where a curator would put
     it -- e.g. ``ct:mRNA`` on a nucleic-acid-feature glyph. It carries **no**
@@ -97,9 +97,9 @@ def make_label(
     collapse into a single merged activity.
 
     When ``include_units_of_information`` is ``False`` the unit-of-information
-    block is omitted too -- the merged ``normal`` / ``normal-no-complex`` modes relocate
+    block is omitted too -- the merged reading (``keep_species`` off) relocates
     it to the activity's unit-of-information glyph instead of inlining it. The
-    keep-species modes keep both blocks (the defaults).
+    ``keep_species`` option keeps both blocks (the defaults).
     """
     decorations = ""
     if include_units_of_information:
