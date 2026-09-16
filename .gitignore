@@ -165,6 +165,9 @@ plans/
 TODO.txt
 poubelle/
 scripts/
+reviews/
 known-issues/
 local-claude-sandbox
 local-codex-sandbox
+local-omp-sandbox
+
