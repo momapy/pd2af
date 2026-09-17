@@ -161,12 +161,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .claude/
-plans/
 TODO.txt
-poubelle/
-scripts/
-reviews/
-known-issues/
+workbench/
+.harness-sandbox/
 local-claude-sandbox
 local-codex-sandbox
 local-omp-sandbox

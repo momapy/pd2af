@@ -157,7 +157,7 @@ def _map_from(species, reactions):
 class TestCycleAwareInfluences:
     """A source feeding a production cycle must not leak influence back
     around the loop onto members it directly depletes; transitivity across
-    non-cycle edges is untouched. See plans/cycle-aware-influence-paths.md."""
+    non-cycle edges is untouched. See workbench/plans/cycle-aware-influence-paths.md."""
 
     def test_cyclic_production_blocks_leaked_influence(self):
         # A catalyses B->C; C->B closes the production cycle; B and C active.

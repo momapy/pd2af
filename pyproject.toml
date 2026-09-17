@@ -72,7 +72,6 @@ suppress-none-returning = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "ANN"]
-"scripts/**" = ["D", "ANN"]
 "docs/**" = ["D", "ANN"]
 
 [tool.pytest.ini_options]
