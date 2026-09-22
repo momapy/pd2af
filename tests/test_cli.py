@@ -174,6 +174,53 @@ class TestCliMainStdout:
         assert captured.tell() > 0
 
 
+
+class TestVisualizeFlag:
+    def test_flag_defaults_to_false(self):
+        args = _parse_transform_args(["transform", "map.xml"])
+        assert args.visualize is False
+
+    def test_flag_visualizes_and_writes_nothing_to_stdout(self, example_map_path):
+        captured = io.BytesIO()
+        fake_stdout = unittest.mock.MagicMock()
+        fake_stdout.buffer = captured
+        with unittest.mock.patch("momapy.cli._visualize_map") as visualize_map:
+            with unittest.mock.patch("sys.stdout", new=fake_stdout):
+                pd2af.cli.main(
+                    [
+                        "transform",
+                        example_map_path,
+                        "--keep-species",
+                        "-l",
+                        "plain",
+                        "-V",
+                    ]
+                )
+        visualize_map.assert_called_once()
+        assert captured.tell() == 0
+
+    def test_flag_with_output_file_writes_the_file_too(
+        self, tmp_path, example_map_path
+    ):
+        out_path = tmp_path / "out.xml"
+        with unittest.mock.patch("momapy.cli._visualize_map") as visualize_map:
+            pd2af.cli.main(
+                [
+                    "transform",
+                    example_map_path,
+                    "--keep-species",
+                    "-l",
+                    "plain",
+                    "-o",
+                    str(out_path),
+                    "--visualize",
+                ]
+            )
+        visualize_map.assert_called_once()
+        assert out_path.exists()
+        assert out_path.stat().st_size > 0
+
+
 class TestActiveFlag:
     def test_active_flag_defaults_to_none(self):
         args = _parse_transform_args(["transform", "map.xml"])

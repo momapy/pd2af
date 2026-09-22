@@ -4,14 +4,14 @@
 
 The `pd2af` command-line interface transforms a process-description (PD) map — CellDesigner or SBGN-PD — into an activity-flow (AF) map.
 
-The output map is written to stdout as a [momapy](https://github.com/adrienrougny/momapy) pickle (preserving layout styling) so it can be piped into `momapy visualize`. With `-o`, the writer is chosen from the output file extension.
+The output map is written to stdout as a [momapy](https://github.com/adrienrougny/momapy) pickle (preserving layout styling) so it can be piped into `momapy visualize`. With `-o`, the writer is chosen from the output file extension. With `-V`, the output map is opened in the momapy browser viewer, and nothing is written to stdout.
 
 An unreadable input file, an unknown element id, or a mode the input or the layout does not support is reported as a short `error: ...` message on stderr, with exit status 1 and no output file written.
 
 ## Synopsis
 
 ```bash
-pd2af transform <input_file> [-m {normal,no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [--keep-species | --no-keep-species] [--drop-compartments | --no-drop-compartments] [-a <id> ...] [-i <id> ...] [-A | -I] [--exclude-group <group> ...] [--exclude-rule <rule> ...] [-o <output_file>]
+pd2af transform <input_file> [-m {normal,no-complex,keep-reactions}] [-l {plain,overlay,dot,auto}] [-p {cross,nearest}] [--keep-species | --no-keep-species] [--drop-compartments | --no-drop-compartments] [-a <id> ...] [-i <id> ...] [-A | -I] [--exclude-group <group> ...] [--exclude-rule <rule> ...] [-o <output_file>] [-V]
 pd2af list-modes [--json]
 pd2af list-groups [--json]
 pd2af --version
@@ -51,6 +51,7 @@ no-complex` runs exactly like `pd2af transform map.xml -m no-complex`.
 | `--exclude-group` |  | Drop a whole rule group, e.g. `activity:phenotype` to stop treating phenotypes as activities, or `paths:chaining` to keep only single-hop influences. Repeatable. Excluding a group another included group depends on is an error; run `pd2af list-groups` for the excludable groups per mode |
 | `--exclude-rule` |  | Drop a single rule by identifier, e.g. `influences:kind:celldesigner:catalysis` — the scalpel for the table groups. Repeatable. Prefer `--exclude-group` for coherent behaviors |
 | `--output` | `-o` | Write output to this file instead of stdout. Input RDF annotations and notes are carried onto the corresponding output elements for file output only; the stdout pickle cannot carry them |
+| `--visualize` | `-V` | Open the output map in the momapy browser viewer. With `-o` the map is also written to the file; without `-o` nothing is written to stdout |
 
 ## Transformation modes (`-m`)
 
@@ -140,6 +141,12 @@ pd2af list-groups --json
 
 ```bash
 pd2af transform my_map.xml | momapy visualize -
+```
+
+### Transform and open the result in the viewer
+
+```bash
+pd2af transform my_map.xml -V
 ```
 
 ### Transform to CellDesigner XML (default `normal` mode, auto layout)
