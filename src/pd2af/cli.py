@@ -9,6 +9,7 @@ import tempfile
 import textwrap
 import typing
 
+import momapy.cli
 import momapy.io.core
 
 import pd2af
@@ -124,12 +125,7 @@ def _run(args: argparse.Namespace) -> None:
         element_to_notes=reader_result.element_to_notes,
     )
     new_map = transform_result.obj
-    if args.output is None:
-        # The stdout pickle serializes only the map object; annotations and
-        # notes live in side-tables that a bare-map pickle cannot carry, so
-        # they are dropped on this path (use -o file.xml / .sbgn to keep them).
-        _write_map_to_stdout(new_map)
-    else:
+    if args.output is not None:
         writer = _writer_for_output(args.output)
         momapy.io.core.write(
             new_map,
@@ -138,6 +134,13 @@ def _run(args: argparse.Namespace) -> None:
             element_to_annotations=transform_result.element_to_annotations,
             element_to_notes=transform_result.element_to_notes,
         )
+    elif not args.visualize:
+        # The stdout pickle serializes only the map object; annotations and
+        # notes live in side-tables that a bare-map pickle cannot carry, so
+        # they are dropped on this path (use -o file.xml / .sbgn to keep them).
+        _write_map_to_stdout(new_map)
+    if args.visualize:
+        momapy.cli._visualize_map(new_map)
 
 
 def _describe_option_default(name: str, option: dict) -> str:
@@ -527,6 +530,16 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
             "annotations and notes are carried onto the corresponding output "
             "elements only for file output (.xml/.sbml/.sbgn/.sbgnml); the "
             "stdout pickle cannot carry them and drops them."
+        ),
+    )
+    parser.add_argument(
+        "-V",
+        "--visualize",
+        action="store_true",
+        help=(
+            "open the output map in the momapy browser viewer. With -o the "
+            "map is also written to the file; without -o nothing is written "
+            "to stdout."
         ),
     )
     parser.set_defaults(func=_run)
