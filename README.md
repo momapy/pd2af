@@ -15,7 +15,7 @@ Features of pd2af include the following:
 * five transformation modes, from a true PD→AF reduction to a CellDesigner-native one that keeps the PD topology
 * an option to drop the compartments, merging the species and influences that become equal
 * activities discovered from the structure of the map: phenotypes, explicit active markers, modulation sources and logical-gate inputs
-* influences inferred beyond the stated modulations: multi-hop chaining across reactions, catalyst-consumes-reactant and inhibitor-spares-reactant
+* influences inferred beyond the stated modulations: multi-hop chaining across reactions, catalyst-consumes-reactant and inhibitor-spares-reactant, and activation by binding (a reactant whose partner comes out of a complex-forming reaction active)
 * three layout modes: Graphviz `dot` auto-layout, reuse of the original positions, and an overlay on the original layout
 * RDF/MIRIAM annotations and notes carried from the input elements to the elements they produce
 * a transformation defined by declarative ASP rules, listable and individually excludable

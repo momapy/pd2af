@@ -69,18 +69,19 @@ class TestSolve:
         for species in example_cd_map.model.species:
             assert species.id_ in mapped_species_ids
 
-    def test_solve_keep_species_finds_five_activity_atoms(self, solved_keep_species):
-        # B, D, E, F, G. Active subunit C of complex D no longer gets its own
+    def test_solve_keep_species_finds_six_activity_atoms(self, solved_keep_species):
+        # A, B, D, E, F, G. Active subunit C of complex D no longer gets its own
         # activity -- it resolves to D's top-level `keptSpeciesKey(D)`, the same
-        # key D itself carries, so it adds no distinct activity atom.
+        # key D itself carries, so it adds no distinct activity atom. A is an
+        # activity because binding it activates C.
         clingo_model, _ = solved_keep_species
         atoms = _activity_atoms(clingo_model)
-        assert len(atoms) == 5
+        assert len(atoms) == 6
 
-    def test_solve_keep_species_finds_four_influence_atoms(self, solved_keep_species):
+    def test_solve_keep_species_finds_seven_influence_atoms(self, solved_keep_species):
         clingo_model, _ = solved_keep_species
         atoms = _influence_atoms(clingo_model)
-        assert len(atoms) == 4
+        assert len(atoms) == 7
 
     def test_solve_keep_species_no_complex_excludes_complex_with_active_subunit(
         self, example_cd_map
@@ -210,15 +211,20 @@ class TestSetActive:
     `hasActivity(..., isInputParameter)` for a species that carries no
     structural activity signal of its own."""
 
-    def test_set_active_adds_activity_for_non_active_species(
-        self, example_cd_map, solved_keep_species
-    ):
+    def test_set_active_adds_activity_for_non_active_species(self, example_cd_map):
         # Species A (id `s1`) is a bare, non-active top-level species: it is
-        # absent from the baseline activities (B, D, E, F, G).
-        baseline_model, _ = solved_keep_species
+        # absent from the baseline activities (B, D, E, F, G) once binding
+        # activation, which makes it an activity, is excluded.
+        exclude_groups = ("influences:binding_activation",)
+        baseline_model, _ = solve_map_in_mode_name(
+            example_cd_map, mode_name="normal", exclude_groups=exclude_groups
+        )
         baseline_count = len(_activity_atoms(baseline_model))
         clingo_model, id_to_model_element = solve_map_in_mode_name(
-            example_cd_map, mode_name="normal", set_active=["s1"]
+            example_cd_map,
+            mode_name="normal",
+            set_active=["s1"],
+            exclude_groups=exclude_groups,
         )
         atoms = _activity_atoms(clingo_model)
         names = {id_to_model_element[atom.key.species].name for atom in atoms}

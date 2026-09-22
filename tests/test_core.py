@@ -11,6 +11,7 @@ import pd2af
 import pd2af.modes
 
 from tests._helpers import (
+    BINDING_ACTIVATION_MAPS_DIR,
     MAPS_DIR,
     has_dot_binary,
     modulation_set,
@@ -81,8 +82,9 @@ class TestTransformExampleKeepSpeciesMode:
     def test_expected_active_species(self, out_keep_species):
         # Active subunit C is subsumed into its containing complex D under
         # `normal` (which keeps complexes), so it does not appear as a
-        # top-level activity.
+        # top-level activity. A is an activity because binding it activates C.
         assert species_names(out_keep_species.model) == [
+            "A",
             "B",
             "D",
             "E",
@@ -92,6 +94,11 @@ class TestTransformExampleKeepSpeciesMode:
 
     def test_expected_modulations(self, out_keep_species):
         assert modulation_set(out_keep_species.model) == {
+            # A activates C by binding, and C is carried by D
+            ("PositiveInfluence", "A", "D"),
+            # B catalyzes the reaction producing A, and consumes A
+            ("PositiveInfluence", "B", "A"),
+            ("NegativeInfluence", "B", "A"),
             ("PositiveInfluence", "B", "D"),
             ("PositiveInfluence", "D", "F"),
             ("NegativeInfluence", "B", "E"),
@@ -117,6 +124,9 @@ class TestTransformExampleKeepSpeciesNoComplexMode:
 
     def test_expected_modulations(self, out_keep_species_no_complex):
         assert modulation_set(out_keep_species_no_complex.model) == {
+            ("PositiveInfluence", "A", "C"),
+            ("PositiveInfluence", "B", "A"),
+            ("NegativeInfluence", "B", "A"),
             ("PositiveInfluence", "B", "C"),
             ("PositiveInfluence", "C", "F"),
             ("NegativeInfluence", "B", "E"),
@@ -381,9 +391,15 @@ class TestTransformSetActive:
 
     def test_set_active_surfaces_non_active_species(self, example_cd_map):
         # Species A (id `s1`) is a bare, non-active species: absent from the
-        # baseline `keep_species` activities.
+        # baseline `keep_species` activities once binding activation, which
+        # makes it an activity, is excluded.
+        exclude_groups = ("influences:binding_activation",)
         baseline = pd2af.transform(
-            example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
+            example_cd_map,
+            mode="normal",
+            keep_species=True,
+            layout_mode="plain",
+            exclude_groups=exclude_groups,
         ).obj
         assert "A" not in species_names(baseline.model)
         with_active = pd2af.transform(
@@ -392,6 +408,7 @@ class TestTransformSetActive:
             keep_species=True,
             layout_mode="plain",
             set_active=["s1"],
+            exclude_groups=exclude_groups,
         ).obj
         assert "A" in species_names(with_active.model)
 
@@ -459,8 +476,10 @@ class TestTransformSetAllActive:
             keep_species=True,
             layout_mode="plain",
             set_all_active=True,
+            exclude_groups=("influences:binding_activation",),
         ).obj
-        # A is bare (never active by default); the toggle surfaces it.
+        # A is bare (never active by default, binding activation excluded);
+        # the toggle surfaces it.
         assert "A" in species_names(with_all_active.model)
 
     def test_set_inactive_overrides_set_all_active(self, example_cd_map):
@@ -1010,3 +1029,154 @@ class TestOptionsDecideTheLayoutModes:
         message = str(error.value)
         assert message.startswith("'sbgn_pd' input supports layout_mode")
         assert "merged" not in message
+
+
+def _binding_activation_map(name):
+    return read_cd_map(os.path.join(BINDING_ACTIVATION_MAPS_DIR, f"{name}.xml"))
+
+
+class TestBindingActivation:
+    """`L + R -> L:R` with `R` drawn active only inside the complex: `L`
+    activated `R` by binding, so `L` is an activity that positively influences
+    the activity carrying `R` (the complex in `normal`, the promoted `R` in
+    `no-complex`). Each case is a small map in `tests/maps/binding_activation/`,
+    drawn in both languages."""
+
+    def _transform(self, name, mode, **kwargs):
+        out = pd2af.transform(
+            _binding_activation_map(name), mode=mode, layout_mode=None, **kwargs
+        ).obj
+        return species_names(out.model), modulation_set(out.model)
+
+    # M -> L, L + R -> L:R (R active only in the complex), L:R + X -> L:R:X.
+    def test_normal_targets_the_complex(self):
+        names, modulations = self._transform("ligand_receptor", "normal")
+        assert names == ["L", "L:R", "L:R:X", "M"]
+        assert ("PositiveInfluence", "L", "L:R") in modulations
+
+    def test_no_complex_targets_the_promoted_subunit(self):
+        names, modulations = self._transform("ligand_receptor", "no-complex")
+        assert names == ["L", "L:R:X", "M", "R"]
+        assert ("PositiveInfluence", "L", "R") in modulations
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_excluding_the_group_restores_the_plain_reading(self, mode):
+        names, modulations = self._transform(
+            "ligand_receptor", mode, exclude_groups=("influences:binding_activation",)
+        )
+        assert "L" not in names
+        assert not {one for one in modulations if one[1] == "L"}
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_upstream_path_reaches_the_activator(self, mode):
+        _, modulations = self._transform("ligand_receptor", mode)
+        assert ("PositiveInfluence", "M", "L") in modulations
+        assert ("PositiveInfluence", "M", "L:R:X") in modulations
+
+    def test_upstream_path_reaches_the_promoted_subunit(self):
+        _, modulations = self._transform("ligand_receptor", "no-complex")
+        assert ("PositiveInfluence", "M", "R") in modulations
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_binding_edge_does_not_chain_downstream(self, mode):
+        _, modulations = self._transform("ligand_receptor", mode)
+        assert ("PositiveInfluence", "L", "L:R:X") not in modulations
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_suppressed_subunit_draws_no_edge(self, mode):
+        names, modulations = self._transform(
+            "ligand_receptor", mode, set_inactive=["lr_r_active"]
+        )
+        assert "L" not in names
+        assert not {one for one in modulations if one[1] == "L"}
+
+    # Ras:GTP (Ras active) + Raf -> Ras:GTP:Raf (Ras and Raf active).
+    def test_active_recruiter_is_a_source(self):
+        _, modulations = self._transform("active_recruiter", "normal")
+        assert modulations == {("PositiveInfluence", "Ras:GTP", "Ras:GTP:Raf")}
+        names, modulations = self._transform("active_recruiter", "no-complex")
+        assert names == ["Raf", "Ras"]
+        assert modulations == {("PositiveInfluence", "Ras", "Raf")}
+
+    # A + B -> A:B, both active in the complex.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_two_newly_active_reactants_draw_no_edge(self, mode):
+        names, modulations = self._transform("mutual", mode)
+        assert names == (["A:B"] if mode == "normal" else ["A", "B"])
+        assert modulations == set()
+
+    def test_explicitly_active_reactant_is_not_newly_activated(self):
+        names, modulations = self._transform("mutual", "no-complex", set_active=["a"])
+        assert names == ["A", "B"]
+        assert modulations == {("PositiveInfluence", "A", "B")}
+
+    # L + R:S (R inactive) -> L:(R:S) (R active, nested one level down).
+    def test_nested_subunits(self):
+        _, modulations = self._transform("nested", "normal")
+        assert modulations == {("PositiveInfluence", "L", "L:(R:S)")}
+        names, modulations = self._transform("nested", "no-complex")
+        assert names == ["L", "R"]
+        assert modulations == {("PositiveInfluence", "L", "R")}
+
+    # cAMP (a simple molecule, so no template) + PKA -> cAMP:PKA.
+    def test_template_free_species_match_by_class_and_name(self):
+        _, modulations = self._transform("template_free", "normal")
+        assert modulations == {("PositiveInfluence", "PKA", "cAMP:PKA")}
+        _, modulations = self._transform("template_free", "no-complex")
+        assert modulations == {("PositiveInfluence", "PKA", "cAMP")}
+
+    # X the simple molecule and X the protein share a name, not an entity.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_equal_names_of_different_classes_do_not_match(self, mode):
+        names, modulations = self._transform("different_kinds", mode)
+        assert "P" not in names
+        assert modulations == set()
+
+    # R -> R:R, both subunits active.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_same_entity_is_never_its_own_activator(self, mode):
+        _, modulations = self._transform("homodimer", mode)
+        assert modulations == set()
+
+    # L + R <-> L:R (R active).
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_reversible_reaction_is_read_in_its_drawn_direction(self, mode):
+        _, modulations = self._transform("reversible", mode)
+        assert modulations == {
+            ("PositiveInfluence", "L", "L:R" if mode == "normal" else "R")
+        }
+
+    # L (membrane) + R (cytosol) -> L:R (R active); R also catalyzes Y -> Z.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("keep_species", (False, True))
+    @pytest.mark.parametrize("drop_compartments", (False, True))
+    def test_no_self_influence(self, mode, keep_species, drop_compartments):
+        names, modulations = self._transform(
+            "merge",
+            mode,
+            keep_species=keep_species,
+            drop_compartments=drop_compartments,
+        )
+        assert (
+            "PositiveInfluence",
+            "L",
+            "L:R" if mode == "normal" else "R",
+        ) in modulations
+        assert ("PositiveInfluence", "R", "Z") in modulations
+        assert not {one for one in modulations if one[1] == one[2]}
+        if mode == "no-complex" and not keep_species and drop_compartments:
+            # The promoted R merges with the R that catalyzes the other reaction.
+            assert names == ["L", "R", "Z"]
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("name", ("ligand_receptor", "nested", "merge"))
+    def test_output_round_trips(self, tmp_path, name, mode):
+        out = pd2af.transform(
+            _binding_activation_map(name),
+            mode=mode,
+            keep_species=True,
+            layout_mode="plain",
+        ).obj
+        path = os.path.join(tmp_path, f"{name}_{mode}.xml")
+        momapy.io.core.write(out, path, writer="celldesigner")
+        momapy.io.core.read(path)

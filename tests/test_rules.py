@@ -263,6 +263,64 @@ class TestInfluencesConsumptionGroup:
         assert "hasSource(MODULATION, SOURCE_ENTITY_POOL)" in program
 
 
+class TestInfluencesBindingActivationGroup:
+    """Activation by binding is a group of its own, carried by the
+    path-inference modes only and excludable on its own."""
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_path_inference_modes_include_it(self, mode):
+        assert "influences:binding_activation" in _group_ids(mode)
+        program = build_program_for_mode_name(mode, "celldesigner")
+        assert (
+            "activatesByBinding(REACTION, INACTIVE_REACTANT, ACTIVE_SUBUNIT)" in program
+        )
+        assert "hasActivityCandidate(ACTIVATOR, isBindingActivator)" in program
+
+    def test_keep_reactions_omits_it(self):
+        assert "influences:binding_activation" not in _group_ids("keep-reactions")
+
+    def test_excluding_it_keeps_the_rest_of_the_derivation(self):
+        full = build_program_for_mode_name("normal", "celldesigner")
+        pruned = build_program_for_mode_name(
+            "normal", "celldesigner", exclude_groups=("influences:binding_activation",)
+        )
+        assert "activatesByBinding" not in pruned
+        assert "new(activity(KEY)) :- hasActivityKey(_, KEY)." in pruned
+        assert len(pruned.splitlines()) < len(full.splitlines())
+
+    def test_requires_the_active_marker_group(self):
+        with pytest.raises(ValueError, match="activity:active_marker"):
+            build_program_for_mode_name(
+                "normal", "celldesigner", exclude_groups=("activity:active_marker",)
+            )
+
+    def test_compares_input_markers_not_activity(self):
+        # The "inactive before" side must not read `hasActivity`, which the
+        # group's own candidates feed.
+        for language in ("celldesigner", "sbgn_pd"):
+            program = build_program_for_mode_name("normal", language)
+            assert "not hasExplicitActiveMarker(INACTIVE_REACTANT)" in program
+            assert (
+                "not hasActivity("
+                not in program.split("activatesByBinding")[1].split(".")[0]
+            )
+
+    def test_celldesigner_variant_matches_by_template_then_name(self):
+        program = build_program_for_mode_name("normal", "celldesigner")
+        assert "hasTemplate(SPECIES, TEMPLATE)" in program
+        assert "hasName(SPECIES, NAME)" in program
+        assert "hasEntityKind(SPECIES, complex) :- complex(SPECIES)." in program
+
+    def test_sbgn_pd_variant_matches_by_kind_and_label(self):
+        program = build_program_for_mode_name("normal", "sbgn_pd")
+        assert "hasLabel(ELEMENT, LABEL)" in program
+        assert (
+            "hasEntityKind(ELEMENT, macromolecule) :- macromoleculeSubunit(ELEMENT)."
+            in program
+        )
+        assert "hasTemplate" not in program
+
+
 class TestSbgnPdVariant:
     """`normal`/`no-complex` must emit working rules for SBGN-PD input:
     entity-pool carriers (not the CellDesigner `species` carrier). Keys are

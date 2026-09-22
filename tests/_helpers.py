@@ -20,6 +20,10 @@ SBGN_EXAMPLE_MAP_PATH = os.path.join(
 # curated maps do not), so the compartment-handling paths can be exercised.
 SBGN_WITH_COMPARTMENTS_MAP_PATH = os.path.join(SBGN_MAPS_DIR, "with_compartments.sbgn")
 
+# Small CellDesigner (.xml) and SBGN-PD (.sbgn) maps built for the
+# `influences:binding_activation` rule group, one per case.
+BINDING_ACTIVATION_MAPS_DIR = os.path.join(_TESTS_DIR, "maps", "binding_activation")
+
 
 def build_program_for_mode_name(
     mode_name, language=pd2af.modes.Language.CELLDESIGNER, **kwargs

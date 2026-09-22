@@ -31,7 +31,7 @@ influences are a CellDesigner artifact, not standard AF).
 
 | mode              | complexes                                                  | influences                                            |
 | ----------------- | ---------------------------------------------------------- | ----------------------------------------------------- |
-| `normal`          | kept (opaque; subunits carried in the label/structure, influences routed to the complex) | inferred: modulations + multi-hop chaining + consumption |
+| `normal`          | kept (opaque; subunits carried in the label/structure, influences routed to the complex) | inferred: modulations + multi-hop chaining + consumption + activation by binding |
 | `no-complex`      | dissolved: active subunits promoted to top-level activities | inferred                                              |
 | `keep-reactions`  | kept (opaque; subunits routed to the complex)              | stated only: reactant→product positive influences + direct modulations |
 

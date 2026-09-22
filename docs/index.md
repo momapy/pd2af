@@ -51,9 +51,9 @@ A mode decides what counts as an activity; an option decides which activities ar
 
 Selectable with `-m` / `mode=`:
 
-- **`normal`** *(default)*: complexes are activities of their own, and a subunit's influences are routed to the complex it belongs to. An active subunit of an activity-bearing complex is subsumed into the complex and does not appear as a separate top-level activity.
-- **`no-complex`**: a complex with an active subunit is replaced by those subunits, promoted to top-level activities, and the influences run through them.
-- **`keep-reactions`**: the PD topology itself is kept. Every species is an activity — no structural signal required — and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds, and none of the inference the other modes do (multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant) is applied. CellDesigner-only, and usually wanted with `--keep-species`, which it starts from by default.
+- **`normal`** *(default)*: complexes are activities of their own, and a subunit's influences are routed to the complex it belongs to. An active subunit of an activity-bearing complex is subsumed into the complex and does not appear as a separate top-level activity. Influences are inferred beyond the stated modulations: multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant, and activation by binding (in `L + R -> L:R` with `R` drawn active only inside the complex, `L` is an activity that positively influences `L:R`).
+- **`no-complex`**: a complex with an active subunit is replaced by those subunits, promoted to top-level activities, and the influences run through them; the same inference applies, so activation by binding gives `L -> R`.
+- **`keep-reactions`**: the PD topology itself is kept. Every species is an activity — no structural signal required — and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds, and none of the inference the other modes do (multi-hop chaining across reactions, catalyst-consumes-reactant / inhibitor-spares-reactant, activation by binding) is applied. CellDesigner-only, and usually wanted with `--keep-species`, which it starts from by default.
 
 ### Options
 

@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbml xmlns="http://www.sbml.org/sbml/level2/version4" xmlns:celldesigner="http://www.sbml.org/2001/ns/celldesigner" level="2" version="4">
+<model metaid="active_recruiter" id="active_recruiter">
+<annotation>
+<celldesigner:extension>
+<celldesigner:modelVersion>4.0</celldesigner:modelVersion>
+<celldesigner:modelDisplay sizeX="1200" sizeY="800"/>
+<celldesigner:listOfIncludedSpecies>
+<celldesigner:species id="rasgtp_ras" name="Ras">
+<celldesigner:annotation>
+<celldesigner:complexSpecies>rasgtp</celldesigner:complexSpecies>
+<celldesigner:speciesIdentity>
+<celldesigner:class>PROTEIN</celldesigner:class>
+<celldesigner:proteinReference>pr1</celldesigner:proteinReference>
+<celldesigner:state>
+<celldesigner:listOfStructuralStates>
+<celldesigner:structuralState structuralState="active"/>
+</celldesigner:listOfStructuralStates>
+</celldesigner:state>
+</celldesigner:speciesIdentity>
+</celldesigner:annotation>
+</celldesigner:species>
+<celldesigner:species id="rasgtp_gtp" name="GTP">
+<celldesigner:annotation>
+<celldesigner:complexSpecies>rasgtp</celldesigner:complexSpecies>
+<celldesigner:speciesIdentity>
+<celldesigner:class>SIMPLE_MOLECULE</celldesigner:class>
+<celldesigner:name>GTP</celldesigner:name>
+</celldesigner:speciesIdentity>
+</celldesigner:annotation>
+</celldesigner:species>
+<celldesigner:species id="rasgtpraf_ras" name="Ras">
+<celldesigner:annotation>
+<celldesigner:complexSpecies>rasgtpraf</celldesigner:complexSpecies>
+<celldesigner:speciesIdentity>
+<celldesigner:class>PROTEIN</celldesigner:class>
+<celldesigner:proteinReference>pr1</celldesigner:proteinReference>
+<celldesigner:state>
+<celldesigner:listOfStructuralStates>
+<celldesigner:structuralState structuralState="active"/>
+</celldesigner:listOfStructuralStates>
+</celldesigner:state>
+</celldesigner:speciesIdentity>
+</celldesigner:annotation>
+</celldesigner:species>
+<celldesigner:species id="rasgtpraf_gtp" name="GTP">
+<celldesigner:annotation>
+<celldesigner:complexSpecies>rasgtpraf</celldesigner:complexSpecies>
+<celldesigner:speciesIdentity>
+<celldesigner:class>SIMPLE_MOLECULE</celldesigner:class>
+<celldesigner:name>GTP</celldesigner:name>
+</celldesigner:speciesIdentity>
+</celldesigner:annotation>
+</celldesigner:species>
+<celldesigner:species id="rasgtpraf_raf" name="Raf">
+<celldesigner:annotation>
+<celldesigner:complexSpecies>rasgtpraf</celldesigner:complexSpecies>
+<celldesigner:speciesIdentity>
+<celldesigner:class>PROTEIN</celldesigner:class>
+<celldesigner:proteinReference>pr2</celldesigner:proteinReference>
+<celldesigner:state>
+<celldesigner:listOfStructuralStates>
+<celldesigner:structuralState structuralState="active"/>
+</celldesigner:listOfStructuralStates>
+</celldesigner:state>
+</celldesigner:speciesIdentity>
+</celldesigner:annotation>
+</celldesigner:species>
+</celldesigner:listOfIncludedSpecies>
+<celldesigner:listOfCompartmentAliases>
+</celldesigner:listOfCompartmentAliases>
+<celldesigner:listOfComplexSpeciesAliases>
+<celldesigner:complexSpeciesAlias id="csa1" species="rasgtp">
+<celldesigner:activity>inactive</celldesigner:activity>
+<celldesigner:bounds x="80" y="80" w="124" h="170"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="0" y="0"/>
+<celldesigner:boxSize width="124" height="170"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:complexSpeciesAlias>
+<celldesigner:complexSpeciesAlias id="csa2" species="rasgtpraf">
+<celldesigner:activity>inactive</celldesigner:activity>
+<celldesigner:bounds x="384" y="80" w="124" h="242"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="0" y="0"/>
+<celldesigner:boxSize width="124" height="242"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:complexSpeciesAlias>
+</celldesigner:listOfComplexSpeciesAliases>
+<celldesigner:listOfSpeciesAliases>
+<celldesigner:speciesAlias id="sa1" species="rasgtp_ras" complexSpeciesAlias="csa1">
+<celldesigner:activity>active</celldesigner:activity>
+<celldesigner:bounds x="92" y="92" w="100" h="60"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:structuralState angle="1.5707963267948966"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="12" y="12"/>
+<celldesigner:boxSize width="100" height="60"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:speciesAlias>
+<celldesigner:speciesAlias id="sa2" species="rasgtp_gtp" complexSpeciesAlias="csa1">
+<celldesigner:activity>inactive</celldesigner:activity>
+<celldesigner:bounds x="92" y="164" w="100" h="60"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="12" y="84"/>
+<celldesigner:boxSize width="100" height="60"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:speciesAlias>
+<celldesigner:speciesAlias id="sa3" species="raf">
+<celldesigner:activity>inactive</celldesigner:activity>
+<celldesigner:bounds x="92" y="290" w="100" h="60"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="0" y="0"/>
+<celldesigner:boxSize width="100" height="60"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:speciesAlias>
+<celldesigner:speciesAlias id="sa4" species="rasgtpraf_ras" complexSpeciesAlias="csa2">
+<celldesigner:activity>active</celldesigner:activity>
+<celldesigner:bounds x="396" y="92" w="100" h="60"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:structuralState angle="1.5707963267948966"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="12" y="12"/>
+<celldesigner:boxSize width="100" height="60"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:speciesAlias>
+<celldesigner:speciesAlias id="sa5" species="rasgtpraf_gtp" complexSpeciesAlias="csa2">
+<celldesigner:activity>inactive</celldesigner:activity>
+<celldesigner:bounds x="396" y="164" w="100" h="60"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="12" y="84"/>
+<celldesigner:boxSize width="100" height="60"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:speciesAlias>
+<celldesigner:speciesAlias id="sa6" species="rasgtpraf_raf" complexSpeciesAlias="csa2">
+<celldesigner:activity>active</celldesigner:activity>
+<celldesigner:bounds x="396" y="236" w="100" h="60"/>
+<celldesigner:font size="12"/>
+<celldesigner:view state="usual"/>
+<celldesigner:structuralState angle="1.5707963267948966"/>
+<celldesigner:usualView>
+<celldesigner:innerPosition x="12" y="156"/>
+<celldesigner:boxSize width="100" height="60"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="ffccffcc" scheme="Color"/>
+</celldesigner:usualView>
+<celldesigner:briefView>
+<celldesigner:innerPosition x="0.0" y="0.0"/>
+<celldesigner:boxSize width="80.0" height="60.0"/>
+<celldesigner:singleLine width="1.0"/>
+<celldesigner:paint color="3fff0000" scheme="Color"/>
+</celldesigner:briefView>
+<celldesigner:info state="empty" angle="-1.5707963267948966"/>
+</celldesigner:speciesAlias>
+</celldesigner:listOfSpeciesAliases>
+<celldesigner:listOfGroups/>
+<celldesigner:listOfProteins>
+<celldesigner:protein id="pr1" name="Ras" type="GENERIC"/>
+<celldesigner:protein id="pr2" name="Raf" type="GENERIC"/>
+</celldesigner:listOfProteins>
+<celldesigner:listOfGenes/>
+<celldesigner:listOfRNAs/>
+<celldesigner:listOfAntisenseRNAs/>
+<celldesigner:listOfLayers/>
+<celldesigner:listOfBlockDiagrams/>
+</celldesigner:extension>
+</annotation>
+<listOfUnitDefinitions>
+<unitDefinition metaid="substance" id="substance" name="substance">
+<listOfUnits>
+<unit metaid="CDMT90001" kind="mole"/>
+</listOfUnits>
+</unitDefinition>
+<unitDefinition metaid="volume" id="volume" name="volume">
+<listOfUnits>
+<unit metaid="CDMT90002" kind="litre"/>
+</listOfUnits>
+</unitDefinition>
+</listOfUnitDefinitions>
+<listOfCompartments>
+<compartment metaid="default" id="default" size="1" units="volume"/>
+</listOfCompartments>
+<listOfSpecies>
+<species metaid="rasgtp" id="rasgtp" name="Ras:GTP" compartment="default" initialAmount="0">
+<annotation>
+<celldesigner:extension>
+<celldesigner:positionToCompartment>inside</celldesigner:positionToCompartment>
+<celldesigner:speciesIdentity>
+<celldesigner:class>COMPLEX</celldesigner:class>
+<celldesigner:name>Ras:GTP</celldesigner:name>
+</celldesigner:speciesIdentity>
+</celldesigner:extension>
+</annotation>
+</species>
+<species metaid="raf" id="raf" name="Raf" compartment="default" initialAmount="0">
+<annotation>
+<celldesigner:extension>
+<celldesigner:positionToCompartment>inside</celldesigner:positionToCompartment>
+<celldesigner:speciesIdentity>
+<celldesigner:class>PROTEIN</celldesigner:class>
+<celldesigner:proteinReference>pr2</celldesigner:proteinReference>
+</celldesigner:speciesIdentity>
+</celldesigner:extension>
+</annotation>
+</species>
+<species metaid="rasgtpraf" id="rasgtpraf" name="Ras:GTP:Raf" compartment="default" initialAmount="0">
+<annotation>
+<celldesigner:extension>
+<celldesigner:positionToCompartment>inside</celldesigner:positionToCompartment>
+<celldesigner:speciesIdentity>
+<celldesigner:class>COMPLEX</celldesigner:class>
+<celldesigner:name>Ras:GTP:Raf</celldesigner:name>
+</celldesigner:speciesIdentity>
+</celldesigner:extension>
+</annotation>
+</species>
+</listOfSpecies>
+<listOfReactions>
+<reaction metaid="re1" id="re1" reversible="false">
+<annotation>
+<celldesigner:extension>
+<celldesigner:reactionType>HETERODIMER_ASSOCIATION</celldesigner:reactionType>
+<celldesigner:baseReactants>
+<celldesigner:baseReactant species="rasgtp" alias="csa1">
+<celldesigner:linkAnchor position="E"/>
+</celldesigner:baseReactant>
+<celldesigner:baseReactant species="raf" alias="sa3">
+<celldesigner:linkAnchor position="E"/>
+</celldesigner:baseReactant>
+</celldesigner:baseReactants>
+<celldesigner:baseProducts>
+<celldesigner:baseProduct species="rasgtpraf" alias="csa2">
+<celldesigner:linkAnchor position="W"/>
+</celldesigner:baseProduct>
+</celldesigner:baseProducts>
+<celldesigner:connectScheme connectPolicy="direct">
+<celldesigner:listOfLineDirection>
+<celldesigner:lineDirection arm="0" index="0" value="unknown"/>
+<celldesigner:lineDirection arm="1" index="0" value="unknown"/>
+<celldesigner:lineDirection arm="2" index="0" value="unknown"/>
+</celldesigner:listOfLineDirection>
+</celldesigner:connectScheme>
+<celldesigner:editPoints num0="0" num1="0" num2="0" tShapeIndex="0">0.29,0.5</celldesigner:editPoints>
+<celldesigner:line width="1.0" color="ff000000"/>
+</celldesigner:extension>
+</annotation>
+<listOfReactants>
+<speciesReference metaid="CDMT00001" species="rasgtp">
+<annotation>
+<celldesigner:extension>
+<celldesigner:alias>csa1</celldesigner:alias>
+</celldesigner:extension>
+</annotation>
+</speciesReference>
+<speciesReference metaid="CDMT00002" species="raf">
+<annotation>
+<celldesigner:extension>
+<celldesigner:alias>sa3</celldesigner:alias>
+</celldesigner:extension>
+</annotation>
+</speciesReference>
+</listOfReactants>
+<listOfProducts>
+<speciesReference metaid="CDMT00003" species="rasgtpraf">
+<annotation>
+<celldesigner:extension>
+<celldesigner:alias>csa2</celldesigner:alias>
+</celldesigner:extension>
+</annotation>
+</speciesReference>
+</listOfProducts>
+</reaction>
+</listOfReactions>
+</model>
+</sbml>

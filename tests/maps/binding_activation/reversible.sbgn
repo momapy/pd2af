@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sbgn xmlns="http://sbgn.org/libsbgn/0.3">
+<map language="process description" id="reversible">
+<glyph id="l" class="macromolecule">
+<label text="L"/>
+<bbox x="80" y="80" w="100" h="60"/>
+</glyph>
+<glyph id="r" class="macromolecule">
+<label text="R"/>
+<bbox x="80" y="180" w="100" h="60"/>
+</glyph>
+<glyph id="lr" class="complex">
+<label text="L:R"/>
+<bbox x="360" y="80" w="124" h="170"/>
+<glyph id="lr_l" class="macromolecule">
+<label text="L"/>
+<bbox x="372" y="92" w="100" h="60"/>
+</glyph>
+<glyph id="lr_r" class="macromolecule">
+<label text="R"/>
+<bbox x="372" y="164" w="100" h="60"/>
+<glyph id="lr_r_sv" class="state variable">
+<state value="active"/>
+<bbox x="407" y="213" w="30" h="22"/>
+</glyph>
+</glyph>
+</glyph>
+<glyph id="re1" class="process">
+<bbox x="266" y="151.67" w="20" h="20"/>
+<port id="re1.1" x="256" y="161.67"/>
+<port id="re1.2" x="296" y="161.67"/>
+</glyph>
+<arc id="re1_l_in" class="consumption" source="l" target="re1.1">
+<start x="180" y="130.5"/>
+<end x="256" y="161.67"/>
+</arc>
+<arc id="re1_r_in" class="consumption" source="r" target="re1.1">
+<start x="180" y="190.82"/>
+<end x="256" y="161.67"/>
+</arc>
+<arc id="re1_lr_out" class="production" source="re1.2" target="lr">
+<start x="296" y="161.67"/>
+<end x="360" y="163.36"/>
+</arc>
+</map>
+</sbgn>

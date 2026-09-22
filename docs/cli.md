@@ -58,9 +58,9 @@ A mode decides what counts as an activity; an option decides which activities ar
 
 | Mode | Description |
 |------|-------------|
-| `normal` | Keep complexes as activities of their own, routing a subunit's influences to the complex it belongs to. An active subunit of an activity-bearing complex is subsumed into the complex. **Default**. |
-| `no-complex` | Replace a complex that has an active subunit with those subunits, promoted to top-level activities, and route the influences through them. |
-| `keep-reactions` | Keep the PD topology itself: every species is an activity (no structural activity signal required), and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds; no multi-hop chaining and no consumption/sparing inference. CellDesigner-only; starts from `--keep-species`. |
+| `normal` | Keep complexes as activities of their own, routing a subunit's influences to the complex it belongs to. An active subunit of an activity-bearing complex is subsumed into the complex. Infers influences beyond the stated modulations: multi-hop chaining, consumption/sparing and activation by binding (see below). **Default**. |
+| `no-complex` | Replace a complex that has an active subunit with those subunits, promoted to top-level activities, and route the influences through them. Infers the same influences as `normal`. |
+| `keep-reactions` | Keep the PD topology itself: every species is an activity (no structural activity signal required), and every reaction becomes one positive influence per (reactant, product) pair. Modulation arcs and reaction modifiers are kept as single-hop influences with their own kinds; no multi-hop chaining, consumption/sparing or binding-activation inference. CellDesigner-only; starts from `--keep-species`. |
 
 ## Transformation options
 
@@ -134,6 +134,21 @@ pd2af list-groups
 pd2af list-groups --json
 ```
 
+### Activation by binding (`influences:binding_activation`)
+
+In `normal` and `no-complex`, a reactant that comes out of a complex-forming
+reaction as an active subunit was activated by the binding: in
+`L + R -> L:R` with `R` drawn active only inside `L:R`, `L` becomes an activity
+and positively influences the activity carrying `R`, the complex `L:R` in
+`normal` and the promoted `R` in `no-complex`. Two forms are the same entity
+when they share a template, else the same class and name (CellDesigner), or the
+same entity kind and label (SBGN-PD); state, multimer cardinality and
+compartment are ignored. An active reactant may still be a source
+(`Ras:GTP + Raf -> Ras:GTP:Raf` gives `Ras:GTP -> Ras:GTP:Raf`), two entities
+activated by the same reaction draw no edge between each other, and the
+binding edge is direct: it does not chain through later reactions. Drop it
+with `--exclude-group influences:binding_activation`.
+
 ## Examples
 
 ### Basic transformation to stdout (pipe to momapy)
@@ -188,6 +203,12 @@ pd2af transform my_map.xml -A -i sa1 -i sa2 -o my_map_af.xml
 
 ```bash
 pd2af transform my_map.xml --exclude-group paths:chaining -o my_map_af.xml
+```
+
+### Keep only the influences the map states
+
+```bash
+pd2af transform my_map.xml --exclude-group paths:chaining --exclude-group influences:consumption --exclude-group influences:binding_activation -o my_map_af.xml
 ```
 
 ## Getting help

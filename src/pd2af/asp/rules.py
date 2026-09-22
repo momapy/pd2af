@@ -25,8 +25,9 @@ text for a named mode. The rules are organised in layers:
   ``new(activity(KEY))`` and ``new(positivelyInfluences(...))`` /
   ``new(negativelyInfluences(...))`` from ``hasActivityCarrier`` /
   ``hasActivityKey``. The inference layers on top of it — multi-hop
-  ``paths:chaining`` and ``influences:consumption`` — are carried by the four
-  path-inference modes only.
+  ``paths:chaining``, ``influences:consumption`` and
+  ``influences:binding_activation`` — are carried by the two path-inference
+  modes only.
 
 The ``keep-reactions`` mode reuses that whole scaffolding and swaps
 discovery and inference for two rules: every species is an activity
@@ -62,7 +63,8 @@ from pd2af.modes import Language
 # *structural state* becomes SBGN-PD's active *state variable*, and a reaction
 # modifier (CellDesigner-only) is, in SBGN-PD, just a modulation arc whose
 # target is a process (so it folds into the modulation-source rule). A bare
-# reactant/product is never an activity in either language.
+# reactant/product is never an activity in either language, except a reactant
+# that activates a binding partner (`influences:binding_activation`).
 #
 # The mandatory `activity:core` group holds the candidate->activity bridge and
 # the two global toggles (`--set-all-active`/`--set-all-inactive`); everything
@@ -1017,6 +1019,185 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
     },
 )
 
+# Activation by binding: an entity drawn inactive as a reactant and active as a
+# subunit of a product complex was activated by the binding, so every other
+# reactant of that reaction positively influences it. The comparison reads the
+# input active markers (and the `--set-active` override) rather than
+# `hasActivity`, because the group itself adds activity candidates and a
+# `not hasActivity` on the reactant side would depend on its own result. The
+# edge is written straight into `influences/3`: it neither chains through later
+# reactions nor spreads to the other subunits of the product complex.
+_INFLUENCES_BINDING_ACTIVATION = RuleGroup(
+    identifier="influences:binding_activation",
+    depends_on=frozenset(
+        {"activity:core", "activity:active_marker", "topology:core", "preparation"}
+    ),
+    docs="Excludable activation-by-binding reasoning: when a reaction turns an entity drawn inactive as a reactant (or inside a reactant complex) into an active subunit of a product complex, the binding activated it, so every other reactant of that reaction -- one that is neither the same entity nor itself activated by the same reaction -- becomes an activity (reason `isBindingActivator`) and positively influences the activity carrying the active subunit: its top-level complex in `normal`, the promoted subunit in `no-complex`. Two entities activated by the same reaction draw no edge between each other. Same-entity is a shared template, else the same class and name (CellDesigner), or the same entity kind and label (SBGN-PD); state, multimer cardinality and compartment are ignored. The edge is direct (`influences/3`), so it does not chain through later reactions. Exclude with `--exclude-group influences:binding_activation`.",
+    rules=(
+        Rule(
+            identifier="influences:binding_activation:is_descendant_subunit_of",
+            text=dedent("""\
+                isDescendantSubunitOf(SUBUNIT, COMPLEX) :- hasSubunit(COMPLEX, SUBUNIT).
+                isDescendantSubunitOf(SUBUNIT, COMPLEX) :-
+                    hasSubunit(COMPLEX, INTERMEDIATE_COMPLEX),
+                    isDescendantSubunitOf(SUBUNIT, INTERMEDIATE_COMPLEX)."""),
+            docs="A subunit at any depth of a complex.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:is_self_or_descendant_subunit_of",
+            text=dedent("""\
+                isSelfOrDescendantSubunitOf(ELEMENT, ELEMENT) :- hasReferredElement(_, ELEMENT).
+                isSelfOrDescendantSubunitOf(SUBUNIT, COMPLEX) :- isDescendantSubunitOf(SUBUNIT, COMPLEX)."""),
+            docs="A reaction participant itself, or a subunit of it at any depth: the forms an entity can take on one side of a reaction.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:active_marker_from_override",
+            text="hasExplicitActiveMarker(ELEMENT) :- forceActive(ELEMENT).",
+            docs="An element pinned active by `--set-active` counts as explicitly marked active.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:activates_by_binding",
+            text=dedent("""\
+                activatesByBinding(REACTION, INACTIVE_REACTANT, ACTIVE_SUBUNIT) :-
+                    hasReactant(REACTION, REACTANT),
+                    hasReferredElement(REACTANT, REACTANT_ELEMENT),
+                    isSelfOrDescendantSubunitOf(INACTIVE_REACTANT, REACTANT_ELEMENT),
+                    hasProduct(REACTION, PRODUCT),
+                    hasReferredElement(PRODUCT, PRODUCT_ELEMENT),
+                    isDescendantSubunitOf(ACTIVE_SUBUNIT, PRODUCT_ELEMENT),
+                    isSameEntityAs(INACTIVE_REACTANT, ACTIVE_SUBUNIT),
+                    hasExplicitActiveMarker(ACTIVE_SUBUNIT),
+                    not hasExplicitActiveMarker(INACTIVE_REACTANT)."""),
+            docs="A reaction activates an entity by binding when a form of it enters the reaction without an explicit active marker (as a reactant, or inside a reactant complex) and leaves it as an explicitly active subunit of a product complex.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:contains_inactive_reactant_of",
+            text=dedent("""\
+                containsInactiveReactantOf(REACTANT_ELEMENT, REACTION) :-
+                    activatesByBinding(REACTION, INACTIVE_REACTANT, _),
+                    isSelfOrDescendantSubunitOf(INACTIVE_REACTANT, REACTANT_ELEMENT)."""),
+            docs="A reactant that is, or contains, an entity the reaction activates by binding.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:is_binding_activator_of",
+            text=dedent("""\
+                isBindingActivatorOf(ACTIVATOR, ACTIVE_SUBUNIT) :-
+                    activatesByBinding(REACTION, _, ACTIVE_SUBUNIT),
+                    hasReactant(REACTION, REACTANT),
+                    hasReferredElement(REACTANT, ACTIVATOR),
+                    not isSameEntityAs(ACTIVATOR, ACTIVE_SUBUNIT),
+                    not containsInactiveReactantOf(ACTIVATOR, REACTION),
+                    hasActivityKey(ACTIVE_SUBUNIT, _)."""),
+            docs="Every other reactant of the activating reaction is a binding activator of the active subunit: one that is neither the same entity as the subunit nor itself activated by the reaction. Requiring the subunit's activity key keeps a suppressed subunit (`--set-inactive`) from making its partners activities.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:candidate",
+            text=dedent("""\
+                hasActivityCandidate(ACTIVATOR, isBindingActivator) :-
+                    isBindingActivatorOf(ACTIVATOR, _)."""),
+            docs="A binding activator is an activity candidate (reason `isBindingActivator`); it still passes through the `activity:core` bridge, so the vetoes apply.",
+        ),
+        Rule(
+            identifier="influences:binding_activation:influence",
+            text=dedent("""\
+                influences(SOURCE_KEY, TARGET_KEY, positivelyInfluences) :-
+                    isBindingActivatorOf(ACTIVATOR, ACTIVE_SUBUNIT),
+                    isSelfOrDescendantSubunitOf(SOURCE, ACTIVATOR),
+                    hasActivityKey(SOURCE, SOURCE_KEY),
+                    hasActivityKey(ACTIVE_SUBUNIT, TARGET_KEY)."""),
+            docs="A binding activator positively influences the activity carrying the active subunit. The source is the activator's own key, or -- when the activator is a complex dissolved in `no-complex` -- the key of each of its promoted subunits.",
+        ),
+    ),
+    variants={
+        Language.CELLDESIGNER: (
+            Rule(
+                identifier="influences:binding_activation:celldesigner:active_marker_from_active_flag",
+                text="hasExplicitActiveMarker(SPECIES) :- hasActive(SPECIES, 1).",
+                docs="CellDesigner: a species whose `hasActive` flag is 1 is explicitly marked active.",
+            ),
+            Rule(
+                identifier="influences:binding_activation:celldesigner:active_marker_from_structural_state",
+                text=dedent("""\
+                    hasExplicitActiveMarker(SPECIES) :-
+                        hasStructuralState(SPECIES, STRUCTURAL_STATE),
+                        hasValue(STRUCTURAL_STATE, "active")."""),
+                docs='CellDesigner: a species in an "active" structural state is explicitly marked active.',
+            ),
+            Rule(
+                identifier="influences:binding_activation:celldesigner:same_entity_from_template",
+                text=dedent("""\
+                    isSameEntityAs(SPECIES, OTHER_SPECIES) :-
+                        hasTemplate(SPECIES, TEMPLATE),
+                        hasTemplate(OTHER_SPECIES, TEMPLATE)."""),
+                docs="CellDesigner: two species sharing a template (protein, gene, RNA reference) are the same entity.",
+            ),
+            Rule(
+                identifier="influences:binding_activation:celldesigner:entity_kind",
+                text=dedent("""\
+                    hasEntityKind(SPECIES, complex) :- complex(SPECIES).
+                    hasEntityKind(SPECIES, ion) :- ion(SPECIES).
+                    hasEntityKind(SPECIES, simpleMolecule) :- simpleMolecule(SPECIES).
+                    hasEntityKind(SPECIES, drug) :- drug(SPECIES).
+                    hasEntityKind(SPECIES, unknown) :- unknown(SPECIES)."""),
+                docs="CellDesigner: the kind of each species class that carries no template.",
+            ),
+            Rule(
+                identifier="influences:binding_activation:celldesigner:same_entity_from_name",
+                text=dedent("""\
+                    isSameEntityAs(SPECIES, OTHER_SPECIES) :-
+                        hasEntityKind(SPECIES, KIND),
+                        hasEntityKind(OTHER_SPECIES, KIND),
+                        hasName(SPECIES, NAME),
+                        hasName(OTHER_SPECIES, NAME)."""),
+                docs="CellDesigner: two template-free species of the same kind and name are the same entity.",
+            ),
+        ),
+        Language.SBGN_PD: (
+            Rule(
+                identifier="influences:binding_activation:sbgn_pd:active_marker_from_state_variable",
+                text=dedent("""\
+                    hasExplicitActiveMarker(ELEMENT) :-
+                        hasStateVariable(ELEMENT, STATE_VARIABLE),
+                        hasValue(STATE_VARIABLE, "active")."""),
+                docs='SBGN-PD: an entity pool or subunit carrying an "active" state variable is explicitly marked active.',
+            ),
+            Rule(
+                identifier="influences:binding_activation:sbgn_pd:entity_kind",
+                text=dedent("""\
+                    hasEntityKind(ELEMENT, macromolecule) :- macromolecule(ELEMENT).
+                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeMultimerSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeature(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureMultimerSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemical(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalMultimerSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, unspecifiedEntity) :- unspecifiedEntity(ELEMENT).
+                    hasEntityKind(ELEMENT, unspecifiedEntity) :- unspecifiedEntitySubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complex(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complexMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complexSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complexMultimerSubunit(ELEMENT)."""),
+                docs="SBGN-PD: the kind shared by an entity pool, its multimer, its subunit and its multimer subunit classes, so a `macromolecule` pool and a `macromoleculeSubunit` compare as the same kind.",
+            ),
+            Rule(
+                identifier="influences:binding_activation:sbgn_pd:same_entity_from_label",
+                text=dedent("""\
+                    isSameEntityAs(ELEMENT, OTHER_ELEMENT) :-
+                        hasEntityKind(ELEMENT, KIND),
+                        hasEntityKind(OTHER_ELEMENT, KIND),
+                        hasLabel(ELEMENT, LABEL),
+                        hasLabel(OTHER_ELEMENT, LABEL)."""),
+                docs="SBGN-PD: two elements of the same kind and label are the same entity.",
+            ),
+        ),
+    },
+)
+
 _INFLUENCES_OUTPUT = RuleGroup(
     identifier="influences:output",
     docs="Shared fan-out from the internal `influences(SOURCE, TARGET, INFLUENCE_KIND)` relation to the typed `new(...)` influence heads — one rule per kind. Every pipeline converges on `influences/3`; this group is the single place that turns a kind into its output predicate.",
@@ -1252,7 +1433,7 @@ _KEEP_REACTIONS_INFLUENCES = RuleGroup(
                     hasReferredElement(REACTANT, REACTANT_SPECIES),
                     hasProduct(REACTION, PRODUCT),
                     hasReferredElement(PRODUCT, PRODUCT_SPECIES)."""),
-            docs="Each reactant of a reaction positively influences each product of that reaction. This is the one rule that makes a reaction itself an influence: in the other modes the reactant->product hop only feeds the cycle relations, and a bare reactant is never an influence source.",
+            docs="Each reactant of a reaction positively influences each product of that reaction. This is the one rule that makes a reaction itself an influence: in the other modes the reactant->product hop only feeds the cycle relations, and a reactant is an influence source only when it activates a binding partner (`influences:binding_activation`).",
         ),
     ),
 )
@@ -1274,6 +1455,7 @@ _BUILTIN_GROUPS = (
     _INFLUENCES_KIND,
     _INFLUENCES_CORE,
     _INFLUENCES_CONSUMPTION,
+    _INFLUENCES_BINDING_ACTIVATION,
     _INFLUENCES_OUTPUT,
     _GATES_CORE,
     _KEEP_REACTIONS_ACTIVITY,

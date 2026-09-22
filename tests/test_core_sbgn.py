@@ -24,6 +24,7 @@ from momapy.sbml.model import BQBiol, RDFAnnotation
 import pd2af
 
 from tests._helpers import (
+    BINDING_ACTIVATION_MAPS_DIR,
     MAPS_DIR,
     SBGN_EXAMPLE_MAP_PATH,
     SBGN_MAPS_DIR,
@@ -811,3 +812,124 @@ class TestMergingIsNotProteinOnly:
             layout_mode=None,
         ).obj
         assert len(out.model.activities) == 2
+
+
+def _binding_activation_map(name):
+    return read_sbgn_map(os.path.join(BINDING_ACTIVATION_MAPS_DIR, f"{name}.sbgn"))
+
+
+class TestBindingActivation:
+    """The SBGN-PD side of the binding activation cases: the same small maps as
+    the CellDesigner tests, with the two forms of an entity matched by entity
+    kind and label instead of by template."""
+
+    def _transform(self, name, mode, **kwargs):
+        out = pd2af.transform(
+            _binding_activation_map(name), mode=mode, layout_mode=None, **kwargs
+        ).obj
+        return _activity_labels(out.model), _influence_arrows(out)
+
+    # M -> L, L + R -> L:R (R active only in the complex), L:R + X -> L:R:X.
+    def test_normal_targets_the_complex(self):
+        labels, influences = self._transform("ligand_receptor", "normal")
+        assert labels == ["L", "L:R", "L:R:X", "M"]
+        assert ("PositiveInfluence", "L", "L:R") in influences
+
+    def test_no_complex_targets_the_promoted_subunit(self):
+        labels, influences = self._transform("ligand_receptor", "no-complex")
+        assert labels == ["L", "L:R:X", "M", "R"]
+        assert ("PositiveInfluence", "L", "R") in influences
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_excluding_the_group_restores_the_plain_reading(self, mode):
+        labels, influences = self._transform(
+            "ligand_receptor", mode, exclude_groups=("influences:binding_activation",)
+        )
+        assert "L" not in labels
+        assert not {one for one in influences if one[1] == "L"}
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_upstream_path_reaches_the_activator_but_the_edge_does_not_chain(
+        self, mode
+    ):
+        _, influences = self._transform("ligand_receptor", mode)
+        assert ("PositiveInfluence", "M", "L") in influences
+        assert ("PositiveInfluence", "M", "L:R:X") in influences
+        assert ("PositiveInfluence", "L", "L:R:X") not in influences
+
+    def test_explicitly_active_pool_is_not_newly_activated(self):
+        labels, influences = self._transform(
+            "ligand_receptor", "no-complex", set_active=["r_model"]
+        )
+        assert "L" not in labels
+        assert not {one for one in influences if one[1] == "L"}
+
+    # Ras:GTP (Ras active) + Raf -> Ras:GTP:Raf (Ras and Raf active).
+    def test_active_recruiter_is_a_source(self):
+        _, influences = self._transform("active_recruiter", "normal")
+        assert influences == {("PositiveInfluence", "Ras:GTP", "Ras:GTP:Raf")}
+        labels, influences = self._transform("active_recruiter", "no-complex")
+        assert labels == ["Raf", "Ras"]
+        assert influences == {("PositiveInfluence", "Ras", "Raf")}
+
+    # A + B -> A:B, both active in the complex.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_two_newly_active_reactants_draw_no_edge(self, mode):
+        labels, influences = self._transform("mutual", mode)
+        assert labels == (["A:B"] if mode == "normal" else ["A", "B"])
+        assert influences == set()
+
+    # L + R:S (R inactive) -> L:(R:S) (R active, nested one level down).
+    def test_nested_subunits(self):
+        _, influences = self._transform("nested", "normal")
+        assert influences == {("PositiveInfluence", "L", "L:(R:S)")}
+
+    # X the simple chemical and X the macromolecule share a label, not a kind.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_equal_labels_of_different_kinds_do_not_match(self, mode):
+        labels, influences = self._transform("different_kinds", mode)
+        assert "P" not in labels
+        assert influences == set()
+
+    # A macromolecule pool and a macromolecule subunit are the same kind.
+    def test_pool_and_subunit_of_the_same_kind_match(self):
+        _, influences = self._transform("reversible", "no-complex")
+        assert influences == {("PositiveInfluence", "L", "R")}
+
+    # R -> R:R, both subunits active.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_same_entity_is_never_its_own_activator(self, mode):
+        _, influences = self._transform("homodimer", mode)
+        assert influences == set()
+
+    # L (membrane) + R (cytosol) -> L:R (R active); R also stimulates Y -> Z.
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("keep_species", (False, True))
+    @pytest.mark.parametrize("drop_compartments", (False, True))
+    def test_no_self_influence(self, mode, keep_species, drop_compartments):
+        _, influences = self._transform(
+            "merge",
+            mode,
+            keep_species=keep_species,
+            drop_compartments=drop_compartments,
+        )
+        # Under `keep_species` a label keeps its state prefix ("[active]R").
+        target = "L:R" if mode == "normal" else "R"
+        assert any(
+            kind == "PositiveInfluence" and source == "L" and label.endswith(target)
+            for kind, source, label in influences
+        )
+        assert not {one for one in influences if one[1] == one[2]}
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    @pytest.mark.parametrize("name", ("ligand_receptor", "merge"))
+    def test_output_round_trips(self, tmp_path, name, mode):
+        out = pd2af.transform(
+            _binding_activation_map(name),
+            mode=mode,
+            keep_species=True,
+            layout_mode="plain",
+        ).obj
+        path = os.path.join(tmp_path, f"{name}_{mode}.sbgn")
+        momapy.io.core.write(out, path, writer="sbgnml")
+        momapy.io.core.read(path, reader="sbgnml")
