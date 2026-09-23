@@ -96,9 +96,9 @@ class TestTransformExampleKeepSpeciesMode:
         assert modulation_set(out_keep_species.model) == {
             # A activates C by binding, and C is carried by D
             ("PositiveInfluence", "A", "D"),
-            # B catalyzes the reaction producing A, and consumes A
+            # B catalyzes A -> A, which hands A back as the same activity, so B
+            # does not consume it
             ("PositiveInfluence", "B", "A"),
-            ("NegativeInfluence", "B", "A"),
             ("PositiveInfluence", "B", "D"),
             ("PositiveInfluence", "D", "F"),
             ("NegativeInfluence", "B", "E"),
@@ -126,7 +126,6 @@ class TestTransformExampleKeepSpeciesNoComplexMode:
         assert modulation_set(out_keep_species_no_complex.model) == {
             ("PositiveInfluence", "A", "C"),
             ("PositiveInfluence", "B", "A"),
-            ("NegativeInfluence", "B", "A"),
             ("PositiveInfluence", "B", "C"),
             ("PositiveInfluence", "C", "F"),
             ("NegativeInfluence", "B", "E"),

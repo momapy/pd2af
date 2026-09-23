@@ -883,14 +883,32 @@ _INFLUENCES_CORE = RuleGroup(
 # itself an activity: driving a reaction depletes its reactants, so stimulation
 # (catalysis and necessary stimulation included) consumes -- a negative influence --
 # and inhibition spares -- a positive one; a bare modulation draws no consumption edge.
+# A reactant the reaction hands back as the same activity is not consumed at all, so
+# `returnsReactantAsActivity` holds it back: driving a phosphorylation whose two forms
+# are both activities neither depletes nor spares it. A product that is the same
+# entity but inactive is an inactivation and keeps its edge.
 # These are direct edges, not additions to the reactant->product path closure, so they
 # do not pass through `paths:complex_traversal` and a deleted complex is not rerouted
 # to a promoted subunit.
 _INFLUENCES_CONSUMPTION = RuleGroup(
     identifier="influences:consumption",
-    depends_on=frozenset({"activity:core", "preparation"}),
-    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. The SBGN-PD variant walks a modulation arc onto a process the same way: a stimulation (catalysis and necessary stimulation included) negatively influences each reactant activity, an inhibition positively influences each one, a bare modulation neither. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences:consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.",
-    rules=(),
+    depends_on=frozenset({"activity:core", "entity:identity", "preparation"}),
+    docs="Excludable consumption/sparing reasoning: a reaction depletes its reactants, so a modifier that drives the reaction also acts on every reactant that is itself an activity -- catalyzer/physicalStimulator/trigger negatively influence each consumed reactant, inhibitor positively influences each spared reactant, and the unknown modifiers contribute the unknown twins. The SBGN-PD variant walks a modulation arc onto a process the same way: a stimulation (catalysis and necessary stimulation included) negatively influences each reactant activity, an inhibition positively influences each one, a bare modulation neither. A reactant the reaction hands back as the same activity is not depleted and draws no edge; `returnsReactantAsActivity` carries that condition, and excluding that one rule restores the unconditional behavior. This is inference beyond what the map draws, so it is a group of its own: exclude with `--exclude-group influences:consumption` to keep only the influences the map states. The `keep-reactions` mode omits it, since that mode renders each reaction directly instead of reasoning about it.",
+    rules=(
+        Rule(
+            identifier="influences:consumption:returns_reactant_as_activity",
+            text=dedent("""\
+                returnsReactantAsActivity(PROCESS, REACTANT_ELEMENT) :-
+                    hasReactant(PROCESS, REACTANT),
+                    hasReferredElement(REACTANT, REACTANT_ELEMENT),
+                    hasProduct(PROCESS, PRODUCT),
+                    hasReferredElement(PRODUCT, PRODUCT_ELEMENT),
+                    isSameEntityAs(REACTANT_ELEMENT, PRODUCT_ELEMENT),
+                    hasActivityCarrier(PRODUCT_ELEMENT, PRODUCT_CARRIER),
+                    hasActivityKey(PRODUCT_CARRIER, _)."""),
+            docs="A reaction hands a reactant back when one of its products is the same entity (`entity:identity`) and is itself an activity: a phosphorylation whose two forms are both activities, or a reaction listing the same species on both sides. Such a reactant is not depleted, so the consumption and sparing rules require that this does not hold. A product that is the same entity but *not* an activity is an inactivation and keeps its edge, as does a product that is a different entity, or the same entity sitting as a subunit of a product complex. PROCESS binds a CellDesigner reaction or an SBGN-PD process. Excluding this one rule with `--exclude-rule influences:consumption:returns_reactant_as_activity` leaves the relation underived, so the consumption rules fire unconditionally again -- useful to surface curation mistakes, which show up as an activity influenced both positively and negatively by the same source.",
+        ),
+    ),
     variants={
         Language.SBGN_PD: (
             Rule(
@@ -905,8 +923,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_ENTITY_POOL, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="A stimulation (catalysis and necessary stimulation included -- the ontology derives both from `stimulation`) onto a process negatively influences each reactant of that process that is itself an activity: running the process consumes it.",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(PROCESS, TARGET_ENTITY_POOL)."""),
+                docs="A stimulation (catalysis and necessary stimulation included -- the ontology derives both from `stimulation`) onto a process negatively influences each reactant of that process that is itself an activity and that the process does not hand back as the same activity: running the process consumes it.",
             ),
             Rule(
                 identifier="influences:consumption:sbgn_pd:inhibition_spares_reactant",
@@ -920,8 +939,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_ENTITY_POOL, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_ENTITY_POOL, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="An inhibition onto a process positively influences each reactant of that process that is itself an activity: blocking the process spares it.",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(PROCESS, TARGET_ENTITY_POOL)."""),
+                docs="An inhibition onto a process positively influences each reactant of that process that is itself an activity and that the process does not hand back as the same activity: blocking the process spares it.",
             ),
         ),
         Language.CELLDESIGNER: (
@@ -937,8 +957,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity (consumption depletes the reactant — a negative influence regardless of the modifier's positive role on the product).",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(REACTION, TARGET_SPECIES)."""),
+                docs="A catalyzer of a reaction negatively influences each reactant that is itself an activity and that the reaction does not hand back as the same activity (consumption depletes the reactant — a negative influence alongside the modifier's positive role on a product that is a different activity).",
             ),
             Rule(
                 identifier="influences:consumption:celldesigner:physical_stimulator_consumes_reactant",
@@ -952,8 +973,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity (consumption).",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(REACTION, TARGET_SPECIES)."""),
+                docs="A physical stimulator of a reaction negatively influences each reactant that is itself an activity and that the reaction does not hand back as the same activity (consumption).",
             ),
             Rule(
                 identifier="influences:consumption:celldesigner:trigger_consumes_reactant",
@@ -967,8 +989,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="A trigger of a reaction negatively influences each reactant that is itself an activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship).",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(REACTION, TARGET_SPECIES)."""),
+                docs="A trigger of a reaction negatively influences each reactant that is itself an activity and that the reaction does not hand back as the same activity (consumption is depletion, hence negative — not triggers, which is only the trigger→product relationship).",
             ),
             Rule(
                 identifier="influences:consumption:celldesigner:inhibitor_spares_reactant",
@@ -982,8 +1005,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="An inhibitor of a reaction positively influences each reactant that is itself an activity (sparing).",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(REACTION, TARGET_SPECIES)."""),
+                docs="An inhibitor of a reaction positively influences each reactant that is itself an activity and that the reaction does not hand back as the same activity (sparing).",
             ),
             Rule(
                 identifier="influences:consumption:celldesigner:unknown_catalyzer_consumes_reactant",
@@ -997,8 +1021,9 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity (consumption, uncertain).",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(REACTION, TARGET_SPECIES)."""),
+                docs="An unknown catalyzer of a reaction unknown-negatively influences each reactant that is itself an activity and that the reaction does not hand back as the same activity (consumption, uncertain).",
             ),
             Rule(
                 identifier="influences:consumption:celldesigner:unknown_inhibitor_spares_reactant",
@@ -1012,12 +1037,94 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
                     hasActivityCarrier(SOURCE_SPECIES, SOURCE_CARRIER),
                     hasActivityCarrier(TARGET_SPECIES, TARGET_CARRIER),
                     hasActivityKey(SOURCE_CARRIER, SOURCE_KEY),
-                    hasActivityKey(TARGET_CARRIER, TARGET_KEY)."""),
-                docs="An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity (sparing, uncertain).",
+                    hasActivityKey(TARGET_CARRIER, TARGET_KEY),
+                    not returnsReactantAsActivity(REACTION, TARGET_SPECIES)."""),
+                docs="An unknown inhibitor of a reaction unknown-positively influences each reactant that is itself an activity and that the reaction does not hand back as the same activity (sparing, uncertain).",
             ),
         ),
     },
 )
+
+# Entity identity: when two elements are the same entity in different states.
+# A shared template settles it; for the template-free classes the kind and the
+# name (CellDesigner) or label (SBGN-PD) do. State, multimer cardinality and
+# compartment are ignored, so a species and its phosphorylated form are the
+# same entity. The relation reads input facts only, which is why it depends on
+# nothing and both `influences:consumption` and `influences:binding_activation`
+# can build on it.
+_ENTITY_IDENTITY = RuleGroup(
+    identifier="entity:identity",
+    docs="When two elements are the same entity in different states: `isSameEntityAs(ELEMENT, OTHER_ELEMENT)` holds for two species sharing a template (protein, gene, RNA reference), and for two template-free elements of the same kind and name (CellDesigner) or label (SBGN-PD). State, multimer cardinality and compartment are ignored, so a species and a modified form of it are the same entity. `influences:consumption` uses it to tell a reaction that hands its reactant back from one that uses it up, and `influences:binding_activation` to tell whether the entity leaving a reaction is the one that entered it.",
+    rules=(),
+    variants={
+        Language.CELLDESIGNER: (
+            Rule(
+                identifier="entity:identity:celldesigner:from_template",
+                text=dedent("""\
+                    isSameEntityAs(SPECIES, OTHER_SPECIES) :-
+                        hasTemplate(SPECIES, TEMPLATE),
+                        hasTemplate(OTHER_SPECIES, TEMPLATE)."""),
+                docs="CellDesigner: two species sharing a template (protein, gene, RNA reference) are the same entity.",
+            ),
+            Rule(
+                identifier="entity:identity:celldesigner:kind",
+                text=dedent("""\
+                hasEntityKind(SPECIES, complex) :- complex(SPECIES).
+                hasEntityKind(SPECIES, ion) :- ion(SPECIES).
+                hasEntityKind(SPECIES, simpleMolecule) :- simpleMolecule(SPECIES).
+                hasEntityKind(SPECIES, drug) :- drug(SPECIES).
+                hasEntityKind(SPECIES, unknown) :- unknown(SPECIES)."""),
+                docs="CellDesigner: the kind of each species class that carries no template.",
+            ),
+            Rule(
+                identifier="entity:identity:celldesigner:from_name",
+                text=dedent("""\
+                isSameEntityAs(SPECIES, OTHER_SPECIES) :-
+                    hasEntityKind(SPECIES, KIND),
+                    hasEntityKind(OTHER_SPECIES, KIND),
+                    hasName(SPECIES, NAME),
+                    hasName(OTHER_SPECIES, NAME)."""),
+                docs="CellDesigner: two template-free species of the same kind and name are the same entity.",
+            ),
+        ),
+        Language.SBGN_PD: (
+            Rule(
+                identifier="entity:identity:sbgn_pd:kind",
+                text=dedent("""\
+                    hasEntityKind(ELEMENT, macromolecule) :- macromolecule(ELEMENT).
+                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeMultimerSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeature(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureMultimerSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemical(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalMultimerSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, unspecifiedEntity) :- unspecifiedEntity(ELEMENT).
+                    hasEntityKind(ELEMENT, unspecifiedEntity) :- unspecifiedEntitySubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complex(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complexMultimer(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complexSubunit(ELEMENT).
+                    hasEntityKind(ELEMENT, complex) :- complexMultimerSubunit(ELEMENT)."""),
+                docs="SBGN-PD: the kind shared by an entity pool, its multimer, its subunit and its multimer subunit classes, so a `macromolecule` pool and a `macromoleculeSubunit` compare as the same kind.",
+            ),
+            Rule(
+                identifier="entity:identity:sbgn_pd:from_label",
+                text=dedent("""\
+                isSameEntityAs(ELEMENT, OTHER_ELEMENT) :-
+                    hasEntityKind(ELEMENT, KIND),
+                    hasEntityKind(OTHER_ELEMENT, KIND),
+                    hasLabel(ELEMENT, LABEL),
+                    hasLabel(OTHER_ELEMENT, LABEL)."""),
+                docs="SBGN-PD: two elements of the same kind and label are the same entity.",
+            ),
+        ),
+    },
+)
+
 
 # Activation by binding: an entity drawn inactive as a reactant and active as a
 # subunit of a product complex was activated by the binding, so every other
@@ -1030,9 +1137,15 @@ _INFLUENCES_CONSUMPTION = RuleGroup(
 _INFLUENCES_BINDING_ACTIVATION = RuleGroup(
     identifier="influences:binding_activation",
     depends_on=frozenset(
-        {"activity:core", "activity:active_marker", "topology:core", "preparation"}
+        {
+            "activity:core",
+            "activity:active_marker",
+            "entity:identity",
+            "topology:core",
+            "preparation",
+        }
     ),
-    docs="Excludable activation-by-binding reasoning: when a reaction turns an entity drawn inactive as a reactant (or inside a reactant complex) into an active subunit of a product complex, the binding activated it, so every other reactant of that reaction -- one that is neither the same entity nor itself activated by the same reaction -- becomes an activity (reason `isBindingActivator`) and positively influences the activity carrying the active subunit: its top-level complex in `normal`, the promoted subunit in `no-complex`. Two entities activated by the same reaction draw no edge between each other. Same-entity is a shared template, else the same class and name (CellDesigner), or the same entity kind and label (SBGN-PD); state, multimer cardinality and compartment are ignored. The edge is direct (`influences/3`), so it does not chain through later reactions. Exclude with `--exclude-group influences:binding_activation`.",
+    docs="Excludable activation-by-binding reasoning: when a reaction turns an entity drawn inactive as a reactant (or inside a reactant complex) into an active subunit of a product complex, the binding activated it, so every other reactant of that reaction -- one that is neither the same entity nor itself activated by the same reaction -- becomes an activity (reason `isBindingActivator`) and positively influences the activity carrying the active subunit: its top-level complex in `normal`, the promoted subunit in `no-complex`. Two entities activated by the same reaction draw no edge between each other. Same-entity comes from the `entity:identity` group. The edge is direct (`influences/3`), so it does not chain through later reactions. Exclude with `--exclude-group influences:binding_activation`.",
     rules=(
         Rule(
             identifier="influences:binding_activation:is_descendant_subunit_of",
@@ -1123,34 +1236,6 @@ _INFLUENCES_BINDING_ACTIVATION = RuleGroup(
                         hasValue(STRUCTURAL_STATE, "active")."""),
                 docs='CellDesigner: a species in an "active" structural state is explicitly marked active.',
             ),
-            Rule(
-                identifier="influences:binding_activation:celldesigner:same_entity_from_template",
-                text=dedent("""\
-                    isSameEntityAs(SPECIES, OTHER_SPECIES) :-
-                        hasTemplate(SPECIES, TEMPLATE),
-                        hasTemplate(OTHER_SPECIES, TEMPLATE)."""),
-                docs="CellDesigner: two species sharing a template (protein, gene, RNA reference) are the same entity.",
-            ),
-            Rule(
-                identifier="influences:binding_activation:celldesigner:entity_kind",
-                text=dedent("""\
-                    hasEntityKind(SPECIES, complex) :- complex(SPECIES).
-                    hasEntityKind(SPECIES, ion) :- ion(SPECIES).
-                    hasEntityKind(SPECIES, simpleMolecule) :- simpleMolecule(SPECIES).
-                    hasEntityKind(SPECIES, drug) :- drug(SPECIES).
-                    hasEntityKind(SPECIES, unknown) :- unknown(SPECIES)."""),
-                docs="CellDesigner: the kind of each species class that carries no template.",
-            ),
-            Rule(
-                identifier="influences:binding_activation:celldesigner:same_entity_from_name",
-                text=dedent("""\
-                    isSameEntityAs(SPECIES, OTHER_SPECIES) :-
-                        hasEntityKind(SPECIES, KIND),
-                        hasEntityKind(OTHER_SPECIES, KIND),
-                        hasName(SPECIES, NAME),
-                        hasName(OTHER_SPECIES, NAME)."""),
-                docs="CellDesigner: two template-free species of the same kind and name are the same entity.",
-            ),
         ),
         Language.SBGN_PD: (
             Rule(
@@ -1160,39 +1245,6 @@ _INFLUENCES_BINDING_ACTIVATION = RuleGroup(
                         hasStateVariable(ELEMENT, STATE_VARIABLE),
                         hasValue(STATE_VARIABLE, "active")."""),
                 docs='SBGN-PD: an entity pool or subunit carrying an "active" state variable is explicitly marked active.',
-            ),
-            Rule(
-                identifier="influences:binding_activation:sbgn_pd:entity_kind",
-                text=dedent("""\
-                    hasEntityKind(ELEMENT, macromolecule) :- macromolecule(ELEMENT).
-                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeMultimer(ELEMENT).
-                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, macromolecule) :- macromoleculeMultimerSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeature(ELEMENT).
-                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureMultimer(ELEMENT).
-                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, nucleicAcidFeature) :- nucleicAcidFeatureMultimerSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemical(ELEMENT).
-                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalMultimer(ELEMENT).
-                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, simpleChemical) :- simpleChemicalMultimerSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, unspecifiedEntity) :- unspecifiedEntity(ELEMENT).
-                    hasEntityKind(ELEMENT, unspecifiedEntity) :- unspecifiedEntitySubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, complex) :- complex(ELEMENT).
-                    hasEntityKind(ELEMENT, complex) :- complexMultimer(ELEMENT).
-                    hasEntityKind(ELEMENT, complex) :- complexSubunit(ELEMENT).
-                    hasEntityKind(ELEMENT, complex) :- complexMultimerSubunit(ELEMENT)."""),
-                docs="SBGN-PD: the kind shared by an entity pool, its multimer, its subunit and its multimer subunit classes, so a `macromolecule` pool and a `macromoleculeSubunit` compare as the same kind.",
-            ),
-            Rule(
-                identifier="influences:binding_activation:sbgn_pd:same_entity_from_label",
-                text=dedent("""\
-                    isSameEntityAs(ELEMENT, OTHER_ELEMENT) :-
-                        hasEntityKind(ELEMENT, KIND),
-                        hasEntityKind(OTHER_ELEMENT, KIND),
-                        hasLabel(ELEMENT, LABEL),
-                        hasLabel(OTHER_ELEMENT, LABEL)."""),
-                docs="SBGN-PD: two elements of the same kind and label are the same entity.",
             ),
         ),
     },
@@ -1452,6 +1504,7 @@ _BUILTIN_GROUPS = (
     _PATHS_CORE,
     _PATHS_CHAINING,
     _PATHS_COMPLEX_TRAVERSAL,
+    _ENTITY_IDENTITY,
     _INFLUENCES_KIND,
     _INFLUENCES_CORE,
     _INFLUENCES_CONSUMPTION,

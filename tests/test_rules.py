@@ -321,6 +321,57 @@ class TestInfluencesBindingActivationGroup:
         assert "hasTemplate" not in program
 
 
+class TestEntityIdentityGroup:
+    """Same-entity is a group of its own, shared by the consumption and the
+    binding-activation reasoning."""
+
+    @pytest.mark.parametrize("mode", ("normal", "no-complex"))
+    def test_path_inference_modes_include_it(self, mode):
+        assert "entity:identity" in _group_ids(mode)
+        for language in ("celldesigner", "sbgn_pd"):
+            program = build_program_for_mode_name(mode, language)
+            assert "isSameEntityAs(" in program
+
+    def test_keep_reactions_omits_it(self):
+        assert "entity:identity" not in _group_ids("keep-reactions")
+
+    @pytest.mark.parametrize(
+        "group_id", ("influences:consumption", "influences:binding_activation")
+    )
+    def test_is_a_dependency_of(self, group_id):
+        registry = pd2af.asp.rules.build_registry()
+        assert "entity:identity" in registry.groups[group_id].depends_on
+
+    def test_cannot_be_excluded_while_its_dependents_are_included(self):
+        with pytest.raises(ValueError, match="entity:identity"):
+            build_program_for_mode_name(
+                "normal", "celldesigner", exclude_groups=("entity:identity",)
+            )
+
+
+class TestReturnsReactantAsActivity:
+    """The consumption and sparing rules hold back a reactant the reaction hands
+    back as the same activity; excluding the one rule deriving that condition
+    brings back the unconditional behavior."""
+
+    @pytest.mark.parametrize(
+        "language,guard_count",
+        (("celldesigner", 6), ("sbgn_pd", 2)),
+    )
+    def test_every_consumption_rule_is_guarded(self, language, guard_count):
+        program = build_program_for_mode_name("normal", language)
+        assert program.count("not returnsReactantAsActivity(") == guard_count
+
+    def test_excluding_the_rule_leaves_the_guards_unsatisfiable(self):
+        pruned = build_program_for_mode_name(
+            "normal",
+            "celldesigner",
+            exclude_rules=("influences:consumption:returns_reactant_as_activity",),
+        )
+        assert "returnsReactantAsActivity(PROCESS, REACTANT_ELEMENT) :-" not in pruned
+        assert "not returnsReactantAsActivity(" in pruned
+
+
 class TestSbgnPdVariant:
     """`normal`/`no-complex` must emit working rules for SBGN-PD input:
     entity-pool carriers (not the CellDesigner `species` carrier). Keys are

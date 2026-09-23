@@ -571,6 +571,41 @@ def _consumption_map(modulation_class, reactant_active=True):
     return momapy.sbgn.pd.SBGNPDMap(id_="map", model=model)
 
 
+def _phosphorylation_map(product_active):
+    """A -> A-P under a stimulation from E. A is active; A-P is the same
+    entity, active or not as asked."""
+    product_state_variables = [momapy.sbgn.pd.StateVariable(value="P")]
+    if product_active:
+        product_state_variables.append(momapy.sbgn.pd.StateVariable(value="active"))
+    a = momapy.sbgn.pd.Macromolecule(
+        id_="a",
+        label="A",
+        state_variables=frozenset([momapy.sbgn.pd.StateVariable(value="active")]),
+    )
+    phosphorylated_a = momapy.sbgn.pd.Macromolecule(
+        id_="a_p",
+        label="A",
+        state_variables=frozenset(product_state_variables),
+    )
+    source = momapy.sbgn.pd.Macromolecule(id_="e", label="E")
+    process = momapy.sbgn.pd.GenericProcess(
+        id_="proc",
+        reactants=frozenset([momapy.sbgn.pd.Reactant(id_="r_a", referred_element=a)]),
+        products=frozenset(
+            [momapy.sbgn.pd.Product(id_="pr_a_p", referred_element=phosphorylated_a)]
+        ),
+    )
+    model = momapy.sbgn.pd.SBGNPDModel(
+        id_="m",
+        entity_pools=frozenset([a, phosphorylated_a, source]),
+        processes=frozenset([process]),
+        modulations=frozenset(
+            [momapy.sbgn.pd.Stimulation(id_="mod", source=source, target=process)]
+        ),
+    )
+    return momapy.sbgn.pd.SBGNPDMap(id_="map", model=model)
+
+
 def _influence_arrows(out):
     return {
         (type(influence).__name__, influence.source.label, influence.target.label)
@@ -642,6 +677,39 @@ class TestConsumptionInfluences:
             ("NegativeInfluence", "E", expected_label)
         }
         assert _influence_arrows(without.obj) == set()
+
+    @pytest.mark.parametrize("keep_species", (True, False))
+    def test_reactant_handed_back_as_an_activity_draws_no_edge(self, keep_species):
+        out = pd2af.transform(
+            _phosphorylation_map(product_active=True),
+            mode="normal",
+            keep_species=keep_species,
+            layout_mode=None,
+        ).obj
+        assert not any(
+            name == "NegativeInfluence" for name, _, _ in _influence_arrows(out)
+        )
+
+    def test_reactant_handed_back_inactive_keeps_its_edge(self):
+        out = pd2af.transform(
+            _phosphorylation_map(product_active=False),
+            mode="normal",
+            keep_species=True,
+            layout_mode=None,
+        ).obj
+        assert _influence_arrows(out) == {("NegativeInfluence", "E", "[active]A")}
+
+    def test_excluding_the_guard_rule_restores_the_edge(self):
+        out = pd2af.transform(
+            _phosphorylation_map(product_active=True),
+            mode="normal",
+            layout_mode=None,
+            exclude_rules=("influences:consumption:returns_reactant_as_activity",),
+        ).obj
+        assert _influence_arrows(out) == {
+            ("PositiveInfluence", "E", "A"),
+            ("NegativeInfluence", "E", "A"),
+        }
 
     def test_self_consumption_is_a_self_edge(self):
         # The modulation source IS the reactant: E consumes itself.

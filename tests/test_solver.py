@@ -78,10 +78,12 @@ class TestSolve:
         atoms = _activity_atoms(clingo_model)
         assert len(atoms) == 6
 
-    def test_solve_keep_species_finds_seven_influence_atoms(self, solved_keep_species):
+    def test_solve_keep_species_finds_six_influence_atoms(self, solved_keep_species):
+        # B catalyses A -> A, which hands A back as the same activity, so B draws
+        # no consumption edge onto A.
         clingo_model, _ = solved_keep_species
         atoms = _influence_atoms(clingo_model)
-        assert len(atoms) == 7
+        assert len(atoms) == 6
 
     def test_solve_keep_species_no_complex_excludes_complex_with_active_subunit(
         self, example_cd_map
