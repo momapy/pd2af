@@ -151,7 +151,7 @@ carrying groups the mode brings itself), the input languages it accepts, and
 its `default_options`. `pd2af.asp.rules` owns the groups
 and composes the program; the mode owns the membership, so no rule group decides
 which modes include it. A mode that brings its own groups names them after
-itself: `keep_reactions:*`, as a contributed `casq` mode would name `casq:*`.
+itself: `keep_reactions:*`.
 
 `pd2af.modes.get_transformation_modes()` returns the built-ins in declaration
 order followed by every mode contributed through the `pd2af.modes` entry-point
