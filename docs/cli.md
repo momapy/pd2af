@@ -4,7 +4,7 @@
 
 The `pd2af` command-line interface transforms a process-description (PD) map — CellDesigner or SBGN-PD — into an activity-flow (AF) map.
 
-The output map is written to stdout as a [momapy](https://github.com/adrienrougny/momapy) pickle (preserving layout styling) so it can be piped into `momapy visualize`. With `-o`, the writer is chosen from the output file extension. With `-V`, the output map is opened in the momapy browser viewer, and nothing is written to stdout.
+The output map is written to stdout as a [momapy](https://github.com/momapy/momapy) pickle (preserving layout styling) so it can be piped into `momapy visualize`. With `-o`, the writer is chosen from the output file extension. With `-V`, the output map is opened in the momapy browser viewer, and nothing is written to stdout.
 
 An unreadable input file, an unknown element id, or a mode the input or the layout does not support is reported as a short `error: ...` message on stderr, with exit status 1 and no output file written.
 

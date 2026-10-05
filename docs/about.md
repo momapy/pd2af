@@ -2,7 +2,7 @@
 
 ## Project
 
-**pd2af** is a Python tool for transforming process-description (PD) maps, CellDesigner or SBGN-PD, into activity-flow (AF) maps. The transformation is driven by a set of declarative ASP rules (clingo) and built on top of [momapy](https://github.com/adrienrougny/momapy).
+**pd2af** is a Python tool for transforming process-description (PD) maps, CellDesigner or SBGN-PD, into activity-flow (AF) maps. The transformation is driven by a set of declarative ASP rules (clingo) and built on top of [momapy](https://github.com/momapy/momapy).
 
 The project is developed at the [University of Luxembourg](https://wwwen.uni.lu/).
 
