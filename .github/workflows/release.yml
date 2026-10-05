@@ -205,7 +205,7 @@ jobs:
 
         ## Links
 
-        - [Documentation](https://adrienrougny.github.io/pd2af/)
+        - [Documentation](https://momapy.github.io/pd2af/)
         - [PyPI](https://pypi.org/project/pd2af/${{ env.VERSION }}/)
         EOF
 

@@ -23,9 +23,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/adrienrougny/pd2af"
-Issues = "https://github.com/adrienrougny/pd2af/issues"
-Documentation = "https://adrienrougny.github.io/pd2af/"
+Homepage = "https://github.com/momapy/pd2af"
+Issues = "https://github.com/momapy/pd2af/issues"
+Documentation = "https://momapy.github.io/pd2af/"
 
 [project.scripts]
 pd2af = "pd2af.cli:main"

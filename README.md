@@ -1,6 +1,6 @@
 # pd2af
 
-[![License](https://img.shields.io/github/license/adrienrougny/pd2af)](https://github.com/adrienrougny/pd2af/blob/main/COPYING)
+[![License](https://img.shields.io/github/license/momapy/pd2af)](https://github.com/momapy/pd2af/blob/main/COPYING)
 
 A library and CLI to transform process-description (PD) maps into activity-flow (AF) maps.
 
@@ -14,7 +14,7 @@ A library and CLI to transform process-description (PD) maps into activity-flow 
 ## Installation
 
 ```bash
-pip install git+https://github.com/adrienrougny/pd2af
+pip install git+https://github.com/momapy/pd2af
 ```
 
 The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.

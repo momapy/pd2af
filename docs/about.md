@@ -25,5 +25,5 @@ To contribute code:
 ## License
 
 pd2af is distributed under the GNU General Public License v3 or later; see the
-[`COPYING`](https://github.com/adrienrougny/pd2af/blob/main/COPYING) file for
+[`COPYING`](https://github.com/momapy/pd2af/blob/main/COPYING) file for
 the full terms.
