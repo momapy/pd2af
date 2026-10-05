@@ -8,7 +8,7 @@ A library and CLI to transform process-description (PD) maps into activity-flow 
 
 - **CellDesigner and SBGN-PD input**: a CellDesigner map gives a CellDesigner map, an SBGN-PD map gives an SBGN-AF map
 - **Three transformation modes**: `normal`, `no-complex` and `keep-reactions`, with the `--keep-species` and `--drop-compartments` options
-- **Three layout modes**: Graphviz `dot` auto-layout, reuse of the original positions, or an overlay on the original layout
+- **Three layout modes**: `dot` (Graphviz auto-layout), `plain` (reuse of the original positions) and `overlay` (the original layout, with the elements that have no match dimmed)
 - **Annotations and notes carried over**: from the input elements to the elements they produce
 
 ## Installation
@@ -22,12 +22,12 @@ The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.
 ## Quick example
 
 ```python
-import momapy.io.core
+import momapy.io
 import pd2af
 
-pd_map = momapy.io.core.read("my_map.xml").obj
+pd_map = momapy.io.read("my_map.xml").obj
 af_map = pd2af.transform(pd_map).obj
-momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
+momapy.io.write(af_map, "my_map_af.xml", writer="celldesigner")
 ```
 
 ```bash
