@@ -2,20 +2,18 @@ import os
 import tempfile
 import types
 
-import pytest
-
 import momapy.celldesigner
 import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 import momapy.io.core
 import momapy.sbgn.pd
+import pytest
 
 import pd2af
 import pd2af.asp.predicates
 import pd2af.building.celldesigner.layout
 import pd2af.building.layout
-
 from tests._helpers import MAPS_DIR, has_dot_binary, read_cd_map
 
 

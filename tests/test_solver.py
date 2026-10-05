@@ -1,22 +1,19 @@
 import clorm
-import pytest
-
 import momapy.celldesigner
 import momapy_kb.clingo.core
+import pytest
 
 import pd2af
-import pd2af.modes
-import pd2af.asp.rules
 import pd2af.asp.predicates
+import pd2af.asp.rules
 import pd2af.asp.solver
-
+import pd2af.modes
 from tests._helpers import (
     SBGN_EXAMPLE_MAP_PATH,
     read_sbgn_map,
     solve_map_in_mode_name,
     species_names,
 )
-
 
 _INFLUENCE_PREDICATES = (
     pd2af.asp.predicates.positivelyInfluences,

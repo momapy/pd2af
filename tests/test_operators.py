@@ -23,21 +23,19 @@ import os
 import tempfile
 
 import clorm
-import pytest
-
 import momapy.celldesigner
 import momapy.io.core
 import momapy.sbgn.af
+import pytest
 
 import pd2af
-import pd2af.building.celldesigner.layout
-import pd2af.building.celldesigner.model
-import pd2af.modes
 import pd2af.asp.predicates
 import pd2af.asp.rules
+import pd2af.building.celldesigner.layout
+import pd2af.building.celldesigner.model
 import pd2af.building.sbgn.layout
 import pd2af.building.sbgn.model
-
+import pd2af.modes
 from tests._helpers import (
     MAPS_DIR,
     SBGN_MAPS_DIR,
@@ -46,7 +44,6 @@ from tests._helpers import (
     read_cd_map,
     read_sbgn_map,
 )
-
 
 _PATH_INFERENCE_MODES = (
     "normal",

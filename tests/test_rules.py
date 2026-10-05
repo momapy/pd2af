@@ -1,11 +1,9 @@
 import aspcompose
 import pytest
 
-import pd2af.modes
 import pd2af.asp.rules
-
+import pd2af.modes
 from tests._helpers import build_program_for_mode_name
-
 
 _MODES = (
     "normal",

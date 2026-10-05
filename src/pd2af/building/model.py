@@ -14,8 +14,8 @@ collection to add to.
 import collections.abc
 import typing
 
-import pd2af.building.context
 import pd2af.asp.predicates
+import pd2af.building.context
 
 
 def register_or_reuse(element: typing.Any, cache: dict) -> typing.Any:

@@ -14,7 +14,6 @@ import dataclasses
 import typing
 
 import clorm
-
 import momapy.builder
 import momapy.celldesigner
 import momapy.core.map
@@ -32,7 +31,6 @@ import pd2af.building.provenance
 import pd2af.building.sbgn.layout
 import pd2af.building.sbgn.model
 import pd2af.modes
-
 
 # What building an output map of each input language takes: the two build-pass
 # modules, the map class the two build slots are assembled into, and the

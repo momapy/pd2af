@@ -4,14 +4,12 @@ import json
 import os
 import unittest.mock
 
-import pytest
-
 import momapy.io.core
+import pytest
 
 import pd2af
 import pd2af.cli
 import pd2af.modes
-
 from tests._helpers import MAPS_DIR, has_dot_binary
 
 
@@ -174,7 +172,6 @@ class TestCliMainStdout:
         assert captured.tell() > 0
 
 
-
 class TestVisualizeFlag:
     def test_flag_defaults_to_false(self):
         args = _parse_transform_args(["transform", "map.xml"])
@@ -184,18 +181,20 @@ class TestVisualizeFlag:
         captured = io.BytesIO()
         fake_stdout = unittest.mock.MagicMock()
         fake_stdout.buffer = captured
-        with unittest.mock.patch("momapy.cli._visualize_map") as visualize_map:
-            with unittest.mock.patch("sys.stdout", new=fake_stdout):
-                pd2af.cli.main(
-                    [
-                        "transform",
-                        example_map_path,
-                        "--keep-species",
-                        "-l",
-                        "plain",
-                        "-V",
-                    ]
-                )
+        with (
+            unittest.mock.patch("momapy.cli._visualize_map") as visualize_map,
+            unittest.mock.patch("sys.stdout", new=fake_stdout),
+        ):
+            pd2af.cli.main(
+                [
+                    "transform",
+                    example_map_path,
+                    "--keep-species",
+                    "-l",
+                    "plain",
+                    "-V",
+                ]
+            )
         visualize_map.assert_called_once()
         assert captured.tell() == 0
 

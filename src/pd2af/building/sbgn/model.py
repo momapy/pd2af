@@ -29,12 +29,11 @@ import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
-import pd2af.building.model
-import pd2af.building.context
 import pd2af.asp.predicates
+import pd2af.building.context
+import pd2af.building.model
 import pd2af.building.sbgn.labels
 from pd2af.building.model import add_model_element_if_new, register_or_reuse
-
 
 _ENTITY_CLASS_TO_UNIT_OF_INFORMATION_CLASS = {
     momapy.sbgn.pd.Macromolecule: momapy.sbgn.af.MacromoleculeUnitOfInformation,

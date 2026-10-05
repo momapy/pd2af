@@ -60,12 +60,11 @@ import functools
 import importlib.metadata
 import types
 
-from aspcompose import RuleGroup
-
 import momapy.celldesigner
 import momapy.core.map
 import momapy.core.model
 import momapy.sbgn.pd
+from aspcompose import RuleGroup
 
 
 class Language(enum.StrEnum):

@@ -5,10 +5,9 @@ import functools
 import types
 import typing
 
+import clingo.ast
 import clorm
 import clorm.clingo
-import clingo.ast
-
 import momapy.celldesigner
 import momapy.core.elements
 import momapy.core.map
@@ -19,7 +18,6 @@ import momapy_kb.clingo.core
 import pd2af.asp.predicates
 import pd2af.asp.rules
 import pd2af.modes
-
 
 _ONTOLOGY_BASES = (momapy.core.elements.ModelElement, momapy.core.model.Model)
 
@@ -47,7 +45,7 @@ def _make_ontology_rules(
     return sorted(rules)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _get_ontology_rules_for_language(
     language: pd2af.modes.Language,
 ) -> tuple[str, ...]:

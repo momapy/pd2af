@@ -1,15 +1,13 @@
 import os
 import types
 
-import pytest
-
 import momapy.celldesigner
 import momapy.io.core
+import pytest
 from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
 import pd2af.modes
-
 from tests._helpers import (
     BINDING_ACTIVATION_MAPS_DIR,
     MAPS_DIR,
@@ -611,11 +609,11 @@ class TestTransformDropCompartments:
     cannot show species merging across compartments.
     """
 
-    ALL_MODES = [
+    ALL_MODES = (
         "normal",
         "no-complex",
         "keep-reactions",
-    ]
+    )
 
     @pytest.fixture(scope="class")
     def multi_compartment_map(self):

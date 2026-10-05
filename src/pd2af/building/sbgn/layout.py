@@ -39,7 +39,6 @@ import momapy.sbgn.layout
 import pd2af.building.context
 import pd2af.building.layout
 
-
 _UNIT_OF_INFORMATION_CLASS_TO_LAYOUT_CLASS = {
     momapy.sbgn.af.MacromoleculeUnitOfInformation: momapy.sbgn.af.MacromoleculeUnitOfInformationLayout,
     momapy.sbgn.af.NucleicAcidFeatureUnitOfInformation: momapy.sbgn.af.NucleicAcidFeatureUnitOfInformationLayout,

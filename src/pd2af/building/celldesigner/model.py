@@ -34,11 +34,10 @@ import typing
 import momapy.builder
 import momapy.celldesigner
 
-import pd2af.building.model
-import pd2af.building.context
 import pd2af.asp.predicates
+import pd2af.building.context
+import pd2af.building.model
 from pd2af.building.model import add_model_element_if_new, register_or_reuse
-
 
 _STRIPPED_TEMPLATE_PREFIX = "merged_template__"
 
@@ -234,11 +233,11 @@ def collect_ancestor_compartments(compartments: typing.Any) -> typing.Any:
     expanded = set(compartments)
     frontier = expanded
     while True:
-        next_frontier = set(
+        next_frontier = {
             compartment.outside
             for compartment in frontier
             if compartment.outside is not None and compartment.outside not in expanded
-        )
+        }
         if not next_frontier:
             break
         expanded |= next_frontier

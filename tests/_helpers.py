@@ -7,7 +7,6 @@ import pd2af.asp.rules
 import pd2af.asp.solver
 import pd2af.modes
 
-
 _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPS_DIR = os.path.join(_TESTS_DIR, "maps", "celldesigner")
 EXAMPLE_MAP_PATH = os.path.join(MAPS_DIR, "example.xml")

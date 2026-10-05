@@ -1,7 +1,6 @@
 """The clorm predicates the ASP program is written against."""
 
 import clorm
-
 import momapy.celldesigner
 
 

@@ -7,15 +7,13 @@ unioning every source's metadata onto their shared output.
 
 import os
 
-import pytest
-
 import momapy.io.core
 import momapy.utils
+import pytest
 from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
 from pd2af.building.provenance import carry_annotations_through_provenance
-
 from tests._helpers import MAPS_DIR
 
 
@@ -255,7 +253,7 @@ class TestDroppedOperatorProvenance:
         gate_class_names = {"AndGate", "OrGate", "NotGate", "UnknownGate"}
         assert not any(
             type(output_element).__name__ in gate_class_names
-            for output_element in result.output_element_to_input_elements.keys()
+            for output_element in result.output_element_to_input_elements
         )
 
     def test_creb_surviving_gate_keeps_provenance(self):

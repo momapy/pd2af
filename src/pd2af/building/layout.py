@@ -5,14 +5,14 @@ import itertools
 import math
 import typing
 
-import momapy.core.layout
-import momapy.styling
-import momapy.coloring
-import momapy.drawing
 import momapy.builder
+import momapy.celldesigner
+import momapy.coloring
+import momapy.core.layout
+import momapy.drawing
 import momapy.geometry
 import momapy.positioning
-import momapy.celldesigner
+import momapy.styling
 import pydot
 
 
@@ -45,8 +45,7 @@ class _ClassNameSuffixSelector(momapy.styling.Selector):
 
     def select(self, obj: typing.Any, ancestors: typing.Any) -> bool:
         class_name = type(obj).__name__
-        if class_name.endswith("Builder"):
-            class_name = class_name[: -len("Builder")]
+        class_name = class_name.removesuffix("Builder")
         return class_name.endswith(self.suffix)
 
 
@@ -177,7 +176,7 @@ def highlight_layout_elements(
     not_selector = _NotInIdSetSelector(frozenset(keep_ids))
 
     def make_selector(selector: typing.Any) -> typing.Any:
-        return momapy.styling.CompoundSelector(tuple([selector, not_selector]))
+        return momapy.styling.CompoundSelector((selector, not_selector))
 
     layout_element_selector = make_selector(
         momapy.styling.ClassSelector("LayoutElement")

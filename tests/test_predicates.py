@@ -1,5 +1,4 @@
 import clorm
-
 import momapy.celldesigner
 
 import pd2af.asp.predicates

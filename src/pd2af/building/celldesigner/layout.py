@@ -24,7 +24,6 @@ import pd2af.building.celldesigner.model
 import pd2af.building.context
 import pd2af.building.layout
 
-
 _GATE_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.AndGate: momapy.celldesigner.AndGateLayout,
     momapy.celldesigner.OrGate: momapy.celldesigner.OrGateLayout,

@@ -13,10 +13,9 @@ import momapy.cli
 import momapy.io.core
 
 import pd2af
+import pd2af.asp.rules
 import pd2af.core
 import pd2af.modes
-import pd2af.asp.rules
-
 
 _LAYOUT_CHOICES = tuple(pd2af.modes.LayoutMode) + (pd2af.modes.AUTO,)
 

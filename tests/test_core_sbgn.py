@@ -13,16 +13,14 @@ Two layers of coverage:
 import os
 import tempfile
 
-import pytest
-
 import momapy.core.layout
 import momapy.io.core
 import momapy.sbgn.af
 import momapy.sbgn.pd
+import pytest
 from momapy.sbml.model import BQBiol, RDFAnnotation
 
 import pd2af
-
 from tests._helpers import (
     BINDING_ACTIVATION_MAPS_DIR,
     MAPS_DIR,
