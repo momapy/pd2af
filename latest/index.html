@@ -1257,7 +1257,7 @@
 
 <h1 id="pd2af">pd2af</h1>
 <p><strong>pd2af</strong> transforms a process-description (PD) map into an activity-flow (AF) map. It reads <a href="https://www.celldesigner.org/">CellDesigner</a> and <a href="https://www.sbgn.org">SBGN-PD</a> maps, and writes a CellDesigner map for CellDesigner input and an SBGN-AF map for SBGN-PD input.</p>
-<p>It is built on top of <a href="https://github.com/adrienrougny/momapy">momapy</a> for map I/O and layout, and uses <a href="https://potassco.org/clingo/">clingo</a> (via <a href="https://github.com/potassco/clorm">clorm</a> and <a href="https://github.com/adrienrougny/aspcompose">aspcompose</a>) to derive the AF model from the PD model with a set of declarative rules.</p>
+<p>It is built on top of <a href="https://github.com/momapy/momapy">momapy</a> for map I/O and layout, and uses <a href="https://potassco.org/clingo/">clingo</a> (via <a href="https://github.com/potassco/clorm">clorm</a> and <a href="https://github.com/adrienrougny/aspcompose">aspcompose</a>) to derive the AF model from the PD model with a set of declarative rules.</p>
 <h2 id="installation">Installation</h2>
 <p>pd2af is a Python package (Python &gt;=3.12). With <a href="https://docs.astral.sh/uv/">uv</a>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>pd2af
