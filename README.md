@@ -26,11 +26,17 @@ import momapy.io
 import pd2af
 
 pd_map = momapy.io.read("my_map.xml").obj
-af_map = pd2af.transform(pd_map).obj
+af_map = pd2af.transform(
+    pd_map,
+    mode="no-complex",
+    layout_mode="dot",
+    keep_species=True,
+    drop_compartments=True,
+).obj
 momapy.io.write(af_map, "my_map_af.xml", writer="celldesigner")
 ```
 
 ```bash
-pd2af transform my_map.xml -o my_map_af.xml
+pd2af transform my_map.xml -m no-complex -l dot --keep-species --drop-compartments -o my_map_af.xml
 pd2af list-modes
 ```
