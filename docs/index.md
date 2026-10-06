@@ -6,10 +6,10 @@ It is built on top of [momapy](https://github.com/momapy/momapy) for map I/O and
 
 ## Installation
 
-pd2af is a Python package (Python >=3.12). With [uv](https://docs.astral.sh/uv/):
+pd2af is a Python package (Python >=3.12), installed from GitHub:
 
 ```bash
-uv pip install pd2af
+pip install git+https://github.com/momapy/pd2af
 ```
 
 The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.
@@ -19,18 +19,19 @@ The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.
 ### Python API
 
 ```python
-import momapy.io.core
+import momapy.io
 import pd2af
 
-cd_map = momapy.io.core.read("my_map.xml").obj
+cd_map = momapy.io.read("my_map.xml").obj
 af_map = pd2af.transform(cd_map, mode="normal", layout_mode="auto").obj
-momapy.io.core.write(af_map, "my_map_af.xml", writer="celldesigner")
+momapy.io.write(af_map, "my_map_af.xml", writer="celldesigner")
 ```
 
 `transform` also accepts a bare model instead of a full map: pass
 `cd_map.model` and it returns the transformed model (an SBGN-AF model for
 SBGN-PD input, a CellDesigner model for CellDesigner input) via `.obj`. Model
-input has no geometry, so `layout_mode` is forced to `None`.
+input has no geometry, so no layout is built: `layout_mode` must be `"auto"`
+or `None`, and any other value raises a `ValueError`.
 
 ### Command-line interface
 
@@ -74,18 +75,6 @@ Drop the compartments, so that species differing only by compartment become a si
 ```bash
 pd2af transform my_map.xml --keep-species --drop-compartments -o my_map_af.xml
 ```
-
-### Finding the new spelling
-
-| before | now |
-| --- | --- |
-| `pd2af transform map.xml` | `pd2af transform map.xml` |
-| `-m normal` | `-m normal` |
-| `-m normal-no-complex` | `-m no-complex` |
-| `-m keep-species` | `--keep-species` |
-| `-m keep-species-no-complex` | `-m no-complex --keep-species` |
-| `-m keep-reactions` | `-m keep-reactions` |
-| `--no-compartment` | `--drop-compartments` |
 
 ## Layout modes
 

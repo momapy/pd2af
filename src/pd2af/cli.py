@@ -547,10 +547,14 @@ def _add_transform_parser(subparsers: argparse._SubParsersAction) -> None:
 def _add_list_modes_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
         "list-modes",
-        help="list transformation modes, layout modes, and compatibilities",
+        help=(
+            "list transformation modes, transformation options, layout modes, "
+            "and compatibilities"
+        ),
         description=(
-            "List the available transformation modes, layout modes, their "
-            "compatibilities, and the supported input languages."
+            "List the available transformation modes, transformation options, "
+            "layout modes, their compatibilities, and the supported input "
+            "languages."
         ),
     )
     parser.add_argument(

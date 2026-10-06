@@ -6,7 +6,7 @@ activities and influences are, and `building` turns the answer into a map.
 
 ## Top level
 
-- [Core](core.md): the public `transform()` entry point, and the two build passes it runs
+- [Core](core.md): the public `transform()` entry point and the `TransformerResult` it returns
 - [Modes](modes.md): everything a user chooses from, the input languages, the layout modes, the influence pairings and the transformation modes
 - [CLI](cli.md): command-line entry point
 

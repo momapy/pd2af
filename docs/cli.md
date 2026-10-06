@@ -22,7 +22,7 @@ The CLI is organised into subcommands:
 | Subcommand | Description |
 |------------|-------------|
 | `transform` | Transform a process-description map into an activity-flow map |
-| `list-modes` | List transformation modes, layout modes, their compatibilities, and input languages |
+| `list-modes` | List transformation modes, transformation options, layout modes, their compatibilities, and input languages |
 | `list-groups` | List the rule groups each transformation mode uses, marked excludable or mandatory |
 
 `transform` is the implicit subcommand: when the first argument is neither a
@@ -41,7 +41,7 @@ no-complex` runs exactly like `pd2af transform map.xml -m no-complex`.
 |--------|-------|-------------|
 | `--transformation-mode` | `-m` | Transformation mode (default: `normal`); see below |
 | `--layout-mode` | `-l` | Layout strategy (default: `auto`); see below |
-| `--influence-pairing` | `-p` | How to draw an influence whose source/target maps to several glyphs: `cross` (default) or `nearest` |
+| `--influence-pairing` | `-p` | How to draw an influence whose source/target maps to several glyphs: `cross` (default, one arc per source/target pair) or `nearest` (a single arc between the closest pair). `nearest` only takes effect with `--layout-mode plain` or `overlay`, where glyph positions are real; under `dot` it is ignored |
 | `--keep-species` |  | Keep each species as its own activity instead of merging the forms of the same base entity. Off by default, on for `keep-reactions`; `--no-keep-species` forces it off; see below |
 | `--drop-compartments` |  | Drop the compartments, so that species differing only by compartment become a single activity and the influences that become equal merge in turn. Off by default; works with every transformation mode; requires `--layout-mode dot` (or `auto`); see below |
 | `--set-active` | `-a` | Mark the element with this `id_` (a species or entity pool) as active, surfacing it as an activity even when the map gives it no structural activity signal. Repeatable: `-a sa1 -a sa2`. Wins over `--set-all-inactive` for these ids. Unknown ids raise an error |
@@ -108,8 +108,8 @@ When `-o` is omitted, the map is always written to stdout as a momapy pickle.
 
 ## `list-modes` subcommand
 
-List the transformation modes, layout modes, their compatibilities, and the
-supported input languages. With `--json`, the same data is emitted as
+List the transformation modes, the transformation options, the layout modes,
+their compatibilities, and the supported input languages. With `--json`, the same data is emitted as
 structured JSON for scripting.
 
 ```bash
@@ -118,8 +118,9 @@ pd2af list-modes --json
 ```
 
 The JSON payload mirrors the rendered tables exactly — one entry per row, one
-key per column. It has two top-level keys: `transformation_modes` (each with
-`transformation_mode`, its compatible `layout_modes` and `languages`, and a
+key per column. It has three top-level keys: `transformation_modes` (each with
+`transformation_mode`, its compatible `languages`, and a `description`),
+`transformation_options` (each with its `option` flag, its `default`, and a
 `description`) and `layout_modes` (each with `layout_mode`, its compatible
 `languages`, and a `description`).
 

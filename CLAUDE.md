@@ -87,9 +87,9 @@ Stripping is a single recursive operation over the resolved entity
 `pd2af.building.sbgn.labels.make_label` with `include_state_variables=False`),
 applied to *every* entity when `keep_species` is off — complexes and
 non-templated entities included, not just templated forms of the same base
-entity. The two structural-role activity keys are `kept_species` (a top-level
+entity. The two structural-role activity keys are `keptSpeciesKey` (a top-level
 entity, or the top-level complex a subunit resolves to via the shared
-`resolvesToTopLevel` ASP relation) and `promoted_subunit` (a subunit lifted
+`resolvesToTopLevel` ASP relation) and `promotedSubunitKey` (a subunit lifted
 to top level when its complex is dissolved).
 
 ## How the package is laid out
