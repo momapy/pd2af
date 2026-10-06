@@ -6,10 +6,10 @@ It is built on top of [momapy](https://github.com/momapy/momapy) for map I/O and
 
 ## Installation
 
-pd2af is a Python package (Python >=3.12), installed from GitHub:
+pd2af is available as a Python package and can be installed with pip as follows (Python >=3.12):
 
 ```bash
-pip install git+https://github.com/momapy/pd2af
+pip install pd2af
 ```
 
 The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.

@@ -1,6 +1,9 @@
 # pd2af
 
+[![PyPI](https://img.shields.io/pypi/v/pd2af)](https://pypi.org/project/pd2af/)
+[![Python](https://img.shields.io/pypi/pyversions/pd2af)](https://pypi.org/project/pd2af/)
 [![License](https://img.shields.io/github/license/momapy/pd2af)](https://github.com/momapy/pd2af/blob/main/COPYING)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen)](https://momapy.github.io/pd2af/)
 
 A library and CLI to transform process-description (PD) maps into activity-flow (AF) maps.
 
@@ -13,8 +16,10 @@ A library and CLI to transform process-description (PD) maps into activity-flow 
 
 ## Installation
 
+pd2af is available as a Python package and can be installed with pip as follows (Python >=3.12):
+
 ```bash
-pip install git+https://github.com/momapy/pd2af
+pip install pd2af
 ```
 
 The `dot` layout mode requires Graphviz's `dot` binary on your `PATH`.
@@ -40,3 +45,7 @@ momapy.io.write(af_map, "my_map_af.xml", writer="celldesigner")
 pd2af transform my_map.xml -m no-complex -l dot --keep-species --drop-compartments -o my_map_af.xml
 pd2af list-modes
 ```
+
+## Documentation
+
+The documentation for pd2af is available [here](https://momapy.github.io/pd2af/).
