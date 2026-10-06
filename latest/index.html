@@ -1237,8 +1237,8 @@
 <p><strong>pd2af</strong> transforms a process-description (PD) map into an activity-flow (AF) map. It reads <a href="https://www.celldesigner.org/">CellDesigner</a> and <a href="https://www.sbgn.org">SBGN-PD</a> maps, and writes a CellDesigner map for CellDesigner input and an SBGN-AF map for SBGN-PD input.</p>
 <p>It is built on top of <a href="https://github.com/momapy/momapy">momapy</a> for map I/O and layout, and uses <a href="https://potassco.org/clingo/">clingo</a> (via <a href="https://github.com/potassco/clorm">clorm</a> and <a href="https://github.com/adrienrougny/aspcompose">aspcompose</a>) to derive the AF model from the PD model with a set of declarative rules.</p>
 <h2 id="installation">Installation</h2>
-<p>pd2af is a Python package (Python &gt;=3.12), installed from GitHub:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/momapy/pd2af
+<p>pd2af is available as a Python package and can be installed with pip as follows (Python &gt;=3.12):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>pd2af
 </span></code></pre></div>
 <p>The <code>dot</code> layout mode requires Graphviz's <code>dot</code> binary on your <code>PATH</code>.</p>
 <h2 id="usage">Usage</h2>
