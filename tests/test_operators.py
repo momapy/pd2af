@@ -75,7 +75,7 @@ def _points_close(first, second, tolerance=1e-6):
 def _gate_map_paths():
     paths = []
     for path in sorted(glob.glob(os.path.join(MAPS_DIR, "*.xml"))):
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             content = handle.read()
         if "BOOLEAN_LOGIC_GATE" in content or "GateMember" in content:
             paths.append(path)

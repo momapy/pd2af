@@ -515,7 +515,7 @@ class TestAnnotationCarryCli:
                 str(out_path),
             ]
         )
-        assert expected_resource in out_path.read_text()
+        assert expected_resource in out_path.read_text(encoding="utf-8")
 
 
 class TestCliExpectedErrors:

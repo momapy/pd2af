@@ -151,7 +151,7 @@ class TestSubunitAnnotationCarry:
             element_to_annotations=result.element_to_annotations,
             element_to_notes=result.element_to_notes,
         )
-        with open(path) as written_file:
+        with open(path, encoding="utf-8") as written_file:
             written = written_file.read()
         opening_tag = "<celldesigner:listOfIncludedSpecies"
         closing_tag = "</celldesigner:listOfIncludedSpecies>"
