@@ -1647,7 +1647,7 @@
 </tr>
 <tr>
 <td><code>list-modes</code></td>
-<td>List transformation modes, layout modes, their compatibilities, and input languages</td>
+<td>List transformation modes, transformation options, layout modes, their compatibilities, and input languages</td>
 </tr>
 <tr>
 <td><code>list-groups</code></td>
@@ -1696,7 +1696,7 @@ no-complex</code> runs exactly like <code>pd2af transform map.xml -m no-complex<
 <tr>
 <td><code>--influence-pairing</code></td>
 <td><code>-p</code></td>
-<td>How to draw an influence whose source/target maps to several glyphs: <code>cross</code> (default) or <code>nearest</code></td>
+<td>How to draw an influence whose source/target maps to several glyphs: <code>cross</code> (default, one arc per source/target pair) or <code>nearest</code> (a single arc between the closest pair). <code>nearest</code> only takes effect with <code>--layout-mode plain</code> or <code>overlay</code>, where glyph positions are real; under <code>dot</code> it is ignored</td>
 </tr>
 <tr>
 <td><code>--keep-species</code></td>
@@ -1842,15 +1842,16 @@ no-complex</code> runs exactly like <code>pd2af transform map.xml -m no-complex<
 is a writer choice, never a request to render an image.</p>
 <p>When <code>-o</code> is omitted, the map is always written to stdout as a momapy pickle.</p>
 <h2 id="list-modes-subcommand"><code>list-modes</code> subcommand</h2>
-<p>List the transformation modes, layout modes, their compatibilities, and the
-supported input languages. With <code>--json</code>, the same data is emitted as
+<p>List the transformation modes, the transformation options, the layout modes,
+their compatibilities, and the supported input languages. With <code>--json</code>, the same data is emitted as
 structured JSON for scripting.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pd2af<span class="w"> </span>list-modes
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pd2af<span class="w"> </span>list-modes<span class="w"> </span>--json
 </span></code></pre></div>
 <p>The JSON payload mirrors the rendered tables exactly — one entry per row, one
-key per column. It has two top-level keys: <code>transformation_modes</code> (each with
-<code>transformation_mode</code>, its compatible <code>layout_modes</code> and <code>languages</code>, and a
+key per column. It has three top-level keys: <code>transformation_modes</code> (each with
+<code>transformation_mode</code>, its compatible <code>languages</code>, and a <code>description</code>),
+<code>transformation_options</code> (each with its <code>option</code> flag, its <code>default</code>, and a
 <code>description</code>) and <code>layout_modes</code> (each with <code>layout_mode</code>, its compatible
 <code>languages</code>, and a <code>description</code>).</p>
 <h2 id="list-groups-subcommand"><code>list-groups</code> subcommand</h2>

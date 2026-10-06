@@ -454,17 +454,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#finding-the-new-spelling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Finding the new spelling
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -1200,17 +1189,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#finding-the-new-spelling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Finding the new spelling
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -1259,23 +1237,24 @@
 <p><strong>pd2af</strong> transforms a process-description (PD) map into an activity-flow (AF) map. It reads <a href="https://www.celldesigner.org/">CellDesigner</a> and <a href="https://www.sbgn.org">SBGN-PD</a> maps, and writes a CellDesigner map for CellDesigner input and an SBGN-AF map for SBGN-PD input.</p>
 <p>It is built on top of <a href="https://github.com/momapy/momapy">momapy</a> for map I/O and layout, and uses <a href="https://potassco.org/clingo/">clingo</a> (via <a href="https://github.com/potassco/clorm">clorm</a> and <a href="https://github.com/adrienrougny/aspcompose">aspcompose</a>) to derive the AF model from the PD model with a set of declarative rules.</p>
 <h2 id="installation">Installation</h2>
-<p>pd2af is a Python package (Python &gt;=3.12). With <a href="https://docs.astral.sh/uv/">uv</a>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>pd2af
+<p>pd2af is a Python package (Python &gt;=3.12), installed from GitHub:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/momapy/pd2af
 </span></code></pre></div>
 <p>The <code>dot</code> layout mode requires Graphviz's <code>dot</code> binary on your <code>PATH</code>.</p>
 <h2 id="usage">Usage</h2>
 <h3 id="python-api">Python API</h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">momapy.io.core</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">momapy.io</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pd2af</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">cd_map</span> <span class="o">=</span> <span class="n">momapy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">"my_map.xml"</span><span class="p">)</span><span class="o">.</span><span class="n">obj</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">cd_map</span> <span class="o">=</span> <span class="n">momapy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">"my_map.xml"</span><span class="p">)</span><span class="o">.</span><span class="n">obj</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">af_map</span> <span class="o">=</span> <span class="n">pd2af</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">cd_map</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"normal"</span><span class="p">,</span> <span class="n">layout_mode</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">)</span><span class="o">.</span><span class="n">obj</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">momapy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">af_map</span><span class="p">,</span> <span class="s2">"my_map_af.xml"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"celldesigner"</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">momapy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">af_map</span><span class="p">,</span> <span class="s2">"my_map_af.xml"</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="s2">"celldesigner"</span><span class="p">)</span>
 </span></code></pre></div>
 <p><code>transform</code> also accepts a bare model instead of a full map: pass
 <code>cd_map.model</code> and it returns the transformed model (an SBGN-AF model for
 SBGN-PD input, a CellDesigner model for CellDesigner input) via <code>.obj</code>. Model
-input has no geometry, so <code>layout_mode</code> is forced to <code>None</code>.</p>
+input has no geometry, so no layout is built: <code>layout_mode</code> must be <code>"auto"</code>
+or <code>None</code>, and any other value raises a <code>ValueError</code>.</p>
 <h3 id="command-line-interface">Command-line interface</h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pd2af<span class="w"> </span>transform<span class="w"> </span>my_map.xml<span class="w"> </span>-o<span class="w"> </span>my_map_af.xml
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pd2af<span class="w"> </span>transform<span class="w"> </span>my_map.xml<span class="w"> </span>--keep-species<span class="w"> </span>-l<span class="w"> </span>plain<span class="w"> </span>-o<span class="w"> </span>my_map_af.xml
@@ -1305,45 +1284,6 @@ input has no geometry, so <code>layout_mode</code> is forced to <code>None</code
 </ul>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pd2af<span class="w"> </span>transform<span class="w"> </span>my_map.xml<span class="w"> </span>--keep-species<span class="w"> </span>--drop-compartments<span class="w"> </span>-o<span class="w"> </span>my_map_af.xml
 </span></code></pre></div>
-<h3 id="finding-the-new-spelling">Finding the new spelling</h3>
-<table>
-<thead>
-<tr>
-<th>before</th>
-<th>now</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>pd2af transform map.xml</code></td>
-<td><code>pd2af transform map.xml</code></td>
-</tr>
-<tr>
-<td><code>-m normal</code></td>
-<td><code>-m normal</code></td>
-</tr>
-<tr>
-<td><code>-m normal-no-complex</code></td>
-<td><code>-m no-complex</code></td>
-</tr>
-<tr>
-<td><code>-m keep-species</code></td>
-<td><code>--keep-species</code></td>
-</tr>
-<tr>
-<td><code>-m keep-species-no-complex</code></td>
-<td><code>-m no-complex --keep-species</code></td>
-</tr>
-<tr>
-<td><code>-m keep-reactions</code></td>
-<td><code>-m keep-reactions</code></td>
-</tr>
-<tr>
-<td><code>--no-compartment</code></td>
-<td><code>--drop-compartments</code></td>
-</tr>
-</tbody>
-</table>
 <h2 id="layout-modes">Layout modes</h2>
 <p>Selectable with <code>-l</code> / <code>layout_mode=</code>:</p>
 <ul>
