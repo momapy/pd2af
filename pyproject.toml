@@ -41,6 +41,8 @@ dev = [
   "ruff>=0.16.10,<0.17",
   "pre-commit>=4.6.2",
   "git-cliff>=2.14.2",
+  "tox>=4.22",
+  "tox-uv>=1.16",
   { include-group = "test" },
 ]
 test = ["pytest>=9.1.1", "pytest-cov>=7.1.0"]
