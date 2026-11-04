@@ -24,7 +24,7 @@ def _assert_recursively_stripped(species_iterable):
     for species in species_iterable:
         assert not species.id_.startswith("new_species_from_template")
         assert getattr(species, "homomultimer", 1) == 1
-        assert not getattr(species, "structural_states", frozenset())
+        assert getattr(species, "structural_state", None) is None
         assert not getattr(species, "modifications", frozenset())
         template = getattr(species, "template", None)
         if template is not None:
@@ -221,9 +221,7 @@ class TestTransformExampleNoComplexMode:
             if not species.id_.startswith("merged__"):
                 continue
             assert species.homomultimer == 1
-            structural_states = getattr(species, "structural_states", None)
-            if structural_states is not None:
-                assert structural_states == frozenset()
+            assert getattr(species, "structural_state", None) is None
             modifications = getattr(species, "modifications", None)
             if modifications is not None:
                 assert modifications == frozenset()
@@ -294,8 +292,7 @@ class TestMergedStripping:
         decorated = [
             s
             for s in out.model.species
-            if getattr(s, "modifications", None)
-            or getattr(s, "structural_states", None)
+            if getattr(s, "modifications", None) or getattr(s, "structural_state", None)
         ]
         assert decorated  # `keep_species` preserves PTM decorations
 

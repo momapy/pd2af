@@ -22,7 +22,7 @@ has to change the ASP program and is a mode, while a choice that only groups
 the results afterwards happens at the build stage and is an option. That leaves
 **whether to keep or dissolve complexes** and **where the influences come
 from** as the two mode axes, and **whether to strip post-translational
-decorations** (state variables in SBGN; `modifications`, `structural_states`,
+decorations** (state variables in SBGN; `modifications`, `structural_state`,
 template `modification_residues`/`regions` and `homomultimer` in CellDesigner)
 and merge content-equal results as an option. In every mode a subunit is a
 *structural component*, never an independent activity: a subunit's activity and
