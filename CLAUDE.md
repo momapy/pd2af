@@ -178,6 +178,10 @@ arcs). pd2af reads the glyphs that draw an input model element with
 representatives of the keys sorted by `id_`, so the copy `dot` keeps is the
 same from run to run.
 
+A species glyph's `container` is the compartment glyph of its input glyph (for
+a promoted subunit, of the top-level input glyph holding it), kept only when
+the output maps that glyph to a compartment, and `None` otherwise.
+
 A CellDesigner gate has one output, so in CellDesigner output each
 gate-sourced modulation arc is drawn from its own gate copy. A gate with one
 arc keeps its curated glyph; with several, each copy is placed on the line from

@@ -103,11 +103,11 @@ def new_layout_and_mapping_builders() -> typing.Any:
 
 
 def clone_layout_pruning_foreground(
-    input_layout_element: typing.Any, foreground_ids: set[int], object_to_builder: dict
+    input_layout_element: typing.Any, foreground_ids: set[str], object_to_builder: dict
 ) -> typing.Any:
     """Clone an input layout element as a builder, to serve as dimmed background.
 
-    Any descendant subtree whose input original is in ``foreground_ids``
+    Any descendant subtree whose ``id_`` is in ``foreground_ids``
     (already drawn in the foreground) is omitted, and ``None`` is returned when
     the element itself belongs to the foreground.
 
@@ -116,7 +116,7 @@ def clone_layout_pruning_foreground(
     frozen objects -- so dimming the background never mutates the input
     map's layout.
     """
-    if id(input_layout_element) in foreground_ids:
+    if input_layout_element.id_ in foreground_ids:
         return None
     clone = momapy.builder.builder_from_object(
         input_layout_element, object_to_builder=object_to_builder
@@ -130,7 +130,7 @@ def clone_layout_pruning_foreground(
 def _prune_foreground_from_clone(
     input_layout_element: typing.Any,
     clone: typing.Any,
-    foreground_ids: set[int],
+    foreground_ids: set[str],
     object_to_builder: dict,
 ):
     # The only foreground glyphs that can sit *inside* a background clone are
@@ -144,7 +144,7 @@ def _prune_foreground_from_clone(
         return
     surviving_clones = []
     for input_subunit in input_subunits:
-        if id(input_subunit) in foreground_ids:
+        if input_subunit.id_ in foreground_ids:
             continue
         subunit_clone = object_to_builder[id(input_subunit)]
         _prune_foreground_from_clone(
@@ -396,25 +396,59 @@ def _make_and_add_compartment_layout(
         add_mappings_for_layout_and_descendants(context, input_layout)
 
 
-def _add_decoration_stripped_species_layouts(
+def _get_input_container(
+    context: pd2af.building.context.BuilderContext, input_layout: typing.Any
+) -> typing.Any:
+    for top_level_layout in context.input_map.layout.layout_elements:
+        if top_level_layout is input_layout:
+            return input_layout.container
+        for descendant in top_level_layout.descendants():
+            if descendant is input_layout:
+                return top_level_layout.container
+    return None
+
+
+def _get_mapped_container(
+    context: pd2af.building.context.BuilderContext, container: typing.Any
+) -> typing.Any:
+    if container is None:
+        return None
+    if isinstance(
+        context.layout_model_mapping.get_mapping(container),
+        momapy.celldesigner.Compartment,
+    ):
+        return container
+    return None
+
+
+def _add_species_layouts(
     context: pd2af.building.context.BuilderContext,
     species: typing.Any,
     input_layouts: typing.Any,
 ):
-    """Place decoration-pruned clones of ``input_layouts`` for ``species``.
-
-    Their surviving glyphs are mapped to the model (the merged reading).
-    """
-    stripped_layouts = []
+    placed_layouts = []
     for input_layout in input_layouts:
-        original_to_stripped = {}
-        stripped = make_decoration_stripped_layout(input_layout, original_to_stripped)
-        add_mappings_for_layout_and_descendants(
-            context, input_layout, original_to_stripped
+        original_to_placed = {}
+        if context.keep_species:
+            placed_layout = input_layout
+            for original in [input_layout] + list(input_layout.descendants()):
+                original_to_placed[id(original)] = original
+        else:
+            placed_layout = make_decoration_stripped_layout(
+                input_layout, original_to_placed
+            )
+        container = _get_mapped_container(
+            context, _get_input_container(context, input_layout)
         )
-        stripped_layouts.append(stripped)
-    context.layout.layout_elements.extend(stripped_layouts)
-    context.model_element_to_layout_elements[id(species)] = tuple(stripped_layouts)
+        if container is not placed_layout.container:
+            placed_layout = dataclasses.replace(placed_layout, container=container)
+            original_to_placed[id(input_layout)] = placed_layout
+        add_mappings_for_layout_and_descendants(
+            context, input_layout, original_to_placed
+        )
+        placed_layouts.append(placed_layout)
+    context.layout.layout_elements.extend(placed_layouts)
+    context.model_element_to_layout_elements[id(species)] = tuple(placed_layouts)
 
 
 def _make_and_add_species_layout(
@@ -438,17 +472,7 @@ def _make_and_add_species_layout(
             # subunit structure) and let graphviz place it. plain/overlay keep
             # every clone, where the curated positions are meaningful.
             input_layouts = input_layouts[:1]
-        if not context.keep_species:
-            # The merged reading strips the model species of their decorations; the
-            # reused input glyph still carries the matching ModificationLayout /
-            # StructuralStateLayout sub-glyphs, so prune them from a clone (the
-            # frozen input layout must not be mutated) before placing it.
-            _add_decoration_stripped_species_layouts(context, species, input_layouts)
-        else:
-            context.layout.layout_elements.extend(input_layouts)
-            for input_layout in input_layouts:
-                add_mappings_for_layout_and_descendants(context, input_layout)
-            context.model_element_to_layout_elements[id(species)] = tuple(input_layouts)
+        _add_species_layouts(context, species, input_layouts)
     elif context.layout_mode == "dot":
         synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
         context.synthetic_index += 1
@@ -674,7 +698,7 @@ def _add_dimmed_background(
     They go in as unmapped background, for the dimmer to grey out.
 
     ``foreground`` is the set of layout elements built by the plain path
-    above (input objects shared with the input map). Any input subtree
+    above (input objects, or copies keeping their ``id_``). Any input subtree
     already represented there -- a top-level glyph reused verbatim, or a
     promoted subunit lifted out of a dissolved complex -- is pruned from the
     clones, so the background never duplicates a foreground glyph nor
@@ -690,14 +714,16 @@ def _add_dimmed_background(
     """
     foreground_ids = set()
     for layout_element in foreground:
-        foreground_ids.add(id(layout_element))
+        foreground_ids.add(layout_element.id_)
         for descendant in layout_element.descendants():
-            foreground_ids.add(id(descendant))
+            foreground_ids.add(descendant.id_)
     background_clones = []
     for input_layout_element in context.input_map.layout.layout_elements:
         background_clone = clone_layout_pruning_foreground(
             input_layout_element, foreground_ids, context.object_to_builder
         )
         if background_clone is not None:
+            if hasattr(background_clone, "container"):
+                background_clone.container = None
             background_clones.append(background_clone)
     context.layout.layout_elements[insert_index:insert_index] = background_clones
