@@ -19,11 +19,13 @@ Coverage mirrors the plan's verification list:
 """
 
 import glob
+import math
 import os
 import tempfile
 
 import clorm
 import momapy.celldesigner
+import momapy.geometry
 import momapy.io.core
 import momapy.sbgn.af
 import pytest
@@ -353,6 +355,114 @@ def test_every_gate_map_round_trips(path):
     momapy.io.core.write(out, written, writer="celldesigner")
     back = momapy.io.core.read(written).obj
     assert len(back.model.boolean_logic_gates) == len(out.model.boolean_logic_gates)
+
+
+_GATE_LAYOUT_CLASSES = tuple(
+    pd2af.building.celldesigner.layout._GATE_CLASS_TO_LAYOUT_CLASS.values()
+)
+
+
+def _get_gate_layouts(layout):
+    return [
+        layout_element
+        for layout_element in layout.layout_elements
+        if isinstance(layout_element, _GATE_LAYOUT_CLASSES)
+    ]
+
+
+def _get_arcs_from(layout, source_layout, arc_classes):
+    return [
+        layout_element
+        for layout_element in layout.layout_elements
+        if isinstance(layout_element, arc_classes)
+        and layout_element.source is source_layout
+    ]
+
+
+class TestGateCopies:
+    """A CellDesigner gate has one output, so each gate-sourced modulation arc
+    is drawn from its own gate copy. Histamine has a gate with one arc and
+    species inside drawn compartments; NR2F1 has a gate with three
+    modulations."""
+
+    @pytest.mark.parametrize(
+        "map_name", ("Histamine_signaling.xml", "NR2F1_signaling.xml")
+    )
+    @pytest.mark.parametrize(
+        ("keep_species", "layout_mode"),
+        ((False, "dot"), (True, "dot"), (True, "plain"), (True, "overlay")),
+    )
+    def test_round_trips_with_one_arc_per_gate_glyph(
+        self, map_name, keep_species, layout_mode
+    ):
+        if layout_mode == "dot" and not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        cd_map = read_cd_map(os.path.join(MAPS_DIR, map_name))
+        out = pd2af.transform(
+            cd_map, keep_species=keep_species, layout_mode=layout_mode
+        ).obj
+        mapping = out.layout_model_mapping
+        assert not any(
+            isinstance(layout_element, frozenset)
+            for layout_element in out.layout.layout_elements
+        )
+        for species in out.model.species:
+            assert mapping.get_representative_layout_elements(species)
+        for gate_layout in _get_gate_layouts(out.layout):
+            if mapping.get_mapping(gate_layout) is None:
+                continue
+            modulation_arcs = [
+                layout_element
+                for layout_element in out.layout.layout_elements
+                if getattr(layout_element, "source", None) is gate_layout
+                and not isinstance(layout_element, momapy.celldesigner.LogicArcLayout)
+            ]
+            assert len(modulation_arcs) == 1
+        written = os.path.join(tempfile.gettempdir(), "pd2af_test_gate_copies.xml")
+        momapy.io.core.write(out, written, writer="celldesigner")
+        back = momapy.io.core.read(written).obj
+        assert len(back.model.species) == len(out.model.species)
+        assert len(back.model.modulations) == len(out.model.modulations)
+        assert len(back.model.boolean_logic_gates) == len(out.model.boolean_logic_gates)
+
+    def test_copies_are_placed_toward_their_targets(self):
+        cd_map = read_cd_map(os.path.join(MAPS_DIR, "NR2F1_signaling.xml"))
+        (input_gate,) = cd_map.model.boolean_logic_gates
+        (input_gate_layout,) = (
+            cd_map.layout_model_mapping.get_representative_layout_elements(input_gate)
+        )
+        out = pd2af.transform(cd_map, keep_species=True, layout_mode="plain").obj
+        gate_layouts = _get_gate_layouts(out.layout)
+        assert len(gate_layouts) > 1
+        for gate_layout in gate_layouts:
+            input_layouts = [
+                logic_arc.target
+                for logic_arc in _get_arcs_from(
+                    out.layout, gate_layout, momapy.celldesigner.LogicArcLayout
+                )
+            ]
+            (modulation_arc,) = [
+                layout_element
+                for layout_element in out.layout.layout_elements
+                if getattr(layout_element, "source", None) is gate_layout
+                and not isinstance(layout_element, momapy.celldesigner.LogicArcLayout)
+            ]
+            centroid = momapy.geometry.Point(
+                sum(layout.position.x for layout in input_layouts) / len(input_layouts),
+                sum(layout.position.y for layout in input_layouts) / len(input_layouts),
+            )
+            target_position = modulation_arc.target.position
+            target_distance = math.dist(centroid.to_tuple(), target_position.to_tuple())
+            expected_distance = min(
+                math.dist(centroid.to_tuple(), input_gate_layout.position.to_tuple()),
+                target_distance / 2,
+            )
+            ratio = expected_distance / target_distance
+            expected_position = momapy.geometry.Point(
+                centroid.x + (target_position.x - centroid.x) * ratio,
+                centroid.y + (target_position.y - centroid.y) * ratio,
+            )
+            assert _points_close(gate_layout.position, expected_position)
 
 
 class TestSbgnOperatorsShapeB:

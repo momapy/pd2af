@@ -66,6 +66,38 @@ _ROOT_LAYOUT_SEP = 15.0
 _DOT_CLUSTER_SEP = 40.0
 
 
+def get_layout_elements_sorted_by_id(
+    layout_model_mapping: typing.Any, model_element: typing.Any
+) -> list:
+    """Return the glyphs that draw ``model_element``, sorted by ``id_``."""
+    return sorted(
+        layout_model_mapping.get_representative_layout_elements(model_element),
+        key=lambda layout_element: layout_element.id_,
+    )
+
+
+def get_key_of_layout_element(
+    mapping_builder: typing.Any, layout_element: typing.Any
+) -> frozenset:
+    """Return the mapping key ``layout_element`` stands for, as a frozenset."""
+    key = mapping_builder.representative_to_key.get(layout_element)
+    if key is not None:
+        return key
+    return frozenset([layout_element])
+
+
+def get_nearest_layout_element(
+    layout_elements: typing.Any, position: typing.Any
+) -> typing.Any:
+    """Return the layout element whose position is nearest ``position``."""
+    return min(
+        layout_elements,
+        key=lambda layout_element: math.dist(
+            layout_element.position.to_tuple(), position.to_tuple()
+        ),
+    )
+
+
 def nearest_layout_pair(
     source_layouts: typing.Any, target_layouts: typing.Any
 ) -> tuple:
@@ -320,10 +352,10 @@ def _build_dot_graph(
     # can copy each cluster's dot-computed bounding box onto its compartment.
     dot_cluster_name_to_compartment_layout_element = {}
     for compartment in new_map_builder.model.compartments:
-        compartment_layout_elements = new_map_builder.layout_model_mapping.get_mapping(
-            compartment
+        compartment_layout_elements = get_layout_elements_sorted_by_id(
+            new_map_builder.layout_model_mapping, compartment
         )
-        if compartment_layout_elements is not None:
+        if compartment_layout_elements:
             compartment_layout_element = compartment_layout_elements[0]
             dot_cluster = pydot.Cluster(compartment.id_)
             dot_cluster.set("margin", _DOT_CLUSTER_SEP)

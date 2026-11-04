@@ -169,6 +169,21 @@ it, the three consumers of `hasActivityCarrier`/`hasActivityKey`
 so a mode that omits its preparation group raises `unfilled_slot` instead of
 silently emitting an activity-less program.
 
+## Reading the input layout
+
+The keys of momapy's layout-model mapping can be frozensets (a species glyph
+together with the glyph of its compartment, a gate together with its logic
+arcs). pd2af reads the glyphs that draw an input model element with
+`pd2af.building.layout.get_layout_elements_sorted_by_id`, which returns the
+representatives of the keys sorted by `id_`, so the copy `dot` keeps is the
+same from run to run.
+
+A CellDesigner gate has one output, so in CellDesigner output each
+gate-sourced modulation arc is drawn from its own gate copy. A gate with one
+arc keeps its curated glyph; with several, each copy is placed on the line from
+the centroid of its inputs toward its target, at the distance the input gate
+glyph is from that centroid, but no further than half way.
+
 ## Annotations and notes
 
 momapy stores RDF/MIRIAM annotations and notes not on model elements but

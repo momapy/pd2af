@@ -49,6 +49,30 @@ class TestModulationLayoutMap:
             assert model_class in layout_map, model_class
 
 
+class TestInputGlyphLookup:
+    def test_glyphs_of_a_cloned_species_are_sorted_by_id(self):
+        cd_map = read_cd_map(os.path.join(MAPS_DIR, "Nicotine_signaling.xml"))
+        mapping = cd_map.layout_model_mapping
+        cloned_species = [
+            species
+            for species in cd_map.model.species
+            if len(mapping.get_representative_layout_elements(species)) > 1
+        ]
+        assert cloned_species
+        for species in cloned_species:
+            layout_elements = pd2af.building.layout.get_layout_elements_sorted_by_id(
+                mapping, species
+            )
+            layout_element_ids = [
+                layout_element.id_ for layout_element in layout_elements
+            ]
+            assert layout_element_ids == sorted(layout_element_ids)
+            assert not any(
+                isinstance(layout_element, frozenset)
+                for layout_element in layout_elements
+            )
+
+
 class TestNearestInfluencePairing:
     def test_picks_the_closest_source_target_pair(self):
         target = _node(momapy.geometry.Point(0.0, 0.0))

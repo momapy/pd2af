@@ -114,8 +114,11 @@ def _get_input_layouts(
 
     Empty when the element has none; a cloned entity pool maps to several.
     """
-    input_layouts = context.input_map.layout_model_mapping.get_mapping(input_element)
-    return tuple(input_layouts) if input_layouts else ()
+    return tuple(
+        pd2af.building.layout.get_layout_elements_sorted_by_id(
+            context.input_map.layout_model_mapping, input_element
+        )
+    )
 
 
 def _make_and_add_compartment_layout(
@@ -306,23 +309,15 @@ def _input_operator_glyph(
 ) -> typing.Any:
     """Return the input SBGN-PD operator's glyph layout, or ``None``.
 
-    The glyph is the node anchoring the operator's frozenset mapping; ``None``
-    when the input operator has no layout.
+    When the operator is drawn several times, the glyph with the smallest
+    ``id_`` is returned.
     """
-    mapping = context.input_map.layout_model_mapping.get_mapping(input_operator)
-    if not mapping:
+    input_operator_layouts = pd2af.building.layout.get_layout_elements_sorted_by_id(
+        context.input_map.layout_model_mapping, input_operator
+    )
+    if not input_operator_layouts:
         return None
-    for layout_key in mapping:
-        if isinstance(layout_key, frozenset):
-            for element in layout_key:
-                if (
-                    context.input_map.layout_model_mapping.get_mapping(element)
-                    is input_operator
-                ):
-                    return element
-        else:
-            return layout_key
-    return None
+    return input_operator_layouts[0]
 
 
 def _operator_connector_segment(

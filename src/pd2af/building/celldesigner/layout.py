@@ -12,6 +12,7 @@ the model pass.
 """
 
 import dataclasses
+import math
 import typing
 
 import momapy.builder
@@ -309,9 +310,9 @@ def add_mappings_for_layout_and_descendants(
             placed = original_to_stripped.get(id(original))
             if placed is None:
                 continue
-        if original not in input_layout_model_mapping:
+        model_value = input_layout_model_mapping.get_mapping(original)
+        if model_value is None:
             continue
-        model_value = input_layout_model_mapping[original]
         model_value = context.input_model_element_to_canonical_model_element.get(
             id(model_value), model_value
         )
@@ -331,16 +332,14 @@ def add_modulation_mapping(
     glyphs) contributes that whole cluster, so the mapping stays consistent with
     the one the endpoint's own layout was registered under.
     """
-    source_key = mapping_builder.representative_to_key.get(source_layout)
-    source_cluster = (
-        source_key if source_key is not None else frozenset([source_layout])
-    )
-    target_key = mapping_builder.representative_to_key.get(target_layout)
-    target_cluster = (
-        target_key if target_key is not None else frozenset([target_layout])
-    )
     mapping_builder.add_mapping(
-        frozenset([arc]) | source_cluster | target_cluster,
+        frozenset([arc])
+        | pd2af.building.layout.get_key_of_layout_element(
+            mapping_builder, source_layout
+        )
+        | pd2af.building.layout.get_key_of_layout_element(
+            mapping_builder, target_layout
+        ),
         modulation,
         representative=arc,
     )
@@ -365,13 +364,11 @@ def make_and_add_layout(context: pd2af.building.context.BuilderContext):
     compartment_count = len(context.layout.layout_elements)
     for _key_class, species, input_species in context.activity_emissions:
         _make_and_add_species_layout(context, species, input_species)
-    # Gates after species (their logic arcs target species layouts) and before
-    # modulations (a gate-sourced modulation resolves its source through the
-    # gate layout registered here).
     for gate, input_gate in context.operator_emissions:
-        _make_and_add_gate_layout(context, gate, input_gate)
+        _make_and_add_gate_modulation_layouts(context, gate, input_gate)
     for modulation in context.model.modulations:
-        _make_and_add_modulation_layout(context, modulation)
+        if not isinstance(modulation.source, momapy.celldesigner.BooleanLogicGate):
+            _make_and_add_modulation_layout(context, modulation)
 
     # Overlay = the plain foreground built above + the input map's remaining
     # glyphs cloned in as dimmed, unmapped background. The background carries
@@ -389,7 +386,9 @@ def make_and_add_layout(context: pd2af.building.context.BuilderContext):
 def _make_and_add_compartment_layout(
     context: pd2af.building.context.BuilderContext, compartment: typing.Any
 ):
-    input_layouts = context.input_map.layout_model_mapping.get_mapping(compartment)
+    input_layouts = pd2af.building.layout.get_layout_elements_sorted_by_id(
+        context.input_map.layout_model_mapping, compartment
+    )
     if not input_layouts:
         return
     context.layout.layout_elements.extend(input_layouts)
@@ -424,7 +423,9 @@ def _make_and_add_species_layout(
     input_species: typing.Any,
 ):
     input_layouts = (
-        context.input_map.layout_model_mapping.get_mapping(input_species)
+        pd2af.building.layout.get_layout_elements_sorted_by_id(
+            context.input_map.layout_model_mapping, input_species
+        )
         if input_species is not None
         else None
     )
@@ -456,51 +457,183 @@ def _make_and_add_species_layout(
         context.model_element_to_layout_elements[id(species)] = (synthetic_layout,)
 
 
-def _make_and_add_gate_layout(
+def _make_and_add_gate_modulation_layouts(
     context: pd2af.building.context.BuilderContext,
     gate: typing.Any,
     input_gate: typing.Any,
 ):
-    """Place a gate glyph and its logic arcs.
+    """Draw the modulations ``gate`` is the source of, each arc from its own gate copy.
 
-    Mirrors :func:`_make_and_add_species_layout`. The gate glyph is the curated input gate layout when one exists
-    (plain/overlay, and dot when the input had one), otherwise a synthetic
-    node (dot). It is mapped to the gate and registered in
-    ``model_element_to_layout_elements`` so the modulation pass can resolve a
-    gate-sourced modulation. One ``LogicArcLayout`` is drawn from each gate
-    glyph to each input species' layout (gate -> input, the CellDesigner
-    writer's convention).
+    A CellDesigner gate has one output, so a gate glyph is the source of exactly
+    one modulation arc. When the gate has several arcs, each copy is placed on
+    the line from the centroid of its inputs toward its target, at the distance
+    the input gate glyph is from that centroid but no further than half way.
     """
-    input_layouts = (
-        context.input_map.layout_model_mapping.get_mapping(input_gate)
+    input_gate_layouts = (
+        pd2af.building.layout.get_layout_elements_sorted_by_id(
+            context.input_map.layout_model_mapping, input_gate
+        )
         if input_gate is not None
-        else None
+        else []
     )
-    if input_layouts:
-        if context.layout_mode == "dot" and len(input_layouts) > 1:
-            input_layouts = input_layouts[:1]
-        gate_layouts = list(input_layouts)
-        context.layout.layout_elements.extend(gate_layouts)
-        for gate_layout in gate_layouts:
-            context.layout_model_mapping.add_mapping(gate_layout, gate)
-    elif context.layout_mode == "dot":
-        gate_layout = make_synthetic_gate_layout(gate, context.synthetic_index)
+    if not input_gate_layouts:
+        if context.layout_mode != "dot":
+            return
+        input_gate_layouts = [make_synthetic_gate_layout(gate, context.synthetic_index)]
         context.synthetic_index += 1
-        context.layout.layout_elements.append(gate_layout)
-        context.layout_model_mapping.add_mapping(gate_layout, gate)
-        gate_layouts = [gate_layout]
-    else:
-        return
-    context.model_element_to_layout_elements[id(gate)] = tuple(gate_layouts)
-    for gate_layout in gate_layouts:
-        for gate_input in gate.inputs:
-            input_species_layouts = context.model_element_to_layout_elements.get(
-                id(gate_input.referred_element)
+    prefer_nearest = context.influence_pairing == "nearest" and context.layout_mode in (
+        "plain",
+        "overlay",
+    )
+    modulation_target_layout_pairs = []
+    for modulation in context.model.modulations:
+        if modulation.source is not gate:
+            continue
+        target_layouts = context.model_element_to_layout_elements.get(
+            id(modulation.target)
+        )
+        if not target_layouts:
+            continue
+        if prefer_nearest:
+            _, target_layout = pd2af.building.layout.nearest_layout_pair(
+                input_gate_layouts, target_layouts
             )
-            if not input_species_layouts:
-                continue
-            arc = make_logic_arc(context, gate_layout, input_species_layouts[0])
-            context.layout.layout_elements.append(arc)
+            target_layouts = [target_layout]
+        for target_layout in target_layouts:
+            modulation_target_layout_pairs.append((modulation, target_layout))
+    used_positions = []
+    for copy_index, (modulation, target_layout) in enumerate(
+        modulation_target_layout_pairs
+    ):
+        gate_input_layout_pairs = _get_gate_input_layout_pairs(
+            context, gate, target_layout
+        )
+        reference_layout = pd2af.building.layout.get_nearest_layout_element(
+            input_gate_layouts, target_layout.position
+        )
+        if len(modulation_target_layout_pairs) == 1:
+            gate_layout = reference_layout
+        else:
+            if context.layout_mode == "dot":
+                position = momapy.geometry.Point(float(context.synthetic_index), 0.0)
+                context.synthetic_index += 1
+            else:
+                position = _make_gate_copy_position(
+                    reference_layout,
+                    gate_input_layout_pairs,
+                    target_layout,
+                    used_positions,
+                )
+            used_positions.append(position)
+            gate_layout = dataclasses.replace(
+                reference_layout,
+                id_=f"{reference_layout.id_}_{copy_index}",
+                position=position,
+            )
+        context.layout.layout_elements.append(gate_layout)
+        _add_logic_arcs_and_gate_mapping(
+            context, gate, gate_layout, gate_input_layout_pairs
+        )
+        arc = make_modulation_arc(context, modulation, gate_layout, target_layout)
+        context.layout.layout_elements.append(arc)
+        add_modulation_mapping(
+            context.layout_model_mapping,
+            arc,
+            gate_layout,
+            target_layout,
+            modulation,
+        )
+
+
+def _get_gate_input_layout_pairs(
+    context: pd2af.building.context.BuilderContext,
+    gate: typing.Any,
+    target_layout: typing.Any,
+) -> list:
+    """Return, for each input of ``gate``, its glyph nearest ``target_layout``."""
+    gate_input_layout_pairs = []
+    for gate_input in sorted(gate.inputs, key=lambda gate_input: gate_input.id_):
+        species_layouts = context.model_element_to_layout_elements.get(
+            id(gate_input.referred_element)
+        )
+        if not species_layouts:
+            continue
+        gate_input_layout_pairs.append(
+            (
+                gate_input,
+                pd2af.building.layout.get_nearest_layout_element(
+                    species_layouts, target_layout.position
+                ),
+            )
+        )
+    return gate_input_layout_pairs
+
+
+def _make_gate_copy_position(
+    reference_layout: typing.Any,
+    gate_input_layout_pairs: list,
+    target_layout: typing.Any,
+    used_positions: list,
+) -> typing.Any:
+    """Return the position of one gate copy among several.
+
+    It is on the line from the centroid of the inputs toward the target, at the
+    distance ``reference_layout`` is from that centroid but no further than half
+    way to the target, moved right by one gate width until no other copy of the
+    same gate is there.
+    """
+    position = reference_layout.position
+    if gate_input_layout_pairs:
+        input_layouts = [layout for _, layout in gate_input_layout_pairs]
+        centroid = momapy.geometry.Point(
+            sum(layout.position.x for layout in input_layouts) / len(input_layouts),
+            sum(layout.position.y for layout in input_layouts) / len(input_layouts),
+        )
+        target_distance = math.dist(
+            centroid.to_tuple(), target_layout.position.to_tuple()
+        )
+        if target_distance > 0:
+            reference_distance = math.dist(
+                centroid.to_tuple(), reference_layout.position.to_tuple()
+            )
+            ratio = min(reference_distance / target_distance, 0.5)
+            position = momapy.geometry.Point(
+                centroid.x + (target_layout.position.x - centroid.x) * ratio,
+                centroid.y + (target_layout.position.y - centroid.y) * ratio,
+            )
+    while position in used_positions:
+        position = momapy.geometry.Point(
+            position.x + reference_layout.width, position.y
+        )
+    return position
+
+
+def _add_logic_arcs_and_gate_mapping(
+    context: pd2af.building.context.BuilderContext,
+    gate: typing.Any,
+    gate_layout: typing.Any,
+    gate_input_layout_pairs: list,
+):
+    """Draw a logic arc from ``gate_layout`` to each input, and map them.
+
+    Each logic arc is mapped to its gate input together with the key of the
+    input glyph, and the gate copy to the gate together with the keys of its
+    logic arcs, the copy being the representative.
+    """
+    gate_key = frozenset([gate_layout])
+    for gate_input, input_layout in gate_input_layout_pairs:
+        logic_arc = make_logic_arc(context, gate_layout, input_layout)
+        context.layout.layout_elements.append(logic_arc)
+        logic_arc_key = frozenset(
+            [logic_arc]
+        ) | pd2af.building.layout.get_key_of_layout_element(
+            context.layout_model_mapping, input_layout
+        )
+        context.layout_model_mapping.add_mapping(
+            logic_arc_key, gate_input, representative=logic_arc
+        )
+        gate_key |= logic_arc_key
+    context.layout_model_mapping.add_mapping(gate_key, gate, representative=gate_layout)
 
 
 def _make_and_add_modulation_layout(
