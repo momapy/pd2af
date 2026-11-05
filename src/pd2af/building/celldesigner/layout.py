@@ -54,7 +54,7 @@ _SPECIES_CLASS_TO_LAYOUT_CLASS = {
 # sibling (a `*ActiveLayout` the reader appends to a species glyph's
 # `layout_elements` for an active species). Dropping all of them makes a stripped
 # species render plain, matching its decoration-free model (whose `active` flag
-# is cleared in `get_or_make_stripped_species`, so the two stay in sync).
+# is cleared in `make_stripped_species`, so the two stay in sync).
 _STRIPPABLE_SPECIES_DECORATION_CLASSES = (
     momapy.celldesigner.ModificationLayout,
     momapy.celldesigner.StructuralStateLayout,

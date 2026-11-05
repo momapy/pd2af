@@ -83,7 +83,7 @@ single-hop influences, and takes none of the inference layers. It is
 CellDesigner-only.
 
 Stripping is a single recursive operation over the resolved entity
-(`pd2af.building.celldesigner.model.get_or_make_stripped_species`;
+(`pd2af.building.celldesigner.model.make_stripped_species`;
 `pd2af.building.sbgn.labels.make_label` with `include_state_variables=False`),
 applied to *every* entity when `keep_species` is off — complexes and
 non-templated entities included, not just templated forms of the same base
@@ -237,6 +237,14 @@ which causes `KeyError` on read-back of the written CellDesigner XML.
 The right fix when this shape of bug appears is a dedup-and-remap pass
 over the constructed model (mirroring `register_model_element`), not
 ad-hoc patching. See `pd2af.building.model.register_or_reuse`.
+
+Only top-level species are interned, never subunits: as in momapy's readers,
+two distinct complexes never share a subunit object. A stripped complex gets
+its own freshly built subunits, and each input subunit is recorded against
+the content-equal subunit of the complex that actually lands in the model
+(`pd2af.building.celldesigner.model.record_canonical_subunits`), which covers
+both a complex collapsing onto an earlier one and equal subunits collapsing
+inside one complex.
 
 ## Read-back as the integration test
 
