@@ -221,30 +221,33 @@ so `__eq__` and `__hash__` are content-based: two model elements with
 identical fields and different `id_` are *equal* but have *different
 identities*.
 
-momapy's readers enforce this invariant (see
-`momapy/io/utils.py::register_model_element`): when an equal element
-is registered a second time, only one survives (smaller `id_` wins),
-and all references to the evicted element are remapped to the
-survivor (`remap_model_element`). The XML-id lookup still resolves to
-the survivor, so dangling references can't happen.
+pd2af builds every output map with `momapy.core.make_map`. The build passes
+fill three lists of the `pd2af.building.context.BuilderContext`: the top-level
+model elements, the top-level layout elements, and one
+`(layout element, model element)` pair per drawn element. `make_map` merges
+equal top-level elements into the one with the smallest `id_`, points every
+reference at the element kept, and computes the layout-model mapping keys from
+the pairs, following momapy's catalogue (a species key also holds the glyph of
+its compartment, a gate key its logic arcs). It raises when an element is a
+child of two elements that are not equal, or refers to an element that is not
+in the map.
 
-**pd2af must preserve this invariant when constructing new models.**
-A naive `set(...)` of model elements silently drops duplicates without
-remapping references — leaving callers (e.g. `subunits`,
-`modulation.source`, `proteinReference`) pointing at evicted elements,
-which causes `KeyError` on read-back of the written CellDesigner XML.
+pd2af still interns its top-level elements through
+`pd2af.building.model.register_or_reuse`: the layout pass draws one glyph per
+output element, so equal elements must already be one object when it runs, and
+no two layout elements may be equal either (the dot placeholder glyphs get
+distinct positions). Children are never interned: a subunit, a gate or operator
+input and a unit of information are built for their parent alone. A stripped
+complex gets its own freshly built subunits, and each input subunit is recorded
+against the content-equal subunit of the complex that actually lands in the
+model (`pd2af.building.celldesigner.model.record_canonical_subunits`), which
+covers both a complex collapsing onto an earlier one and equal subunits
+collapsing inside one complex.
 
-The right fix when this shape of bug appears is a dedup-and-remap pass
-over the constructed model (mirroring `register_model_element`), not
-ad-hoc patching. See `pd2af.building.model.register_or_reuse`.
-
-Only top-level species are interned, never subunits: as in momapy's readers,
-two distinct complexes never share a subunit object. A stripped complex gets
-its own freshly built subunits, and each input subunit is recorded against
-the content-equal subunit of the complex that actually lands in the model
-(`pd2af.building.celldesigner.model.record_canonical_subunits`), which covers
-both a complex collapsing onto an earlier one and equal subunits collapsing
-inside one complex.
+The `overlay` background is added to the layout after `make_map`
+(`pd2af.building.celldesigner.layout.add_dimmed_background`): `make_map` puts
+every unpaired arc that touches a drawn glyph into the key of that glyph, and
+the background is full of PD arcs ending on foreground glyphs.
 
 ## Read-back as the integration test
 

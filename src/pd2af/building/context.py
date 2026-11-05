@@ -1,9 +1,10 @@
 """The shared state of the two build passes.
 
 ``BuilderContext`` is a plain dataclass of slots: :func:`pd2af.core._build_map`
-creates one, the model pass fills the model and the pass-1 scratch slots, and
-the layout pass reads them back to build the layout and the layout-model
-mapping. It lives in its own module so both language builders can name it in
+creates one, the model pass fills the top-level model elements and the pass-1
+scratch slots, and the layout pass reads them back to fill the top-level layout
+elements and the layout-model pairs, from which ``momapy.core.make_map``
+builds the map. It lives in its own module so both language builders can name it in
 their annotations without importing the orchestrator that imports them.
 """
 
@@ -27,10 +28,10 @@ class BuilderContext:
     keep_species: bool = False
     drop_compartments: bool = False
 
-    # --- outputs being built ---
-    model: object = None
-    layout: object = None
-    layout_model_mapping: object = None
+    # --- what momapy.core.make_map builds the map from ---
+    model_elements: list = dataclasses.field(default_factory=list)
+    layout_elements: list = dataclasses.field(default_factory=list)
+    layout_model_pairs: list = dataclasses.field(default_factory=list)
 
     # --- Pass-1 -> Pass-2 handoff ---
     activity_emissions: list = dataclasses.field(default_factory=list)

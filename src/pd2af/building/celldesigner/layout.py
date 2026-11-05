@@ -1,10 +1,11 @@
 """Build the AF layout, reusing the input map's glyphs where possible.
 
-``make_and_add_layout`` is the layout pass: it walks the model built by
-:mod:`pd2af.building.celldesigner.model` and populates ``context.layout`` and
-``context.layout_model_mapping``, branching on ``layout_mode``. The leaf
-primitives below -- synthetic nodes, modulation arcs, mapping helpers, and
-background cloning for overlay -- do the per-element construction.
+``make_and_add_layout`` is the layout pass: it walks the model elements built
+by :mod:`pd2af.building.celldesigner.model` and fills ``context.layout_elements``
+and ``context.layout_model_pairs``, from which ``momapy.core.make_map`` computes
+the layout-model mapping. The leaf primitives below -- synthetic nodes,
+modulation arcs, mapping helpers, and background cloning for overlay -- do the
+per-element construction.
 
 :mod:`pd2af.core` invokes this pass through a
 :class:`pd2af.building.context.BuilderContext` after
@@ -18,7 +19,6 @@ import typing
 import momapy.builder
 import momapy.celldesigner
 import momapy.core.layout
-import momapy.core.mapping
 import momapy.geometry
 
 import pd2af.building.celldesigner.model
@@ -89,17 +89,6 @@ _MODULATION_CLASS_TO_LAYOUT_CLASS = {
     momapy.celldesigner.UnknownModulation: momapy.celldesigner.UnknownModulationLayout,
     momapy.celldesigner.UnknownTriggering: momapy.celldesigner.UnknownTriggeringLayout,
 }
-
-
-def new_layout_and_mapping_builders() -> typing.Any:
-    """A fresh, empty (layout builder, layout-model mapping builder) pair."""
-    layout_builder_class = momapy.builder.get_or_make_builder_cls(
-        momapy.core.layout.Layout
-    )
-    return (
-        layout_builder_class(),
-        momapy.core.mapping.LayoutModelMappingBuilder(),
-    )
 
 
 def clone_layout_pruning_foreground(
@@ -293,7 +282,7 @@ def add_mappings_for_layout_and_descendants(
     input_layout: typing.Any,
     original_to_stripped: dict[int, typing.Any] | None = None,
 ):
-    """Map an input glyph and its descendants to their model elements.
+    """Pair an input glyph and its descendants with their model elements.
 
     With ``original_to_stripped``, the glyphs actually placed are the stripped
     clones of :func:`make_decoration_stripped_layout`: a clone may be a fresh
@@ -316,33 +305,7 @@ def add_mappings_for_layout_and_descendants(
         model_value = context.input_model_element_to_canonical_model_element.get(
             id(model_value), model_value
         )
-        context.layout_model_mapping.add_mapping(placed, model_value)
-
-
-def add_modulation_mapping(
-    mapping_builder: typing.Any,
-    arc: typing.Any,
-    source_layout: typing.Any,
-    target_layout: typing.Any,
-    modulation: typing.Any,
-):
-    """Map the arc, together with its two endpoint clusters, to ``modulation``.
-
-    An endpoint that is already part of a cluster (a species drawn as several
-    glyphs) contributes that whole cluster, so the mapping stays consistent with
-    the one the endpoint's own layout was registered under.
-    """
-    mapping_builder.add_mapping(
-        frozenset([arc])
-        | pd2af.building.layout.get_key_of_layout_element(
-            mapping_builder, source_layout
-        )
-        | pd2af.building.layout.get_key_of_layout_element(
-            mapping_builder, target_layout
-        ),
-        modulation,
-        representative=arc,
-    )
+        context.layout_model_pairs.append((placed, model_value))
 
 
 # ---------------------------------------------------------------------------
@@ -351,36 +314,35 @@ def add_modulation_mapping(
 
 
 def make_and_add_layout(context: pd2af.building.context.BuilderContext):
-    """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
-    context.layout, context.layout_model_mapping = new_layout_and_mapping_builders()
+    """Fill ``context.layout_elements`` and ``context.layout_model_pairs`` (pass 2).
 
+    The overlay foreground is the plain layout; its dimmed background is added
+    by :func:`add_dimmed_background` once the map is made.
+    """
+    compartments = [
+        model_element
+        for model_element in context.model_elements
+        if isinstance(model_element, momapy.celldesigner.Compartment)
+    ]
     for compartment in pd2af.building.celldesigner.model.compartments_outermost_first(
-        context.model.compartments
+        compartments
     ):
         _make_and_add_compartment_layout(context, compartment)
-    # Only compartments have been added so far, so this counts exactly the
-    # foreground compartment layouts -- the insertion point for the overlay
-    # background below.
-    compartment_count = len(context.layout.layout_elements)
     for _key_class, species, input_species in context.activity_emissions:
         _make_and_add_species_layout(context, species, input_species)
     for gate, input_gate in context.operator_emissions:
         _make_and_add_gate_modulation_layouts(context, gate, input_gate)
-    for modulation in context.model.modulations:
+    for modulation in _get_modulations(context):
         if not isinstance(modulation.source, momapy.celldesigner.BooleanLogicGate):
             _make_and_add_modulation_layout(context, modulation)
 
-    # Overlay = the plain foreground built above + the input map's remaining
-    # glyphs cloned in as dimmed, unmapped background. The background carries
-    # PD context for rendering only; being unmapped, the model-driven writer
-    # drops it, so overlay round-trips identically to plain.
-    if context.layout_mode == "overlay":
-        foreground = list(context.layout.layout_elements)
-        _add_dimmed_background(context, foreground, compartment_count)
-        context.layout = pd2af.building.layout.highlight_layout_elements(
-            foreground, context.layout
-        )
-    pd2af.building.layout.harmonize_root_layout(context.layout)
+
+def _get_modulations(context: pd2af.building.context.BuilderContext) -> list:
+    return [
+        model_element
+        for model_element in context.model_elements
+        if isinstance(model_element, momapy.celldesigner.KnownOrUnknownModulation)
+    ]
 
 
 def _make_and_add_compartment_layout(
@@ -391,7 +353,8 @@ def _make_and_add_compartment_layout(
     )
     if not input_layouts:
         return
-    context.layout.layout_elements.extend(input_layouts)
+    context.layout_elements.extend(input_layouts)
+    context.model_element_to_layout_elements[id(compartment)] = tuple(input_layouts)
     for input_layout in input_layouts:
         add_mappings_for_layout_and_descendants(context, input_layout)
 
@@ -413,10 +376,9 @@ def _get_mapped_container(
 ) -> typing.Any:
     if container is None:
         return None
-    if isinstance(
-        context.layout_model_mapping.get_mapping(container),
-        momapy.celldesigner.Compartment,
-    ):
+    compartment = context.input_map.layout_model_mapping.get_mapping(container)
+    placed_layouts = context.model_element_to_layout_elements.get(id(compartment), ())
+    if any(placed_layout is container for placed_layout in placed_layouts):
         return container
     return None
 
@@ -447,7 +409,7 @@ def _add_species_layouts(
             context, input_layout, original_to_placed
         )
         placed_layouts.append(placed_layout)
-    context.layout.layout_elements.extend(placed_layouts)
+    context.layout_elements.extend(placed_layouts)
     context.model_element_to_layout_elements[id(species)] = tuple(placed_layouts)
 
 
@@ -476,8 +438,8 @@ def _make_and_add_species_layout(
     elif context.layout_mode == "dot":
         synthetic_layout = make_synthetic_layout(species, context.synthetic_index)
         context.synthetic_index += 1
-        context.layout.layout_elements.append(synthetic_layout)
-        context.layout_model_mapping.add_mapping(synthetic_layout, species)
+        context.layout_elements.append(synthetic_layout)
+        context.layout_model_pairs.append((synthetic_layout, species))
         context.model_element_to_layout_elements[id(species)] = (synthetic_layout,)
 
 
@@ -510,7 +472,7 @@ def _make_and_add_gate_modulation_layouts(
         "overlay",
     )
     modulation_target_layout_pairs = []
-    for modulation in context.model.modulations:
+    for modulation in _get_modulations(context):
         if modulation.source is not gate:
             continue
         target_layouts = context.model_element_to_layout_elements.get(
@@ -554,19 +516,13 @@ def _make_and_add_gate_modulation_layouts(
                 id_=f"{reference_layout.id_}_{copy_index}",
                 position=position,
             )
-        context.layout.layout_elements.append(gate_layout)
-        _add_logic_arcs_and_gate_mapping(
+        context.layout_elements.append(gate_layout)
+        _add_logic_arcs_and_gate_pairs(
             context, gate, gate_layout, gate_input_layout_pairs
         )
         arc = make_modulation_arc(context, modulation, gate_layout, target_layout)
-        context.layout.layout_elements.append(arc)
-        add_modulation_mapping(
-            context.layout_model_mapping,
-            arc,
-            gate_layout,
-            target_layout,
-            modulation,
-        )
+        context.layout_elements.append(arc)
+        context.layout_model_pairs.append((arc, modulation))
 
 
 def _get_gate_input_layout_pairs(
@@ -632,32 +588,22 @@ def _make_gate_copy_position(
     return position
 
 
-def _add_logic_arcs_and_gate_mapping(
+def _add_logic_arcs_and_gate_pairs(
     context: pd2af.building.context.BuilderContext,
     gate: typing.Any,
     gate_layout: typing.Any,
     gate_input_layout_pairs: list,
 ):
-    """Draw a logic arc from ``gate_layout`` to each input, and map them.
+    """Draw a logic arc from ``gate_layout`` to each input, and pair them.
 
-    Each logic arc is mapped to its gate input together with the key of the
-    input glyph, and the gate copy to the gate together with the keys of its
-    logic arcs, the copy being the representative.
+    Each logic arc is paired with its gate input and the gate copy with the
+    gate; ``momapy.core.make_map`` puts the logic arcs in the key of the copy.
     """
-    gate_key = frozenset([gate_layout])
     for gate_input, input_layout in gate_input_layout_pairs:
         logic_arc = make_logic_arc(context, gate_layout, input_layout)
-        context.layout.layout_elements.append(logic_arc)
-        logic_arc_key = frozenset(
-            [logic_arc]
-        ) | pd2af.building.layout.get_key_of_layout_element(
-            context.layout_model_mapping, input_layout
-        )
-        context.layout_model_mapping.add_mapping(
-            logic_arc_key, gate_input, representative=logic_arc
-        )
-        gate_key |= logic_arc_key
-    context.layout_model_mapping.add_mapping(gate_key, gate, representative=gate_layout)
+        context.layout_elements.append(logic_arc)
+        context.layout_model_pairs.append((logic_arc, gate_input))
+    context.layout_model_pairs.append((gate_layout, gate))
 
 
 def _make_and_add_modulation_layout(
@@ -678,40 +624,33 @@ def _make_and_add_modulation_layout(
         source_layouts, target_layouts, prefer_nearest
     ):
         arc = make_modulation_arc(context, modulation, source_layout, target_layout)
-        context.layout.layout_elements.append(arc)
-        add_modulation_mapping(
-            context.layout_model_mapping,
-            arc,
-            source_layout,
-            target_layout,
-            modulation,
-        )
+        context.layout_elements.append(arc)
+        context.layout_model_pairs.append((arc, modulation))
 
 
-def _add_dimmed_background(
-    context: pd2af.building.context.BuilderContext,
-    foreground: typing.Any,
-    insert_index: int,
-):
-    """Clone the input layout's remaining glyphs into ``context.layout``.
+def add_dimmed_background(
+    context: pd2af.building.context.BuilderContext, new_map: typing.Any
+) -> typing.Any:
+    """Return ``new_map`` with the input layout's remaining glyphs added, dimmed.
 
-    They go in as unmapped background, for the dimmer to grey out.
+    The background is added after ``momapy.core.make_map``, as drawing only:
+    ``make_map`` would put every unpaired arc touching a drawn glyph into the
+    key of that glyph. Being unmapped, the model-driven writer drops it, so
+    overlay round-trips identically to plain.
 
-    ``foreground`` is the set of layout elements built by the plain path
-    above (input objects, or copies keeping their ``id_``). Any input subtree
-    already represented there -- a top-level glyph reused verbatim, or a
-    promoted subunit lifted out of a dissolved complex -- is pruned from the
-    clones, so the background never duplicates a foreground glyph nor
-    collides with its ``id_`` in the dimming selector.
+    Any input subtree already drawn in ``new_map`` -- a top-level glyph reused
+    verbatim, or a promoted subunit lifted out of a dissolved complex -- is
+    pruned from the clones, so the background never duplicates a foreground
+    glyph.
 
-    momapy draws ``layout_elements`` in list order (later elements paint on
-    top), so the clones are inserted at ``insert_index`` -- the count of
-    foreground compartments, which are the leading elements -- to land *after*
-    them but *before* the rest of the foreground. This three-layer z-order is
-    required: compartments render an opaque white interior that would hide the
-    background if it sat behind them, while the foreground species and freshly
-    built influence arcs must stay on top of the background.
+    momapy draws ``layout_elements`` in order (later elements paint on top), so
+    the background goes *after* the foreground compartments, which are the
+    leading elements, but *before* the rest of the foreground: compartments
+    render an opaque white interior that would hide the background if it sat
+    behind them, while the foreground species and influence arcs must stay on
+    top of the background.
     """
+    foreground = new_map.layout.layout_elements
     foreground_ids = set()
     for layout_element in foreground:
         foreground_ids.add(layout_element.id_)
@@ -726,4 +665,20 @@ def _add_dimmed_background(
             if hasattr(background_clone, "container"):
                 background_clone.container = None
             background_clones.append(background_clone)
-    context.layout.layout_elements[insert_index:insert_index] = background_clones
+    pd2af.building.layout.dim_layout_elements(background_clones)
+    background = momapy.builder.object_from_builder(background_clones)
+    compartment_count = 0
+    for layout_element in foreground:
+        if not isinstance(
+            new_map.layout_model_mapping.get_mapping(layout_element),
+            momapy.celldesigner.Compartment,
+        ):
+            break
+        compartment_count += 1
+    layout = dataclasses.replace(
+        new_map.layout,
+        layout_elements=foreground[:compartment_count]
+        + tuple(background)
+        + foreground[compartment_count:],
+    )
+    return dataclasses.replace(new_map, layout=layout)

@@ -1,9 +1,9 @@
 """Build the AF model from clingo activity / influence atoms.
 
 ``make_and_add_model`` is the model pass: it walks the activity atoms in
-layer order (keptSpeciesKey → promotedSubunitKey) and populates ``context.model``
-with canonical, content-deduped compartments, templates, species and
-modulations. When the forms of the same base entity merge (``keep_species``
+layer order (keptSpeciesKey → promotedSubunitKey) and fills
+``context.model_elements`` with canonical, content-deduped compartments,
+templates, species, gates and modulations. When the forms of the same base entity merge (``keep_species``
 off) each activity's species is stripped of its PTM decorations (recursively,
 including subunits) by ``get_or_make_stripped_species``; otherwise the input
 species is kept, placed in its effective compartment by
@@ -31,7 +31,6 @@ the layout pass.
 import dataclasses
 import typing
 
-import momapy.builder
 import momapy.celldesigner
 
 import pd2af.asp.predicates
@@ -320,10 +319,7 @@ def collect_ancestor_compartments(compartments: typing.Any) -> typing.Any:
 def make_and_add_model(
     context: pd2af.building.context.BuilderContext, clingo_model: typing.Any
 ):
-    """Build ``context.model`` from the clingo atoms (pass 1)."""
-    context.model = momapy.builder.get_or_make_builder_cls(
-        momapy.celldesigner.CellDesignerModel
-    )()
+    """Fill ``context.model_elements`` from the clingo atoms (pass 1)."""
     context.subunit_to_top_level = pd2af.building.model.build_subunit_to_top_level(
         context.input_map.model.species
     )
@@ -337,7 +333,6 @@ def make_and_add_model(
         context,
         _OPERATOR_TYPE_TO_GATE_CLASS,
         momapy.celldesigner.BooleanLogicGateInput,
-        context.model.boolean_logic_gates,
     )
     _make_and_add_modulations(context)
 
@@ -365,7 +360,7 @@ def _make_and_add_compartments(context: pd2af.building.context.BuilderContext):
     for compartment in compartments_outermost_first(
         collect_ancestor_compartments(immediate_compartments)
     ):
-        context.model.compartments.add(compartment)
+        context.model_elements.append(compartment)
         # Compartments carry over by identity, so the output compartment is the
         # input one; record it for provenance so its annotations/notes carry.
         context.compartment_emissions.append((compartment, compartment))
@@ -405,7 +400,7 @@ def _make_and_add_templates(context: pd2af.building.context.BuilderContext):
             else:
                 canonical = register_or_reuse(input_template, context.cache)
             add_model_element_if_new(
-                context.model.species_templates,
+                context.model_elements,
                 canonical,
                 seen_template_identities,
             )
@@ -425,7 +420,7 @@ def _make_and_add_species(context: pd2af.building.context.BuilderContext):
         species = _resolve_activity_key(context, atom.key)
         context.key_to_activity[atom.key] = species
         if add_model_element_if_new(
-            context.model.species, species, seen_species_identities
+            context.model_elements, species, seen_species_identities
         ):
             input_species = context.clingo_id_to_model_element[atom.key.species]
             context.activity_emissions.append((type(atom.key), species, input_species))
@@ -476,5 +471,5 @@ def _make_and_add_modulations(context: pd2af.building.context.BuilderContext):
             modulation_class, source, target, context.cache
         )
         add_model_element_if_new(
-            context.model.modulations, canonical, seen_modulation_identities
+            context.model_elements, canonical, seen_modulation_identities
         )

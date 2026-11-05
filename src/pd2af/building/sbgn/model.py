@@ -3,8 +3,8 @@
 ``make_and_add_model`` is the AF model pass: it walks the activity atoms
 (``keptSpeciesKey`` / ``promotedSubunitKey`` keys, each resolving to an input
 SBGN-PD entity pool, phenotype or promoted subunit) and the influence atoms,
-and populates ``context.model`` with canonical, content-deduped compartments,
-activities and influences.
+and fills ``context.model_elements`` with canonical, content-deduped
+compartments, activities, operators and influences.
 
 Each entity pool becomes a :class:`BiologicalActivity` carrying a typed
 :class:`UnitOfInformation` (the entity class) and a label that is the canonical
@@ -18,14 +18,13 @@ glyph -- no brackets -- not ``[ct:mRNA]`` in the label); otherwise the label
 keeps both blocks and distinct forms stay distinct under content-based model
 equality. A PD
 :class:`Phenotype` process becomes an AF :class:`Phenotype` activity. Dedup is
-honoured by interning every constructed element through the shared content
+honoured by interning every top-level element through the shared content
 cache (``register_or_reuse``) and resolving influence endpoints through the
-deduped activities, mirroring the model-element dedup invariant.
+deduped activities; a unit of information is built for its activity alone.
 """
 
 import typing
 
-import momapy.builder
 import momapy.sbgn.af
 import momapy.sbgn.pd
 
@@ -93,8 +92,7 @@ _OPERATOR_TYPE_TO_OPERATOR_CLASS = {
 def make_and_add_model(
     context: pd2af.building.context.BuilderContext, clingo_model: typing.Any
 ):
-    """Build ``context.model`` from the clingo atoms (pass 1)."""
-    context.model = momapy.builder.get_or_make_builder_cls(momapy.sbgn.af.SBGNAFModel)()
+    """Fill ``context.model_elements`` from the clingo atoms (pass 1)."""
     pd2af.building.model.collect_atoms(context, clingo_model)
     context.subunit_to_top_level = pd2af.building.model.build_subunit_to_top_level(
         context.input_map.model.entity_pools
@@ -105,7 +103,6 @@ def make_and_add_model(
         context,
         _OPERATOR_TYPE_TO_OPERATOR_CLASS,
         momapy.sbgn.af.LogicalOperatorInput,
-        context.model.logical_operators,
     )
     _make_and_add_influences(context)
 
@@ -152,7 +149,7 @@ def _make_and_add_compartments(context: pd2af.building.context.BuilderContext):
         # may dedup to one AF compartment by label -- the bucket union handles it).
         context.compartment_emissions.append((input_compartment, af_compartment))
         add_model_element_if_new(
-            context.model.compartments,
+            context.model_elements,
             af_compartment,
             seen_compartment_identities,
         )
@@ -184,7 +181,7 @@ def _make_and_add_activities(context: pd2af.building.context.BuilderContext):
         activity = _make_activity(context, input_element, strip=strip)
         context.key_to_activity[atom.key] = activity
         if add_model_element_if_new(
-            context.model.activities, activity, seen_activity_identities
+            context.model_elements, activity, seen_activity_identities
         ):
             context.activity_emissions.append((activity, input_element))
 
@@ -220,9 +217,7 @@ def _make_activity(
         if strip
         else None
     )
-    unit_of_information = register_or_reuse(
-        unit_of_information_class(label=unit_of_information_label), context.cache
-    )
+    unit_of_information = unit_of_information_class(label=unit_of_information_label)
     input_compartment = _compartment_for_input_element(context, input_element)
     compartment = None
     if input_compartment is not None:
@@ -250,5 +245,5 @@ def _make_and_add_influences(context: pd2af.building.context.BuilderContext):
         candidate = influence_class(source=source, target=target)
         canonical = register_or_reuse(candidate, context.cache)
         add_model_element_if_new(
-            context.model.influences, canonical, seen_influence_identities
+            context.model_elements, canonical, seen_influence_identities
         )
