@@ -762,6 +762,9 @@ def make_auto_layout(
     ``operator_arc_resolver`` overrides the rebuilt segments of selected arcs
     (see :func:`_rebuild_arc_geometry`). Both default to inert, so callers
     that pass neither (e.g. CellDesigner) are unaffected.
+
+    The root layout of the returned map is fitted around the repositioned
+    elements (see :func:`harmonize_root_layout`).
     """
     new_map_builder = momapy.builder.builder_from_object(cd_map)
     new_layout_builder = new_map_builder.layout
@@ -788,4 +791,6 @@ def make_auto_layout(
         operator_arc_resolver=operator_arc_resolver,
     )
     new_map = momapy.builder.object_from_builder(new_map_builder)
-    return new_map
+    return dataclasses.replace(
+        new_map, layout=harmonize_root_layout(new_map.layout)
+    )

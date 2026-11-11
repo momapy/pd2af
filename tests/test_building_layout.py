@@ -8,6 +8,7 @@ import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 import momapy.io.core
+import momapy.positioning
 import momapy.sbgn.pd
 import pytest
 
@@ -351,6 +352,24 @@ class TestCelldesignerAutoLayoutCompartments:
             species.name for species in out.model.species
         )
         assert len(back.model.modulations) == len(out.model.modulations)
+
+
+class TestAutoLayoutCanvas:
+    def test_canvas_fits_the_repositioned_elements(self, example_cd_map):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        plain_map = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
+        ).obj
+        out = pd2af.building.layout.make_auto_layout(plain_map)
+        bounding_box = momapy.positioning.fit(
+            out.layout.layout_elements,
+            xsep=pd2af.building.layout._ROOT_LAYOUT_SEP,
+            ysep=pd2af.building.layout._ROOT_LAYOUT_SEP,
+        )
+        assert out.layout.width == bounding_box.width
+        assert out.layout.height == bounding_box.height
+        assert out.layout.position == bounding_box.position
 
 
 def _get_container_problems(out):
