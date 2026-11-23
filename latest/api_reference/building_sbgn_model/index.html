@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.2">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
       
 
@@ -1084,8 +1084,8 @@
 <p><code>make_and_add_model</code> is the AF model pass: it walks the activity atoms
 (<code>keptSpeciesKey</code> / <code>promotedSubunitKey</code> keys, each resolving to an input
 SBGN-PD entity pool, phenotype or promoted subunit) and the influence atoms,
-and populates <code>context.model</code> with canonical, content-deduped compartments,
-activities and influences.</p>
+and fills <code>context.model_elements</code> with canonical, content-deduped
+compartments, activities, operators and influences.</p>
 <p>Each entity pool becomes a :class:<code>BiologicalActivity</code> carrying a typed
 :class:<code>UnitOfInformation</code> (the entity class) and a label that is the canonical
 serialization of the whole entity pool (:mod:<code>pd2af.building.sbgn.labels</code>). In
@@ -1098,9 +1098,9 @@ glyph -- no brackets -- not <code>[ct:mRNA]</code> in the label); otherwise the 
 keeps both blocks and distinct forms stay distinct under content-based model
 equality. A PD
 :class:<code>Phenotype</code> process becomes an AF :class:<code>Phenotype</code> activity. Dedup is
-honoured by interning every constructed element through the shared content
+honoured by interning every top-level element through the shared content
 cache (<code>register_or_reuse</code>) and resolving influence endpoints through the
-deduped activities, mirroring the model-element dedup invariant.</p>
+deduped activities; a unit of information is built for its activity alone.</p>
 
 
 
@@ -1126,7 +1126,7 @@ deduped activities, mirroring the model-element dedup invariant.</p>
               <td><code><a class="autorefs autorefs-internal" title="            make_and_add_model (pd2af.building.sbgn.model.make_and_add_model)" href="#pd2af.building.sbgn.model.make_and_add_model">make_and_add_model</a></code></td>
               <td>
                 <div class="doc-md-description">
-                  <p>Build <code>context.model</code> from the clingo atoms (pass 1).</p>
+                  <p>Fill <code>context.model_elements</code> from the clingo atoms (pass 1).</p>
                 </div>
               </td>
             </tr>
@@ -1167,46 +1167,42 @@ deduped activities, mirroring the model-element dedup invariant.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Build <code>context.model</code> from the clingo atoms (pass 1).</p>
+        <p>Fill <code>context.model_elements</code> from the clingo atoms (pass 1).</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/pd2af/building/sbgn/model.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
-<span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
-<span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
-<span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
-<span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
-<span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
-<span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
-<span class="normal"><a href="#__codelineno-0-100">100</a></span>
-<span class="normal"><a href="#__codelineno-0-101">101</a></span>
-<span class="normal"><a href="#__codelineno-0-102">102</a></span>
-<span class="normal"><a href="#__codelineno-0-103">103</a></span>
-<span class="normal"><a href="#__codelineno-0-104">104</a></span>
-<span class="normal"><a href="#__codelineno-0-105">105</a></span>
-<span class="normal"><a href="#__codelineno-0-106">106</a></span>
-<span class="normal"><a href="#__codelineno-0-107">107</a></span>
-<span class="normal"><a href="#__codelineno-0-108">108</a></span>
-<span class="normal"><a href="#__codelineno-0-109">109</a></span>
-<span class="normal"><a href="#__codelineno-0-110">110</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_and_add_model</span><span class="p">(</span>
-</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="n">context</span><span class="p">:</span> <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">BuilderContext</span><span class="p">,</span> <span class="n">clingo_model</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span>
-</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="p">):</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="w">    </span><span class="sd">"""Build ``context.model`` from the clingo atoms (pass 1)."""</span>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="n">context</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">momapy</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">get_or_make_builder_cls</span><span class="p">(</span><span class="n">momapy</span><span class="o">.</span><span class="n">sbgn</span><span class="o">.</span><span class="n">af</span><span class="o">.</span><span class="n">SBGNAFModel</span><span class="p">)()</span>
-</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>    <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">collect_atoms</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">clingo_model</span><span class="p">)</span>
-</span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>    <span class="n">context</span><span class="o">.</span><span class="n">subunit_to_top_level</span> <span class="o">=</span> <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">build_subunit_to_top_level</span><span class="p">(</span>
-</span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="n">context</span><span class="o">.</span><span class="n">input_map</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">entity_pools</span>
-</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>    <span class="p">)</span>
-</span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>    <span class="n">_make_and_add_compartments</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
-</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>    <span class="n">_make_and_add_activities</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">make_and_add_operators</span><span class="p">(</span>
-</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>        <span class="n">context</span><span class="p">,</span>
-</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="n">_OPERATOR_TYPE_TO_OPERATOR_CLASS</span><span class="p">,</span>
-</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>        <span class="n">momapy</span><span class="o">.</span><span class="n">sbgn</span><span class="o">.</span><span class="n">af</span><span class="o">.</span><span class="n">LogicalOperatorInput</span><span class="p">,</span>
-</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="n">context</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">logical_operators</span><span class="p">,</span>
-</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="p">)</span>
-</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="n">_make_and_add_influences</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-92"> 92</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-93"> 93</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-94"> 94</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-95"> 95</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-96"> 96</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-97"> 97</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-98"> 98</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-99"> 99</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-100">100</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-101">101</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-102">102</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-103">103</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-104">104</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-107">107</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-92"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-92" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-92"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_and_add_model</span><span class="p">(</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-93"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-93" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-93"></a>    <span class="n">context</span><span class="p">:</span> <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">BuilderContext</span><span class="p">,</span> <span class="n">clingo_model</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-94"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-94" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-94"></a><span class="p">):</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-95"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-95" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-95"></a><span class="w">    </span><span class="sd">"""Fill ``context.model_elements`` from the clingo atoms (pass 1)."""</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-96"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-96" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-96"></a>    <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">collect_atoms</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">clingo_model</span><span class="p">)</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-97"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-97" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-97"></a>    <span class="n">context</span><span class="o">.</span><span class="n">subunit_to_top_level</span> <span class="o">=</span> <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">build_subunit_to_top_level</span><span class="p">(</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-98"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-98" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-98"></a>        <span class="n">context</span><span class="o">.</span><span class="n">input_map</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">entity_pools</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-99"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-99" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-99"></a>    <span class="p">)</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-100"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-100" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-100"></a>    <span class="n">_make_and_add_compartments</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-101"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-101" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-101"></a>    <span class="n">_make_and_add_activities</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-102"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-102" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-102"></a>    <span class="n">pd2af</span><span class="o">.</span><span class="n">building</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">make_and_add_operators</span><span class="p">(</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-103"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-103" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-103"></a>        <span class="n">context</span><span class="p">,</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-104"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-104" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-104"></a>        <span class="n">_OPERATOR_TYPE_TO_OPERATOR_CLASS</span><span class="p">,</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-105"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-105" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-105"></a>        <span class="n">momapy</span><span class="o">.</span><span class="n">sbgn</span><span class="o">.</span><span class="n">af</span><span class="o">.</span><span class="n">LogicalOperatorInput</span><span class="p">,</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-106"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-106" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-106"></a>    <span class="p">)</span>
+</span><span id="pd2af.building.sbgn.model.make_and_add_model--source--__span-0-107"><a id="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-107" name="pd2af.building.sbgn.model.make_and_add_model--source--__codelineno-0-107"></a>    <span class="n">_make_and_add_influences</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1274,10 +1270,10 @@ deduped activities, mirroring the model-element dedup invariant.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

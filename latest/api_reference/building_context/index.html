@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.8.2">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
       
 
@@ -1082,9 +1082,10 @@
 
         <p>The shared state of the two build passes.</p>
 <p><code>BuilderContext</code> is a plain dataclass of slots: :func:<code>pd2af.core._build_map</code>
-creates one, the model pass fills the model and the pass-1 scratch slots, and
-the layout pass reads them back to build the layout and the layout-model
-mapping. It lives in its own module so both language builders can name it in
+creates one, the model pass fills the top-level model elements and the pass-1
+scratch slots, and the layout pass reads them back to fill the top-level layout
+elements and the layout-model pairs, from which <code>momapy.core.make_map</code>
+builds the map. It lives in its own module so both language builders can name it in
 their annotations without importing the orchestrator that imports them.</p>
 
 
@@ -1153,7 +1154,7 @@ their annotations without importing the orchestrator that imports them.</p>
 
   
       dataclass
-   (pd2af.modes.TransformationMode)" href="../modes/#pd2af.modes.TransformationMode">TransformationMode</a></span><span class="p">,</span> <span class="n">influence_pairing</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            InfluencePairingMode (pd2af.modes.InfluencePairingMode)" href="../modes/#pd2af.modes.InfluencePairingMode">InfluencePairingMode</a></span> <span class="o">=</span> <span class="n"><span title="pd2af.modes.InfluencePairingMode.CROSS">CROSS</span></span><span class="p">,</span> <span class="n">keep_species</span><span class="p">:</span> <span class="n"><span title="bool">bool</span></span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">drop_compartments</span><span class="p">:</span> <span class="n"><span title="bool">bool</span></span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n"><span title="object">object</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">layout</span><span class="p">:</span> <span class="n"><span title="object">object</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">layout_model_mapping</span><span class="p">:</span> <span class="n"><span title="object">object</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">activity_emissions</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">input_model_element_to_canonical_model_element</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">compartment_emissions</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">cache</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">default_compartment</span><span class="p">:</span> <span class="n"><span title="object">object</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">subunit_to_top_level</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">activity_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">influence_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">key_to_activity</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">operator_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">operator_input_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">key_to_operator</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">operator_emissions</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">model_element_to_layout_elements</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">object_to_builder</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">synthetic_index</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">input_compartment_to_af_compartment</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">af_compartment_to_input_compartment</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">())</span>
+   (pd2af.modes.TransformationMode)" href="../modes/#pd2af.modes.TransformationMode">TransformationMode</a></span><span class="p">,</span> <span class="n">influence_pairing</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            InfluencePairingMode (pd2af.modes.InfluencePairingMode)" href="../modes/#pd2af.modes.InfluencePairingMode">InfluencePairingMode</a></span> <span class="o">=</span> <span class="n"><span title="pd2af.modes.InfluencePairingMode.CROSS">CROSS</span></span><span class="p">,</span> <span class="n">keep_species</span><span class="p">:</span> <span class="n"><span title="bool">bool</span></span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">drop_compartments</span><span class="p">:</span> <span class="n"><span title="bool">bool</span></span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">model_elements</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">layout_elements</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">layout_model_pairs</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">activity_emissions</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">input_model_element_to_canonical_model_element</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">compartment_emissions</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">cache</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">default_compartment</span><span class="p">:</span> <span class="n"><span title="object">object</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">subunit_to_top_level</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">activity_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">influence_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">key_to_activity</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">operator_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">operator_input_atoms</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">key_to_operator</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">operator_emissions</span><span class="p">:</span> <span class="n"><span title="list">list</span></span> <span class="o">=</span> <span class="n"><span title="list">list</span></span><span class="p">(),</span> <span class="n">model_element_to_layout_elements</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">object_to_builder</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">synthetic_index</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">input_compartment_to_af_compartment</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">(),</span> <span class="n">af_compartment_to_input_compartment</span><span class="p">:</span> <span class="n"><span title="dict">dict</span></span> <span class="o">=</span> <span class="n"><span title="dict">dict</span></span><span class="p">())</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -1195,7 +1196,7 @@ their annotations without importing the orchestrator that imports them.</p>
                 <code>layout_mode</code>
             </td>
             <td>
-                  <code><span title="LayoutMode">LayoutMode</span> | None</code>
+                  <code>LayoutMode | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1248,7 +1249,7 @@ their annotations without importing the orchestrator that imports them.</p>
                 <code>influence_pairing</code>
             </td>
             <td>
-                  <code><span title="InfluencePairingMode">InfluencePairingMode</span></code>
+                  <code>InfluencePairingMode</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1293,50 +1294,56 @@ their annotations without importing the orchestrator that imports them.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>model</code>
+                <code>model_elements</code>
             </td>
             <td>
-                  <code><span title="object">object</span></code>
+                  <code><span title="list">list</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                
+                <p>Built-in mutable sequence.</p>
+<p>If no argument is given, the constructor creates a new empty list.
+The argument must be an iterable if specified.</p>
               </div>
             </td>
             <td>
-                  <code>None</code>
+                  <code>&lt;dynamic&gt;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>layout</code>
+                <code>layout_elements</code>
             </td>
             <td>
-                  <code><span title="object">object</span></code>
+                  <code><span title="list">list</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                
+                <p>Built-in mutable sequence.</p>
+<p>If no argument is given, the constructor creates a new empty list.
+The argument must be an iterable if specified.</p>
               </div>
             </td>
             <td>
-                  <code>None</code>
+                  <code>&lt;dynamic&gt;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>layout_model_mapping</code>
+                <code>layout_model_pairs</code>
             </td>
             <td>
-                  <code><span title="object">object</span></code>
+                  <code><span title="list">list</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                
+                <p>Built-in mutable sequence.</p>
+<p>If no argument is given, the constructor creates a new empty list.
+The argument must be an iterable if specified.</p>
               </div>
             </td>
             <td>
-                  <code>None</code>
+                  <code>&lt;dynamic&gt;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1792,10 +1799,10 @@ dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
