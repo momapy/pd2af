@@ -17,22 +17,6 @@ import pydot
 
 
 @dataclasses.dataclass(frozen=True)
-class _NotInIdSetSelector(momapy.styling.Selector):
-    """Selects elements whose `id_` is not in `keep_ids` (or which have none).
-
-    Replaces a NotSelector wrapping one IdSelector per kept element: that
-    construction made selection O(N) per visited element and quadratic over
-    the whole layout. A frozenset lookup keeps it O(1).
-    """
-
-    keep_ids: frozenset
-
-    def select(self, obj: typing.Any, ancestors: typing.Any) -> bool:
-        obj_id = getattr(obj, "id_", None)
-        return obj_id is None or obj_id not in self.keep_ids
-
-
-@dataclasses.dataclass(frozen=True)
 class _ClassNameSuffixSelector(momapy.styling.Selector):
     """Selects elements whose class name ends with `suffix`.
 
@@ -64,6 +48,28 @@ _ROOT_LAYOUT_SEP = 15.0
 # cluster bounding box. graphviz defaults to 8, which is too tight; this is the
 # auto-layout equivalent of the old set_fit xsep/ysep.
 _DOT_CLUSTER_SEP = 40.0
+
+
+def get_layout_elements_sorted_by_id(
+    layout_model_mapping: typing.Any, model_element: typing.Any
+) -> list:
+    """Return the glyphs that draw ``model_element``, sorted by ``id_``."""
+    return sorted(
+        layout_model_mapping.get_representative_layout_elements(model_element),
+        key=lambda layout_element: layout_element.id_,
+    )
+
+
+def get_nearest_layout_element(
+    layout_elements: typing.Any, position: typing.Any
+) -> typing.Any:
+    """Return the layout element whose position is nearest ``position``."""
+    return min(
+        layout_elements,
+        key=lambda layout_element: math.dist(
+            layout_element.position.to_tuple(), position.to_tuple()
+        ),
+    )
 
 
 def nearest_layout_pair(
@@ -132,79 +138,60 @@ def make_arc_segments_from_source_and_target(
     return _make_straight_segments(source_layout, target_layout)
 
 
-def harmonize_root_layout(layout_builder: typing.Any) -> None:
-    """Set the root layout's fill to white and fit it around its children.
+def harmonize_root_layout(layout: typing.Any) -> typing.Any:
+    """Return ``layout`` with a white fill, fitted around its children.
 
     Applied uniformly across all layout modes so the rendered canvas has
     consistent background and padding.
     """
-    layout_builder.fill = momapy.coloring.white
-    if not layout_builder.layout_elements:
+    if not layout.layout_elements:
         # An empty output map (e.g. every activity suppressed via
-        # `--set-all-inactive`) has nothing to fit around; `set_fit` raises
+        # `--set-all-inactive`) has nothing to fit around; `fit` raises
         # on an empty element list. Give the root a minimal, valid canvas so
         # the map still has numeric width/height/position for the writer.
         side = 2 * _ROOT_LAYOUT_SEP
-        layout_builder.width = side
-        layout_builder.height = side
-        layout_builder.position = momapy.geometry.Point(
-            _ROOT_LAYOUT_SEP, _ROOT_LAYOUT_SEP
+        return dataclasses.replace(
+            layout,
+            fill=momapy.coloring.white,
+            width=side,
+            height=side,
+            position=momapy.geometry.Point(_ROOT_LAYOUT_SEP, _ROOT_LAYOUT_SEP),
         )
-        return
-    momapy.positioning.set_fit(
-        layout_builder,
-        layout_builder.layout_elements,
-        xsep=_ROOT_LAYOUT_SEP,
-        ysep=_ROOT_LAYOUT_SEP,
+    bounding_box = momapy.positioning.fit(
+        layout.layout_elements, xsep=_ROOT_LAYOUT_SEP, ysep=_ROOT_LAYOUT_SEP
+    )
+    return dataclasses.replace(
+        layout,
+        fill=momapy.coloring.white,
+        width=bounding_box.width,
+        height=bounding_box.height,
+        position=bounding_box.position,
     )
 
 
-def highlight_layout_elements(
-    layout_elements: typing.Any, layout: typing.Any
-) -> typing.Any:
-    """Dim everything in ``layout`` that is not part of ``layout_elements``.
-
-    The overlay mode's greying pass: a style sheet selects every element whose
-    id is outside the kept set and washes it out, leaving the foreground drawn
-    at full strength.
-    """
-    keep_ids = set()
-    for layout_element in layout_elements:
-        keep_ids.add(layout_element.id_)
-        for descendant in layout_element.descendants():
-            keep_ids.add(descendant.id_)
-    not_selector = _NotInIdSetSelector(frozenset(keep_ids))
-
-    def make_selector(selector: typing.Any) -> typing.Any:
-        return momapy.styling.CompoundSelector((selector, not_selector))
-
-    layout_element_selector = make_selector(
-        momapy.styling.ClassSelector("LayoutElement")
+def dim_layout_elements(layout_element_builders: typing.Any) -> None:
+    """Wash out ``layout_element_builders`` in place: the overlay background."""
+    layout_element_selector = momapy.styling.ClassSelector("LayoutElement")
+    active_border_selector = _ClassNameSuffixSelector("ActiveLayout")
+    text_layout_selector = momapy.styling.TypeSelector("TextLayout")
+    production_layout_selector = momapy.styling.TypeSelector("ProductionLayout")
+    compartment_layout_selector = momapy.styling.TypeSelector(
+        "RectangleCompartmentLayout"
     )
-    active_border_selector = make_selector(_ClassNameSuffixSelector("ActiveLayout"))
-    text_layout_selector = make_selector(momapy.styling.TypeSelector("TextLayout"))
-    production_layout_selector = make_selector(
-        momapy.styling.TypeSelector("ProductionLayout")
-    )
-    compartment_layout_selector = make_selector(
-        momapy.styling.TypeSelector("RectangleCompartmentLayout")
-    )
-    reaction_layout_selector = make_selector(
-        momapy.styling.OrSelector(
-            tuple(
-                [
-                    momapy.styling.TypeSelector(class_name)
-                    for class_name in [
-                        "StateTransitionLayout",
-                        "HeterodimerAssociationLayout",
-                        "KnownTransitionOmittedLayout",
-                        "UnknownTransitionLayout",
-                        "TransportLayout",
-                        "TranslationLayout",
-                        "TranscriptionLayout",
-                    ]
+    reaction_layout_selector = momapy.styling.OrSelector(
+        tuple(
+            [
+                momapy.styling.TypeSelector(class_name)
+                for class_name in [
+                    "StateTransitionLayout",
+                    "HeterodimerAssociationLayout",
+                    "KnownTransitionOmittedLayout",
+                    "UnknownTransitionLayout",
+                    "TransportLayout",
+                    "TranslationLayout",
+                    "TranscriptionLayout",
                 ]
-            )
+            ]
         )
     )
     style_sheet = momapy.styling.StyleSheet(
@@ -262,8 +249,10 @@ def highlight_layout_elements(
             ),
         }
     )
-    layout = momapy.styling.apply_style_sheet(layout, style_sheet, strict=False)
-    return layout
+    for layout_element_builder in layout_element_builders:
+        momapy.styling.apply_style_sheet(
+            layout_element_builder, style_sheet, strict=False
+        )
 
 
 def _translate_layout_element(
@@ -320,10 +309,10 @@ def _build_dot_graph(
     # can copy each cluster's dot-computed bounding box onto its compartment.
     dot_cluster_name_to_compartment_layout_element = {}
     for compartment in new_map_builder.model.compartments:
-        compartment_layout_elements = new_map_builder.layout_model_mapping.get_mapping(
-            compartment
+        compartment_layout_elements = get_layout_elements_sorted_by_id(
+            new_map_builder.layout_model_mapping, compartment
         )
-        if compartment_layout_elements is not None:
+        if compartment_layout_elements:
             compartment_layout_element = compartment_layout_elements[0]
             dot_cluster = pydot.Cluster(compartment.id_)
             dot_cluster.set("margin", _DOT_CLUSTER_SEP)
@@ -773,6 +762,9 @@ def make_auto_layout(
     ``operator_arc_resolver`` overrides the rebuilt segments of selected arcs
     (see :func:`_rebuild_arc_geometry`). Both default to inert, so callers
     that pass neither (e.g. CellDesigner) are unaffected.
+
+    The root layout of the returned map is fitted around the repositioned
+    elements (see :func:`harmonize_root_layout`).
     """
     new_map_builder = momapy.builder.builder_from_object(cd_map)
     new_layout_builder = new_map_builder.layout
@@ -798,6 +790,7 @@ def make_auto_layout(
         descendant_id_to_top_level_id,
         operator_arc_resolver=operator_arc_resolver,
     )
-    harmonize_root_layout(new_layout_builder)
     new_map = momapy.builder.object_from_builder(new_map_builder)
-    return new_map
+    return dataclasses.replace(
+        new_map, layout=harmonize_root_layout(new_map.layout)
+    )

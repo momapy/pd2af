@@ -22,7 +22,7 @@ has to change the ASP program and is a mode, while a choice that only groups
 the results afterwards happens at the build stage and is an option. That leaves
 **whether to keep or dissolve complexes** and **where the influences come
 from** as the two mode axes, and **whether to strip post-translational
-decorations** (state variables in SBGN; `modifications`, `structural_states`,
+decorations** (state variables in SBGN; `modifications`, `structural_state`,
 template `modification_residues`/`regions` and `homomultimer` in CellDesigner)
 and merge content-equal results as an option. In every mode a subunit is a
 *structural component*, never an independent activity: a subunit's activity and
@@ -83,7 +83,7 @@ single-hop influences, and takes none of the inference layers. It is
 CellDesigner-only.
 
 Stripping is a single recursive operation over the resolved entity
-(`pd2af.building.celldesigner.model.get_or_make_stripped_species`;
+(`pd2af.building.celldesigner.model.make_stripped_species`;
 `pd2af.building.sbgn.labels.make_label` with `include_state_variables=False`),
 applied to *every* entity when `keep_species` is off — complexes and
 non-templated entities included, not just templated forms of the same base
@@ -169,6 +169,25 @@ it, the three consumers of `hasActivityCarrier`/`hasActivityKey`
 so a mode that omits its preparation group raises `unfilled_slot` instead of
 silently emitting an activity-less program.
 
+## Reading the input layout
+
+The keys of momapy's layout-model mapping can be frozensets (a species glyph
+together with the glyph of its compartment, a gate together with its logic
+arcs). pd2af reads the glyphs that draw an input model element with
+`pd2af.building.layout.get_layout_elements_sorted_by_id`, which returns the
+representatives of the keys sorted by `id_`, so the copy `dot` keeps is the
+same from run to run.
+
+A species glyph's `container` is the compartment glyph of its input glyph (for
+a promoted subunit, of the top-level input glyph holding it), kept only when
+the output maps that glyph to a compartment, and `None` otherwise.
+
+A CellDesigner gate has one output, so in CellDesigner output each
+gate-sourced modulation arc is drawn from its own gate copy. A gate with one
+arc keeps its curated glyph; with several, each copy is placed on the line from
+the centroid of its inputs toward its target, at the distance the input gate
+glyph is from that centroid, but no further than half way.
+
 ## Annotations and notes
 
 momapy stores RDF/MIRIAM annotations and notes not on model elements but
@@ -202,22 +221,33 @@ so `__eq__` and `__hash__` are content-based: two model elements with
 identical fields and different `id_` are *equal* but have *different
 identities*.
 
-momapy's readers enforce this invariant (see
-`momapy/io/utils.py::register_model_element`): when an equal element
-is registered a second time, only one survives (smaller `id_` wins),
-and all references to the evicted element are remapped to the
-survivor (`remap_model_element`). The XML-id lookup still resolves to
-the survivor, so dangling references can't happen.
+pd2af builds every output map with `momapy.core.make_map`. The build passes
+fill three lists of the `pd2af.building.context.BuilderContext`: the top-level
+model elements, the top-level layout elements, and one
+`(layout element, model element)` pair per drawn element. `make_map` merges
+equal top-level elements into the one with the smallest `id_`, points every
+reference at the element kept, and computes the layout-model mapping keys from
+the pairs, following momapy's catalogue (a species key also holds the glyph of
+its compartment, a gate key its logic arcs). It raises when an element is a
+child of two elements that are not equal, or refers to an element that is not
+in the map.
 
-**pd2af must preserve this invariant when constructing new models.**
-A naive `set(...)` of model elements silently drops duplicates without
-remapping references — leaving callers (e.g. `subunits`,
-`modulation.source`, `proteinReference`) pointing at evicted elements,
-which causes `KeyError` on read-back of the written CellDesigner XML.
+pd2af still interns its top-level elements through
+`pd2af.building.model.register_or_reuse`: the layout pass draws one glyph per
+output element, so equal elements must already be one object when it runs, and
+no two layout elements may be equal either (the dot placeholder glyphs get
+distinct positions). Children are never interned: a subunit, a gate or operator
+input and a unit of information are built for their parent alone. A stripped
+complex gets its own freshly built subunits, and each input subunit is recorded
+against the content-equal subunit of the complex that actually lands in the
+model (`pd2af.building.celldesigner.model.record_canonical_subunits`), which
+covers both a complex collapsing onto an earlier one and equal subunits
+collapsing inside one complex.
 
-The right fix when this shape of bug appears is a dedup-and-remap pass
-over the constructed model (mirroring `register_model_element`), not
-ad-hoc patching. See `pd2af.building.model.register_or_reuse`.
+The `overlay` background is added to the layout after `make_map`
+(`pd2af.building.celldesigner.layout.add_dimmed_background`): `make_map` puts
+every unpaired arc that touches a drawn glyph into the key of that glyph, and
+the background is full of PD arcs ending on foreground glyphs.
 
 ## Read-back as the integration test
 

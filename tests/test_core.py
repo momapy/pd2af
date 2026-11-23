@@ -24,7 +24,7 @@ def _assert_recursively_stripped(species_iterable):
     for species in species_iterable:
         assert not species.id_.startswith("new_species_from_template")
         assert getattr(species, "homomultimer", 1) == 1
-        assert not getattr(species, "structural_states", frozenset())
+        assert getattr(species, "structural_state", None) is None
         assert not getattr(species, "modifications", frozenset())
         template = getattr(species, "template", None)
         if template is not None:
@@ -221,9 +221,7 @@ class TestTransformExampleNoComplexMode:
             if not species.id_.startswith("merged__"):
                 continue
             assert species.homomultimer == 1
-            structural_states = getattr(species, "structural_states", None)
-            if structural_states is not None:
-                assert structural_states == frozenset()
+            assert getattr(species, "structural_state", None) is None
             modifications = getattr(species, "modifications", None)
             if modifications is not None:
                 assert modifications == frozenset()
@@ -294,10 +292,64 @@ class TestMergedStripping:
         decorated = [
             s
             for s in out.model.species
-            if getattr(s, "modifications", None)
-            or getattr(s, "structural_states", None)
+            if getattr(s, "modifications", None) or getattr(s, "structural_state", None)
         ]
         assert decorated  # `keep_species` preserves PTM decorations
+
+    @staticmethod
+    def _walk_subunits(species):
+        for subunit in getattr(species, "subunits", None) or ():
+            yield subunit
+            yield from TestMergedStripping._walk_subunits(subunit)
+
+    # A map whose complexes hold subunits that strip to equal content across
+    # complexes, so interning subunits would make the complexes share them.
+    @pytest.fixture(scope="class")
+    def shared_subunit_map(self):
+        return read_cd_map(os.path.join(MAPS_DIR, "Autophagy.xml"))
+
+    @pytest.mark.parametrize("mode", ["normal", "no-complex"])
+    def test_no_two_complexes_share_a_subunit(self, shared_subunit_map, mode):
+        out = pd2af.transform(shared_subunit_map, mode=mode, layout_mode=None).obj
+        complexes_by_subunit_identity = {}
+        for species in out.model.species:
+            for subunit in self._walk_subunits(species):
+                complexes_by_subunit_identity.setdefault(id(subunit), set()).add(
+                    id(species)
+                )
+        assert complexes_by_subunit_identity
+        assert all(
+            len(complex_identities) == 1
+            for complex_identities in complexes_by_subunit_identity.values()
+        )
+
+    # A map with homodimers (Caspase-8 = {CASP8, CASP8}) whose two subunits strip
+    # to equal content and collapse inside the complex.
+    @pytest.fixture(scope="class")
+    def homodimer_map(self):
+        return read_cd_map(os.path.join(MAPS_DIR, "Actin_filament_organization.xml"))
+
+    @pytest.mark.skipif(
+        not has_dot_binary(), reason="graphviz `dot` binary not on PATH"
+    )
+    def test_subunit_glyphs_map_to_model_subunits(self, homodimer_map):
+        out = pd2af.transform(homodimer_map, mode="normal", layout_mode="auto").obj
+        model_species_identities = set()
+        for species in out.model.species:
+            model_species_identities.add(id(species))
+            model_species_identities.update(
+                id(subunit) for subunit in self._walk_subunits(species)
+            )
+        mapped_species = [
+            model_element
+            for _, model_element in out.layout_model_mapping.items()
+            if isinstance(model_element, momapy.celldesigner.Species)
+        ]
+        assert mapped_species
+        assert all(
+            id(model_element) in model_species_identities
+            for model_element in mapped_species
+        )
 
     # A map with curated residue-modification, structural-state and active-border
     # glyphs, so the auto-layout strip below has every kind of stripped PD layout

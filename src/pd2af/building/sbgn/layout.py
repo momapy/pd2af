@@ -3,10 +3,9 @@
 For each AF activity we build a fresh ``BiologicalActivityLayout`` /
 ``PhenotypeLayout`` with a typed unit-of-information sublayout and a label.
 Influence arcs are drawn afresh between the activity positions (PD arcs ran
-entity->process, so they cannot be copied). The ``layout_model_mapping`` is
-built per the catalogue in ``momapy/sbgn/af/__init__.py`` (singleton keys for
-activities and units of information; a ``frozenset`` key ``{arc, source,
-target}`` anchored on the arc for each influence).
+entity->process, so they cannot be copied). Every glyph is paired with the
+model element it draws, and ``momapy.core.make_map`` computes the keys per the
+catalogue in ``momapy/sbgn/af/__init__.py``.
 
 Two layout modes:
 
@@ -17,20 +16,22 @@ Two layout modes:
   ``--influence-pairing`` (``cross`` -- one arc per pair -- or ``nearest`` -- a
   single arc between the closest pair). Activities/compartments whose input has
   no layout are skipped.
-* ``dot`` -- build every element at a placeholder position with the default
-  size, then hand the whole layout to ``pd2af.building.layout.make_auto_layout``
-  (graphviz) in ``build.py`` for repositioning. Required by the merged
+* ``dot`` -- build every element at its own placeholder position with the
+  default size, then hand the whole layout to
+  ``pd2af.building.layout.make_auto_layout`` (graphviz) for repositioning. The
+  placeholder positions differ so that no two glyphs are equal: ``make_map``
+  would merge them. Required by the merged
   reading (``keep_species`` off), where a merged activity has no
   single input layout.
 
 ``overlay`` for SBGN-AF is unsupported (see ``pd2af.core``).
 """
 
+import dataclasses
 import typing
 
 import momapy.builder
 import momapy.core.elements
-import momapy.core.mapping
 import momapy.geometry
 import momapy.sbgn.af
 import momapy.sbgn.io.sbgnml._reading_layout
@@ -63,36 +64,37 @@ _OPERATOR_CLASS_TO_LAYOUT_CLASS = {
 }
 
 # The operator glyph layout classes, for `isinstance_or_builder` checks (the
-# layouts are builders during construction).
+# layouts are builders during the dot repositioning).
 _OPERATOR_LAYOUT_CLASSES = tuple(_OPERATOR_CLASS_TO_LAYOUT_CLASS.values())
 
 # Nodes (activities, phenotypes, units of information) use momapy's default
 # layout-class sizes, so we never pass width/height when building them. The one
 # exception is a compartment in `plain` mode, which reuses its input layout size
 # so it still encloses its members at their curated positions.
-#
-# dot-mode placeholder position; graphviz repositions everything afterwards.
-_PLACEHOLDER_POSITION = momapy.geometry.Point(0.0, 0.0)
 
 # How far right of an activity's north-west corner the unit of information sits.
 _UNIT_OF_INFORMATION_X_OFFSET = 15.0
 
 
-def _builder(layout_class: type, **kwargs) -> typing.Any:
-    return momapy.builder.get_or_make_builder_cls(layout_class)(**kwargs)
+def _get_placeholder_position(
+    context: pd2af.building.context.BuilderContext,
+) -> momapy.geometry.Point:
+    """The next dot-mode placeholder position; graphviz repositions it afterwards."""
+    position = momapy.geometry.Point(float(context.synthetic_index), 0.0)
+    context.synthetic_index += 1
+    return position
 
 
 def make_and_add_layout(context: pd2af.building.context.BuilderContext):
-    """Build ``context.layout`` and ``context.layout_model_mapping`` (pass 2)."""
+    """Fill ``context.layout_elements`` and ``context.layout_model_pairs`` (pass 2)."""
     if context.layout_mode not in ("plain", "dot"):
         raise NotImplementedError(
             "SBGN-AF output supports the 'plain' and 'dot' layout modes "
             f"(got {context.layout_mode!r}); 'overlay' is unsupported."
         )
-    context.layout = _builder(momapy.sbgn.af.SBGNAFLayout)
-    context.layout_model_mapping = momapy.core.mapping.LayoutModelMappingBuilder()
-
-    for compartment in context.model.compartments:
+    for compartment in _get_model_elements_of_class(
+        context, momapy.sbgn.af.Compartment
+    ):
         _make_and_add_compartment_layout(context, compartment)
     for activity, input_element in context.activity_emissions:
         _make_and_add_activity_layout(context, activity, input_element)
@@ -101,10 +103,18 @@ def make_and_add_layout(context: pd2af.building.context.BuilderContext):
     # through the operator layout registered here).
     for operator, input_operator in context.operator_emissions:
         _make_and_add_operator_layout(context, operator, input_operator)
-    for influence in context.model.influences:
+    for influence in _get_model_elements_of_class(context, momapy.sbgn.af.Influence):
         _make_and_add_influence_layout(context, influence)
 
-    pd2af.building.layout.harmonize_root_layout(context.layout)
+
+def _get_model_elements_of_class(
+    context: pd2af.building.context.BuilderContext, model_element_class: type
+) -> list:
+    return [
+        model_element
+        for model_element in context.model_elements
+        if isinstance(model_element, model_element_class)
+    ]
 
 
 def _get_input_layouts(
@@ -114,8 +124,11 @@ def _get_input_layouts(
 
     Empty when the element has none; a cloned entity pool maps to several.
     """
-    input_layouts = context.input_map.layout_model_mapping.get_mapping(input_element)
-    return tuple(input_layouts) if input_layouts else ()
+    return tuple(
+        pd2af.building.layout.get_layout_elements_sorted_by_id(
+            context.input_map.layout_model_mapping, input_element
+        )
+    )
 
 
 def _make_and_add_compartment_layout(
@@ -123,9 +136,8 @@ def _make_and_add_compartment_layout(
 ):
     if context.layout_mode == "dot":
         # Default size; graphviz fits the cluster around its members afterwards.
-        compartment_layout = _builder(
-            momapy.sbgn.af.CompartmentLayout, position=_PLACEHOLDER_POSITION
-        )
+        position = _get_placeholder_position(context)
+        size = {}
     else:
         input_compartment = _input_compartment_for(context, compartment)
         if input_compartment is None:
@@ -136,17 +148,17 @@ def _make_and_add_compartment_layout(
         input_layout = input_layouts[0]
         # Reuse the input layout's size so the compartment still encloses its
         # members at their curated positions.
-        compartment_layout = _builder(
-            momapy.sbgn.af.CompartmentLayout,
-            position=input_layout.position,
-            width=input_layout.width,
-            height=input_layout.height,
-        )
-    compartment_layout.label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-        compartment.label, compartment_layout.position
+        position = input_layout.position
+        size = {"width": input_layout.width, "height": input_layout.height}
+    compartment_layout = momapy.sbgn.af.CompartmentLayout(
+        position=position,
+        label=momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+            compartment.label, position
+        ),
+        **size,
     )
-    context.layout.layout_elements.append(compartment_layout)
-    context.layout_model_mapping.add_mapping(compartment_layout, compartment)
+    context.layout_elements.append(compartment_layout)
+    context.layout_model_pairs.append((compartment_layout, compartment))
     context.model_element_to_layout_elements[id(compartment)] = (compartment_layout,)
 
 
@@ -166,7 +178,7 @@ def _make_and_add_activity_layout(
     # curated input layout positions -- one activity layout per input layout, so
     # a cloned entity pool keeps each of its placements.
     if context.layout_mode == "dot":
-        positions = (_PLACEHOLDER_POSITION,)
+        positions = (_get_placeholder_position(context),)
     else:
         input_layouts = _get_input_layouts(context, input_element)
         if not input_layouts:
@@ -179,54 +191,59 @@ def _make_and_add_activity_layout(
     )
     activity_layouts = []
     for position in positions:
-        activity_layout = _builder(activity_layout_class, position=position)
-        activity_layout.label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
-            activity.label, position
+        activity_layout = activity_layout_class(
+            position=position,
+            label=momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+                activity.label, position
+            ),
         )
-        context.layout.layout_elements.append(activity_layout)
-        context.layout_model_mapping.add_mapping(activity_layout, activity)
+        unit_layout_pairs = []
         for unit_of_information in getattr(
             activity, "units_of_information", frozenset()
         ):
-            _make_and_add_unit_of_information_layout(
-                context, activity_layout, unit_of_information
+            unit_layout = _make_unit_of_information_layout(
+                activity_layout, unit_of_information
             )
+            if unit_layout is not None:
+                unit_layout_pairs.append((unit_layout, unit_of_information))
+        activity_layout = dataclasses.replace(
+            activity_layout,
+            layout_elements=tuple(unit_layout for unit_layout, _ in unit_layout_pairs),
+        )
+        context.layout_elements.append(activity_layout)
+        context.layout_model_pairs.append((activity_layout, activity))
+        context.layout_model_pairs.extend(unit_layout_pairs)
         activity_layouts.append(activity_layout)
     context.model_element_to_layout_elements[id(activity)] = tuple(activity_layouts)
 
 
-def _make_and_add_unit_of_information_layout(
-    context: pd2af.building.context.BuilderContext,
-    activity_layout: typing.Any,
-    unit_of_information: typing.Any,
-):
+def _make_unit_of_information_layout(
+    activity_layout: typing.Any, unit_of_information: typing.Any
+) -> typing.Any:
     layout_class = _UNIT_OF_INFORMATION_CLASS_TO_LAYOUT_CLASS.get(
         type(unit_of_information)
     )
     if layout_class is None:
-        return
+        return None
     # Default size; place the UoI on the activity's top border (the SBGN
     # convention), offset right of the north-west corner.
     north_west = activity_layout.north_west()
-    unit_layout = _builder(
-        layout_class,
-        position=momapy.geometry.Point(
-            north_west.x + _UNIT_OF_INFORMATION_X_OFFSET, north_west.y
-        ),
+    position = momapy.geometry.Point(
+        north_west.x + _UNIT_OF_INFORMATION_X_OFFSET, north_west.y
     )
     # In the merged modes the entity's unit-of-information block is carried on
     # the glyph (e.g. ``[ct:mRNA]``) rather than inlined in the activity label;
     # render it so it is written out and round-trips. Bare glyphs stay bare.
+    label = None
     if unit_of_information.label:
-        unit_layout.label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
+        label = momapy.sbgn.io.sbgnml._reading_layout.make_text_layout(
             unit_of_information.label,
-            unit_layout.position,
+            position,
             # Match the smaller auxiliary-unit font the momapy sbgn reader
             # uses for units of information (not the default node font).
             font_size=momapy.sbgn.layout.DEFAULT_AUXILIARY_UNIT_FONT_SIZE,
         )
-    activity_layout.layout_elements.append(unit_layout)
-    context.layout_model_mapping.add_mapping(unit_layout, unit_of_information)
+    return layout_class(position=position, label=label)
 
 
 def _make_and_add_operator_layout(
@@ -239,9 +256,9 @@ def _make_and_add_operator_layout(
     The glyph is built fresh (like every AF activity) at the input operator's
     curated position (``plain``) or a placeholder (``dot``). One
     ``LogicArcLayout`` runs from the operator to each input activity's layout
-    (operator -> input, the SBGN convention). The operator maps to a frozenset
-    of {glyph, logic arcs, input activity layouts} anchored on the glyph -- the
-    catalogue the SBGN-AF writer expects -- and is registered in
+    (operator -> input, the SBGN convention) and is paired with its operator
+    input, so ``momapy.core.make_map`` puts the logic arcs and the input
+    activity layouts in the operator's key. The glyph is registered in
     ``model_element_to_layout_elements`` so the influence pass can resolve an
     operator-sourced influence.
     """
@@ -249,55 +266,53 @@ def _make_and_add_operator_layout(
     if operator_layout_class is None:
         return
     if context.layout_mode == "dot":
-        operator_layout = _builder(
-            operator_layout_class, position=_PLACEHOLDER_POSITION
-        )
         # make_auto_layout reverses the logic-arc dot edges, so graphviz ranks
         # the inputs above the operator and the target below it; a vertical,
         # left-to-right operator then points its input connector up (toward the
         # inputs) and its output connector down (toward the target).
-        operator_layout.orientation = momapy.core.elements.Orientation.VERTICAL
-        operator_layout.left_to_right = True
+        operator_layout = operator_layout_class(
+            position=_get_placeholder_position(context),
+            orientation=momapy.core.elements.Orientation.VERTICAL,
+            left_to_right=True,
+        )
     else:
         input_glyph = _input_operator_glyph(context, input_operator)
         if input_glyph is None:
             return
-        operator_layout = _builder(operator_layout_class, position=input_glyph.position)
+        operator_layout = operator_layout_class(position=input_glyph.position)
         # plain: inherit the curated input operator's connector geometry, so the
         # arcs meet the same connectors (e.g. a vertical operator with ports
         # up/down) the input map drew.
-        operator_layout.orientation = getattr(
-            input_glyph, "orientation", operator_layout.orientation
+        operator_layout = dataclasses.replace(
+            operator_layout,
+            orientation=getattr(
+                input_glyph, "orientation", operator_layout.orientation
+            ),
+            left_to_right=getattr(
+                input_glyph, "left_to_right", operator_layout.left_to_right
+            ),
+            left_connector_length=getattr(
+                input_glyph,
+                "left_connector_length",
+                operator_layout.left_connector_length,
+            ),
+            right_connector_length=getattr(
+                input_glyph,
+                "right_connector_length",
+                operator_layout.right_connector_length,
+            ),
         )
-        operator_layout.left_to_right = getattr(
-            input_glyph, "left_to_right", operator_layout.left_to_right
-        )
-        operator_layout.left_connector_length = getattr(
-            input_glyph, "left_connector_length", operator_layout.left_connector_length
-        )
-        operator_layout.right_connector_length = getattr(
-            input_glyph,
-            "right_connector_length",
-            operator_layout.right_connector_length,
-        )
-    context.layout.layout_elements.append(operator_layout)
-    logic_arcs = []
-    input_layouts = []
+    context.layout_elements.append(operator_layout)
+    context.layout_model_pairs.append((operator_layout, operator))
     for operator_input in operator.inputs:
         input_activity_layouts = context.model_element_to_layout_elements.get(
             id(operator_input.referred_element)
         )
         if not input_activity_layouts:
             continue
-        input_layout = input_activity_layouts[0]
-        arc = _make_logic_arc(context, operator_layout, input_layout)
-        context.layout.layout_elements.append(arc)
-        logic_arcs.append(arc)
-        input_layouts.append(input_layout)
-    frozenset_key = frozenset([operator_layout, *logic_arcs, *input_layouts])
-    context.layout_model_mapping.add_mapping(
-        frozenset_key, operator, representative=operator_layout
-    )
+        arc = _make_logic_arc(context, operator_layout, input_activity_layouts[0])
+        context.layout_elements.append(arc)
+        context.layout_model_pairs.append((arc, operator_input))
     context.model_element_to_layout_elements[id(operator)] = (operator_layout,)
 
 
@@ -306,23 +321,15 @@ def _input_operator_glyph(
 ) -> typing.Any:
     """Return the input SBGN-PD operator's glyph layout, or ``None``.
 
-    The glyph is the node anchoring the operator's frozenset mapping; ``None``
-    when the input operator has no layout.
+    When the operator is drawn several times, the glyph with the smallest
+    ``id_`` is returned.
     """
-    mapping = context.input_map.layout_model_mapping.get_mapping(input_operator)
-    if not mapping:
+    input_operator_layouts = pd2af.building.layout.get_layout_elements_sorted_by_id(
+        context.input_map.layout_model_mapping, input_operator
+    )
+    if not input_operator_layouts:
         return None
-    for layout_key in mapping:
-        if isinstance(layout_key, frozenset):
-            for element in layout_key:
-                if (
-                    context.input_map.layout_model_mapping.get_mapping(element)
-                    is input_operator
-                ):
-                    return element
-        else:
-            return layout_key
-    return None
+    return input_operator_layouts[0]
 
 
 def _operator_connector_segment(
@@ -391,8 +398,7 @@ def _make_logic_arc(
                 operator_layout, input_layout, is_logic_arc=True
             ),
         )
-    return _builder(
-        momapy.sbgn.af.LogicArcLayout,
+    return momapy.sbgn.af.LogicArcLayout(
         source=operator_layout,
         target=input_layout,
         segments=segments,
@@ -413,12 +419,8 @@ def _make_and_add_influence_layout(
         source_layouts, target_layouts, prefer_nearest
     ):
         arc = _make_influence_arc(context, influence, source_layout, target_layout)
-        context.layout.layout_elements.append(arc)
-        context.layout_model_mapping.add_mapping(
-            frozenset([arc, source_layout, target_layout]),
-            influence,
-            representative=arc,
-        )
+        context.layout_elements.append(arc)
+        context.layout_model_pairs.append((arc, influence))
 
 
 def _make_influence_arc(
@@ -442,6 +444,6 @@ def _make_influence_arc(
         segments = pd2af.building.layout.make_arc_segments_from_source_and_target(
             source_layout, target_layout
         )
-    return _builder(
-        arc_class, source=source_layout, target=target_layout, segments=tuple(segments)
+    return arc_class(
+        source=source_layout, target=target_layout, segments=tuple(segments)
     )

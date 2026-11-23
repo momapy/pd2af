@@ -1,9 +1,9 @@
 """Build the AF model from clingo activity / influence atoms.
 
 ``make_and_add_model`` is the model pass: it walks the activity atoms in
-layer order (keptSpeciesKey → promotedSubunitKey) and populates ``context.model``
-with canonical, content-deduped compartments, templates, species and
-modulations. When the forms of the same base entity merge (``keep_species``
+layer order (keptSpeciesKey → promotedSubunitKey) and fills
+``context.model_elements`` with canonical, content-deduped compartments,
+templates, species, gates and modulations. When the forms of the same base entity merge (``keep_species``
 off) each activity's species is stripped of its PTM decorations (recursively,
 including subunits) by ``get_or_make_stripped_species``; otherwise the input
 species is kept, placed in its effective compartment by
@@ -31,7 +31,6 @@ the layout pass.
 import dataclasses
 import typing
 
-import momapy.builder
 import momapy.celldesigner
 
 import pd2af.asp.predicates
@@ -133,16 +132,52 @@ def get_or_make_stripped_species(
 ) -> typing.Any:
     """Return a decoration-free canonical species for ``input_species``.
 
-    Used with ``keep_species`` off. Clears every post-translational decoration -- ``active`` (-> False), ``homomultimer`` (-> 1),
-    ``modifications``, ``structural_states``, and, via a stripped template,
-    ``modification_residues``/``regions`` -- sets the effective ``compartment``,
-    and strips ``subunits`` recursively (a ``frozenset`` collapses subunits that
-    strip to equal content). Built with ``dataclasses.replace`` so the concrete
-    class and the input's real, reader-resolvable ``id_`` are preserved;
-    content-equal stripped twins still intern to one canonical because ``id_``
-    is ``compare=False``. Records ``id(input) -> canonical`` when they differ so
-    Pass 2 can substitute stale references (mirrors
-    ``get_or_make_species_in_compartment``).
+    Used with ``keep_species`` off. The stripped species is built by
+    :func:`make_stripped_species` and interned by content, so content-equal
+    stripped twins collapse to one canonical (``id_`` is ``compare=False``).
+    Only the species itself is interned: its subunits are built fresh for it,
+    so two complexes never share a subunit object.
+
+    Records ``id(input) -> canonical`` when they differ so Pass 2 can
+    substitute stale references (mirrors
+    ``get_or_make_species_in_compartment``), and records each input subunit, at
+    any depth, against the subunit of the canonical that stands for it
+    (:func:`record_canonical_subunits`).
+    """
+    input_subunit_to_stripped_subunit = {}
+    candidate = make_stripped_species(
+        input_species, compartment, cache, input_subunit_to_stripped_subunit
+    )
+    canonical = register_or_reuse(candidate, cache)
+    if canonical is not input_species:
+        input_model_element_to_canonical_model_element[id(input_species)] = canonical
+    record_canonical_subunits(
+        input_species,
+        canonical,
+        input_subunit_to_stripped_subunit,
+        input_model_element_to_canonical_model_element,
+    )
+    return canonical
+
+
+def make_stripped_species(
+    input_species: typing.Any,
+    compartment: typing.Any,
+    cache: dict,
+    input_subunit_to_stripped_subunit: dict,
+) -> typing.Any:
+    """Build a decoration-free copy of ``input_species``, without interning it.
+
+    Clears every post-translational decoration -- ``active`` (-> False),
+    ``homomultimer`` (-> 1), ``modifications``, ``structural_state``, and, via
+    a stripped template, ``modification_residues``/``regions`` -- sets the
+    effective ``compartment``, and strips ``subunits`` recursively (a
+    ``frozenset`` collapses subunits that strip to equal content). Built with
+    ``dataclasses.replace`` so the concrete class and the input's real,
+    reader-resolvable ``id_`` are preserved. The template is interned through
+    ``cache``; the subunits are not, and ``id(input_subunit) -> stripped`` is
+    recorded in ``input_subunit_to_stripped_subunit`` for every subunit at any
+    depth.
     """
     fields = {}
     if hasattr(input_species, "active"):
@@ -151,8 +186,8 @@ def get_or_make_stripped_species(
         fields["homomultimer"] = 1
     if hasattr(input_species, "modifications"):
         fields["modifications"] = frozenset()
-    if hasattr(input_species, "structural_states"):
-        fields["structural_states"] = frozenset()
+    if hasattr(input_species, "structural_state"):
+        fields["structural_state"] = None
     if hasattr(input_species, "compartment"):
         fields["compartment"] = compartment
     template = getattr(input_species, "template", None)
@@ -160,20 +195,51 @@ def get_or_make_stripped_species(
         fields["template"] = get_or_make_stripped_template(template, cache)
     subunits = getattr(input_species, "subunits", None)
     if subunits:
-        fields["subunits"] = frozenset(
-            get_or_make_stripped_species(
+        stripped_subunits = []
+        for subunit in subunits:
+            stripped_subunit = make_stripped_species(
                 subunit,
                 getattr(subunit, "compartment", None),
                 cache,
-                input_model_element_to_canonical_model_element,
+                input_subunit_to_stripped_subunit,
             )
-            for subunit in subunits
+            input_subunit_to_stripped_subunit[id(subunit)] = stripped_subunit
+            stripped_subunits.append(stripped_subunit)
+        fields["subunits"] = frozenset(stripped_subunits)
+    return dataclasses.replace(input_species, **fields)
+
+
+def record_canonical_subunits(
+    input_species: typing.Any,
+    canonical_species: typing.Any,
+    input_subunit_to_stripped_subunit: dict,
+    input_model_element_to_canonical_model_element: dict,
+) -> None:
+    """Record each input subunit against the subunit of ``canonical_species`` it became.
+
+    The stripped copy :func:`make_stripped_species` built for an input subunit
+    is not always the one in the model: two subunits of one complex that strip
+    to equal content collapse in the ``frozenset``, and a complex that collapses
+    onto an earlier content-equal one keeps none of its own copies. Each copy is
+    content-equal to a subunit of the canonical, so that subunit is looked up by
+    content and recorded, recursing into nested complexes.
+    """
+    canonical_subunit_by_content = {
+        canonical_subunit: canonical_subunit
+        for canonical_subunit in getattr(canonical_species, "subunits", None) or ()
+    }
+    for input_subunit in getattr(input_species, "subunits", None) or ():
+        stripped_subunit = input_subunit_to_stripped_subunit[id(input_subunit)]
+        canonical_subunit = canonical_subunit_by_content[stripped_subunit]
+        input_model_element_to_canonical_model_element[id(input_subunit)] = (
+            canonical_subunit
         )
-    candidate = dataclasses.replace(input_species, **fields)
-    canonical = register_or_reuse(candidate, cache)
-    if canonical is not input_species:
-        input_model_element_to_canonical_model_element[id(input_species)] = canonical
-    return canonical
+        record_canonical_subunits(
+            input_subunit,
+            canonical_subunit,
+            input_subunit_to_stripped_subunit,
+            input_model_element_to_canonical_model_element,
+        )
 
 
 def get_or_make_modulation(
@@ -253,10 +319,7 @@ def collect_ancestor_compartments(compartments: typing.Any) -> typing.Any:
 def make_and_add_model(
     context: pd2af.building.context.BuilderContext, clingo_model: typing.Any
 ):
-    """Build ``context.model`` from the clingo atoms (pass 1)."""
-    context.model = momapy.builder.get_or_make_builder_cls(
-        momapy.celldesigner.CellDesignerModel
-    )()
+    """Fill ``context.model_elements`` from the clingo atoms (pass 1)."""
     context.subunit_to_top_level = pd2af.building.model.build_subunit_to_top_level(
         context.input_map.model.species
     )
@@ -270,7 +333,6 @@ def make_and_add_model(
         context,
         _OPERATOR_TYPE_TO_GATE_CLASS,
         momapy.celldesigner.BooleanLogicGateInput,
-        context.model.boolean_logic_gates,
     )
     _make_and_add_modulations(context)
 
@@ -298,7 +360,7 @@ def _make_and_add_compartments(context: pd2af.building.context.BuilderContext):
     for compartment in compartments_outermost_first(
         collect_ancestor_compartments(immediate_compartments)
     ):
-        context.model.compartments.add(compartment)
+        context.model_elements.append(compartment)
         # Compartments carry over by identity, so the output compartment is the
         # input one; record it for provenance so its annotations/notes carry.
         context.compartment_emissions.append((compartment, compartment))
@@ -338,7 +400,7 @@ def _make_and_add_templates(context: pd2af.building.context.BuilderContext):
             else:
                 canonical = register_or_reuse(input_template, context.cache)
             add_model_element_if_new(
-                context.model.species_templates,
+                context.model_elements,
                 canonical,
                 seen_template_identities,
             )
@@ -358,7 +420,7 @@ def _make_and_add_species(context: pd2af.building.context.BuilderContext):
         species = _resolve_activity_key(context, atom.key)
         context.key_to_activity[atom.key] = species
         if add_model_element_if_new(
-            context.model.species, species, seen_species_identities
+            context.model_elements, species, seen_species_identities
         ):
             input_species = context.clingo_id_to_model_element[atom.key.species]
             context.activity_emissions.append((type(atom.key), species, input_species))
@@ -409,5 +471,5 @@ def _make_and_add_modulations(context: pd2af.building.context.BuilderContext):
             modulation_class, source, target, context.cache
         )
         add_model_element_if_new(
-            context.model.modulations, canonical, seen_modulation_identities
+            context.model_elements, canonical, seen_modulation_identities
         )

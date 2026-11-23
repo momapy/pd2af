@@ -9,7 +9,7 @@ license = { text = "GPL-3.0-or-later" }
 dependencies = [
   "aspcompose>=0.1.0",
   "clorm>=1.6.3",
-  "momapy>=0.15.0",
+  "momapy",
   "momapy-kb[clingo]>=0.5.0",
   "pydot>=4.0.1",
 ]
@@ -89,3 +89,6 @@ branch = true
 show_missing = true
 skip_covered = false
 fail_under = 70
+
+[tool.uv.sources]
+momapy = { path = "../momapy", editable = true }

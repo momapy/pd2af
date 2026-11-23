@@ -359,6 +359,35 @@ class TestCompartments:
             activity.compartment is not None for activity in out.model.activities
         )
 
+    def test_auto_layout_keeps_same_label_activities_apart(self):
+        # Two activities labelled "A" in two compartments: their dot placeholder
+        # glyphs must differ, or make_map merges them into one.
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        compartments = [
+            momapy.sbgn.pd.Compartment(label=label) for label in ("c1", "c2")
+        ]
+        macromolecules = [
+            momapy.sbgn.pd.Macromolecule(label="A", compartment=compartment)
+            for compartment in compartments
+        ]
+        input_map = momapy.sbgn.pd.SBGNPDMap(
+            model=momapy.sbgn.pd.SBGNPDModel(
+                compartments=frozenset(compartments),
+                entity_pools=frozenset(macromolecules),
+            )
+        )
+        out = pd2af.transform(
+            input_map, mode="normal", layout_mode="auto", set_all_active=True
+        ).obj
+        activity_layouts = [
+            element
+            for element in out.layout.layout_elements
+            if isinstance(element, momapy.sbgn.af.BiologicalActivityLayout)
+        ]
+        assert len(out.model.activities) == 2
+        assert len(activity_layouts) == 2
+
     def test_plain_layout_renders_compartment(self, map_with_compartments):
         # Regression: the plain-mode input-compartment lookup used to return
         # None, so zero CompartmentLayouts were emitted.

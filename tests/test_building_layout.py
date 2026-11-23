@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import types
 
@@ -7,6 +8,7 @@ import momapy.core.layout
 import momapy.core.mapping
 import momapy.geometry
 import momapy.io.core
+import momapy.positioning
 import momapy.sbgn.pd
 import pytest
 
@@ -47,6 +49,30 @@ class TestModulationLayoutMap:
         )
         for model_class in output_classes:
             assert model_class in layout_map, model_class
+
+
+class TestInputGlyphLookup:
+    def test_glyphs_of_a_cloned_species_are_sorted_by_id(self):
+        cd_map = read_cd_map(os.path.join(MAPS_DIR, "Nicotine_signaling.xml"))
+        mapping = cd_map.layout_model_mapping
+        cloned_species = [
+            species
+            for species in cd_map.model.species
+            if len(mapping.get_representative_layout_elements(species)) > 1
+        ]
+        assert cloned_species
+        for species in cloned_species:
+            layout_elements = pd2af.building.layout.get_layout_elements_sorted_by_id(
+                mapping, species
+            )
+            layout_element_ids = [
+                layout_element.id_ for layout_element in layout_elements
+            ]
+            assert layout_element_ids == sorted(layout_element_ids)
+            assert not any(
+                isinstance(layout_element, frozenset)
+                for layout_element in layout_elements
+            )
 
 
 class TestNearestInfluencePairing:
@@ -326,3 +352,132 @@ class TestCelldesignerAutoLayoutCompartments:
             species.name for species in out.model.species
         )
         assert len(back.model.modulations) == len(out.model.modulations)
+
+
+class TestAutoLayoutCanvas:
+    def test_canvas_fits_the_repositioned_elements(self, example_cd_map):
+        if not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        plain_map = pd2af.transform(
+            example_cd_map, mode="normal", keep_species=True, layout_mode="plain"
+        ).obj
+        out = pd2af.building.layout.make_auto_layout(plain_map)
+        bounding_box = momapy.positioning.fit(
+            out.layout.layout_elements,
+            xsep=pd2af.building.layout._ROOT_LAYOUT_SEP,
+            ysep=pd2af.building.layout._ROOT_LAYOUT_SEP,
+        )
+        assert out.layout.width == bounding_box.width
+        assert out.layout.height == bounding_box.height
+        assert out.layout.position == bounding_box.position
+
+
+def _get_container_problems(out):
+    layout_elements = out.layout.layout_elements
+    problems = []
+    for layout_element in layout_elements:
+        container = getattr(layout_element, "container", None)
+        if container is None:
+            continue
+        is_placed = any(container is element for element in layout_elements)
+        is_mapped = isinstance(
+            out.layout_model_mapping.get_mapping(container),
+            momapy.celldesigner.Compartment,
+        )
+        if not is_placed or not is_mapped:
+            problems.append(layout_element.id_)
+    return problems
+
+
+def _get_undefined_compartment_aliases(out):
+    path = os.path.join(tempfile.gettempdir(), "pd2af_test_containers.xml")
+    momapy.io.core.write(out, path, writer="celldesigner")
+    with open(path, encoding="utf-8") as file:
+        text = file.read()
+    defined = set(re.findall(r'<celldesigner:compartmentAlias id="([^"]+)"', text))
+    referenced = set(re.findall(r'compartmentAlias="([^"]+)"', text))
+    return referenced - defined
+
+
+class TestSpeciesContainers:
+    @pytest.mark.parametrize(
+        "mode, layout_mode, options",
+        [
+            ("normal", "plain", {"keep_species": True}),
+            ("normal", "overlay", {"keep_species": True}),
+            ("normal", "dot", {}),
+            ("normal", "dot", {"keep_species": True}),
+            ("normal", "dot", {"drop_compartments": True}),
+            ("normal", "dot", {"keep_species": True, "drop_compartments": True}),
+            ("no-complex", "dot", {}),
+        ],
+    )
+    def test_containers_are_mapped_compartment_layouts(
+        self, mode, layout_mode, options
+    ):
+        if layout_mode == "dot" and not has_dot_binary():
+            pytest.skip("graphviz `dot` binary not on PATH")
+        out = pd2af.transform(
+            read_cd_map(os.path.join(MAPS_DIR, "Histamine_signaling.xml")),
+            mode=mode,
+            layout_mode=layout_mode,
+            **options,
+        ).obj
+        assert _get_container_problems(out) == []
+        assert _get_undefined_compartment_aliases(out) == set()
+        if options.get("drop_compartments"):
+            assert all(
+                getattr(layout_element, "container", None) is None
+                for layout_element in out.layout.layout_elements
+            )
+
+    def test_reused_species_layouts_are_unchanged(self):
+        cd_map = read_cd_map(os.path.join(MAPS_DIR, "Histamine_signaling.xml"))
+        out = pd2af.transform(
+            cd_map, mode="normal", layout_mode="plain", keep_species=True
+        ).obj
+        input_layout_ids = {
+            id(layout_element) for layout_element in cd_map.layout.layout_elements
+        }
+        for layout_element in out.layout.layout_elements:
+            if isinstance(
+                out.layout_model_mapping.get_mapping(layout_element),
+                momapy.celldesigner.Species,
+            ):
+                assert id(layout_element) in input_layout_ids
+
+    @pytest.mark.parametrize("layout_mode", ("plain", "overlay"))
+    def test_promoted_subunit_takes_the_container_of_its_complex(self, layout_mode):
+        cd_map = read_cd_map(os.path.join(MAPS_DIR, "CREB_activity.xml"))
+        out = pd2af.transform(
+            cd_map, mode="no-complex", layout_mode=layout_mode, keep_species=True
+        ).obj
+        complex_container_by_subunit_id = {}
+        for input_layout in cd_map.layout.layout_elements:
+            for descendant in input_layout.descendants():
+                complex_container_by_subunit_id[descendant.id_] = getattr(
+                    input_layout, "container", None
+                )
+        promoted_layouts = [
+            layout_element
+            for layout_element in out.layout.layout_elements
+            if layout_element.id_ in complex_container_by_subunit_id
+            and isinstance(
+                out.layout_model_mapping.get_mapping(layout_element),
+                momapy.celldesigner.Species,
+            )
+        ]
+        assert promoted_layouts
+        for promoted_layout in promoted_layouts:
+            assert promoted_layout.container is not None
+            assert (
+                promoted_layout.container
+                is complex_container_by_subunit_id[promoted_layout.id_]
+            )
+        assert _get_container_problems(out) == []
+        layout_element_ids = [
+            descendant.id_
+            for layout_element in out.layout.layout_elements
+            for descendant in [layout_element] + list(layout_element.descendants())
+        ]
+        assert len(layout_element_ids) == len(set(layout_element_ids))

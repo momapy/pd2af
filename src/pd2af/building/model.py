@@ -6,9 +6,8 @@ resolve an influence source and walk the input subunit trees the same way. The l
 shared too: the CellDesigner builder makes ``BooleanLogicGate`` objects and the
 SBGN-AF builder ``LogicalOperator`` objects, and otherwise the two do the
 same thing -- read the operator atoms, resolve each operator's inputs through
-``key_to_activity``, and add to the model those operators that actually source
-an influence. Each builder passes in the classes it wants and the model
-collection to add to.
+``key_to_activity``, and add to ``context.model_elements`` those operators that
+actually source an influence. Each builder passes in the classes it wants.
 """
 
 import collections.abc
@@ -34,7 +33,7 @@ def register_or_reuse(element: typing.Any, cache: dict) -> typing.Any:
 def add_model_element_if_new(
     collection: typing.Any, model_element: typing.Any, seen_identities: set[int]
 ) -> bool:
-    """Append ``model_element`` to ``collection`` unless it was already appended.
+    """Append ``model_element`` to the list ``collection`` unless it was already appended.
 
     Identities already added are tracked in ``seen_identities``.
 
@@ -46,7 +45,7 @@ def add_model_element_if_new(
     if id(model_element) in seen_identities:
         return False
     seen_identities.add(id(model_element))
-    collection.add(model_element)
+    collection.append(model_element)
     return True
 
 
@@ -111,11 +110,10 @@ def make_and_add_operators(
     context: pd2af.building.context.BuilderContext,
     operator_type_to_class: dict[str, type],
     operator_input_class: type,
-    model_operators: typing.Any,
 ) -> None:
     """Build every authored logical operator, adding the used ones to the model.
 
-    An operator reaches ``model_operators`` when it sources an influence or is
+    An operator reaches ``context.model_elements`` when it sources an influence or is
     reachable from such an operator through input edges (SBGN-PD nesting: the
     inner operators of an influence-sourcing AND are part of the output). It is
     added only when it has at least one resolved input: an operator whose
@@ -171,7 +169,7 @@ def make_and_add_operators(
         if operator is None:
             return
         if add_model_element_if_new(
-            model_operators, operator, seen_operator_identities
+            context.model_elements, operator, seen_operator_identities
         ):
             input_operator = context.clingo_id_to_model_element[operator_key.gate]
             context.operator_emissions.append((operator, input_operator))
@@ -241,10 +239,11 @@ def _get_or_make_operator(
     :func:`_get_or_make_operator_recursive`, so a nested operator is built
     before its consumer. An unknown token yields ``None``.
 
-    Each operator input and the operator itself are interned by content
-    (``register_or_reuse``), so content-equal operators collapse to one
-    canonical instance -- preserving the dedup-and-remap invariant for the
-    influences that reference them.
+    The operator is interned by content (``register_or_reuse``), so
+    content-equal operators collapse to one canonical instance for the
+    influences that reference them. Its inputs are built for it alone:
+    ``momapy.core.make_map`` refuses an input held by two operators that are
+    not equal.
     """
     operator_class = operator_type_to_class.get(operator_type)
     if operator_class is None:
@@ -265,9 +264,6 @@ def _get_or_make_operator(
             referred_element = context.key_to_activity.get(input_key)
         if referred_element is None:
             continue
-        operator_input = register_or_reuse(
-            operator_input_class(referred_element=referred_element), context.cache
-        )
-        operator_inputs.append(operator_input)
+        operator_inputs.append(operator_input_class(referred_element=referred_element))
     operator = operator_class(inputs=frozenset(operator_inputs))
     return register_or_reuse(operator, context.cache)

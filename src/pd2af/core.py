@@ -3,21 +3,23 @@
 :func:`transform` validates its arguments against the transformation mode,
 solves the ASP program (:mod:`pd2af.asp.solver`) and hands the answer to
 :func:`_build_map`, which runs the two build passes. The model pass walks the
-clingo activity and influence atoms and fills ``context.model`` with canonical,
-content-deduped elements; the layout pass -- skipped when ``layout_mode is
-None`` -- fills ``context.layout`` and ``context.layout_model_mapping``.
-:func:`_build_map` then assembles the map from those three slots and returns it
-with the provenance mapping and the carried metadata side-tables.
+clingo activity and influence atoms and fills ``context.model_elements`` with
+canonical, content-deduped top-level model elements; the layout pass -- skipped
+when ``layout_mode is None`` -- fills ``context.layout_elements`` and
+``context.layout_model_pairs``. :func:`_build_map` then builds the map from
+those three slots with ``momapy.core.make_map`` and returns it with the
+provenance mapping and the carried metadata side-tables.
 """
 
 import dataclasses
 import typing
 
 import clorm
-import momapy.builder
 import momapy.celldesigner
+import momapy.core
 import momapy.core.map
 import momapy.core.model
+import momapy.geometry
 import momapy.sbgn.af
 import momapy.sbgn.pd
 import momapy.utils
@@ -33,7 +35,7 @@ import pd2af.building.sbgn.model
 import pd2af.modes
 
 # What building an output map of each input language takes: the two build-pass
-# modules, the map class the two build slots are assembled into, and the
+# modules, the output map, model and layout classes, and the
 # keyword arguments the `dot` auto-layout needs. SBGN-AF logical operators have
 # input/output connectors, so their arcs are ranked upstream
 # (`reversed_arc_classes`) and re-attached to the connector tips after graphviz
@@ -45,12 +47,16 @@ _BUILD_BEHAVIOR_BY_LANGUAGE = {
         "model_module": pd2af.building.celldesigner.model,
         "layout_module": pd2af.building.celldesigner.layout,
         "map_class": momapy.celldesigner.CellDesignerMap,
+        "model_class": momapy.celldesigner.CellDesignerModel,
+        "layout_class": momapy.celldesigner.CellDesignerLayout,
         "auto_layout_arguments": {},
     },
     pd2af.modes.Language.SBGN_PD: {
         "model_module": pd2af.building.sbgn.model,
         "layout_module": pd2af.building.sbgn.layout,
         "map_class": momapy.sbgn.af.SBGNAFMap,
+        "model_class": momapy.sbgn.af.SBGNAFModel,
+        "layout_class": momapy.sbgn.af.SBGNAFLayout,
         "auto_layout_arguments": {
             "compartment_layout_classes": (momapy.sbgn.af.CompartmentLayout,),
             "reversed_arc_classes": (momapy.sbgn.af.LogicArcLayout,),
@@ -80,8 +86,9 @@ class TransformerResult:
             (many-to-one); the origin direction is thus the multi-valued one and
             is the forward index. Use ``.inverse`` (``id(input_element) ->
             frozenset`` of output elements) for the source-to-result direction.
-            Output elements are valid keys because they are interned by
-            content, so no two content-equal-but-distinct elements coexist.
+            Top-level output elements are valid keys because they are interned
+            by content; content-equal subunits of different complexes share
+            one key.
         element_to_annotations: Maps each output model element to the
             ``frozenset`` of RDF annotations carried from its input source(s),
             keyed the way momapy's writer expects (``None`` unless input
@@ -174,16 +181,30 @@ def _make_model_and_layout_in_context(
 def _make_map_from_context(
     context: pd2af.building.context.BuilderContext, language: pd2af.modes.Language
 ) -> momapy.core.map.Map:
-    """Assemble the map of ``language`` from the three filled context slots."""
-    map_builder_class = momapy.builder.get_or_make_builder_cls(
-        _BUILD_BEHAVIOR_BY_LANGUAGE[language]["map_class"]
+    """Build the map of ``language`` from the three filled context slots.
+
+    ``momapy.core.make_map`` makes no model and no layout from no elements; an
+    empty output still gets an empty model, and an empty layout when one was
+    asked for.
+    """
+    build_behavior = _BUILD_BEHAVIOR_BY_LANGUAGE[language]
+    new_map = momapy.core.make_map(
+        build_behavior["map_class"],
+        context.model_elements,
+        context.layout_elements,
+        context.layout_model_pairs,
     )
-    map_builder = map_builder_class(
-        model=context.model,
-        layout=context.layout,
-        layout_model_mapping=context.layout_model_mapping,
-    )
-    return momapy.builder.object_from_builder(map_builder)
+    if new_map.model is None:
+        new_map = dataclasses.replace(new_map, model=build_behavior["model_class"]())
+    if context.layout_mode is not None and new_map.layout is None:
+        new_map = dataclasses.replace(
+            new_map,
+            layout=build_behavior["layout_class"](
+                position=momapy.geometry.Point(0.0, 0.0), width=0.0, height=0.0
+            ),
+            layout_model_mapping=momapy.core.LayoutModelMapping(),
+        )
+    return new_map
 
 
 def _build_map(
@@ -239,6 +260,11 @@ def _build_map(
     )
     _make_model_and_layout_in_context(context, clingo_model, language)
     new_map = _make_map_from_context(context, language)
+    # overlay is CellDesigner-only.
+    if layout_mode == pd2af.modes.LayoutMode.OVERLAY:
+        new_map = pd2af.building.celldesigner.layout.add_dimmed_background(
+            context, new_map
+        )
     # the "dot" mode (graphviz) repositions an already-built layout. The
     # compartment-layout classes differ per language (see
     # pd2af.building.layout.make_auto_layout).
@@ -246,6 +272,11 @@ def _build_map(
         new_map = pd2af.building.layout.make_auto_layout(
             new_map,
             **_BUILD_BEHAVIOR_BY_LANGUAGE[language]["auto_layout_arguments"],
+        )
+    if layout_mode is not None:
+        new_map = dataclasses.replace(
+            new_map,
+            layout=pd2af.building.layout.harmonize_root_layout(new_map.layout),
         )
     output_element_to_input_elements = (
         pd2af.building.provenance.make_provenance_from_context(context)
