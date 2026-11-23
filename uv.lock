@@ -963,7 +963,8 @@ wheels = [
 
 [[package]]
 name = "momapy"
-source = { editable = "../momapy" }
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
     { name = "frozendict" },
@@ -973,48 +974,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uharfbuzz" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "colorama", specifier = ">=0.4.6" },
-    { name = "frozendict", specifier = ">=2.3.10" },
-    { name = "ipython", marker = "extra == 'all'" },
-    { name = "ipython", marker = "extra == 'notebook'" },
-    { name = "lxml", specifier = ">=5.3.2" },
-    { name = "numpy", specifier = ">=1.26.2" },
-    { name = "pycairo", marker = "extra == 'all'", specifier = ">=1.29.0" },
-    { name = "pycairo", marker = "extra == 'cairo'", specifier = ">=1.29.0" },
-    { name = "pygments", marker = "extra == 'all'" },
-    { name = "pygments", marker = "extra == 'notebook'" },
-    { name = "pygobject", marker = "extra == 'all'", specifier = ">=3.54.5" },
-    { name = "pygobject", marker = "extra == 'cairo'", specifier = ">=3.54.5" },
-    { name = "pyparsing", specifier = ">=3.1.1" },
-    { name = "skia-python", marker = "extra == 'all'", specifier = ">=138.0" },
-    { name = "skia-python", marker = "extra == 'skia'", specifier = ">=138.0" },
-    { name = "typing-extensions", specifier = ">=4.15.0" },
-    { name = "uharfbuzz", specifier = ">=0.53.0" },
-]
-provides-extras = ["all", "cairo", "notebook", "skia"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "git-cliff", specifier = ">=2.12.0" },
-    { name = "griffe-fieldz", specifier = ">=0.1.2" },
-    { name = "griffe-inherited-docstrings", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.5.6" },
-    { name = "mkdocs-jupyter", specifier = ">=0.25.1" },
-    { name = "mkdocs-pygments", specifier = ">=0.0.2" },
-    { name = "mkdocs-shadcn", specifier = ">=0.12.1" },
-    { name = "mkdocstrings-python", specifier = ">=1.16.12" },
-    { name = "monkeytype", specifier = ">=23.3.0" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=6.0.0" },
-    { name = "ruff", specifier = ">=0.14.10,<0.15" },
-]
-test = [
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=6.0.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/6d/32/5ce96ca2ca8e8772b96eb9f0b99e6d60cae1d843cbd4d1e699eac57254d2/momapy-0.17.0.tar.gz", hash = "sha256:2bbef6b34112dd905ce5882281a9500a5c7cb8ef3fbdafd5dc8170f3ca339d8b", size = 2185870, upload-time = "2026-11-23T09:54:57.498Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/74/414c08c2734b2847f82eb19b94d2a60e369c63d29ba6aa7c7d99e339c743/momapy-0.17.0-py3-none-any.whl", hash = "sha256:5f475e8e74d836636785cf2a37f62286157529ce91555a92a13e6c2750dfc1dc", size = 339112, upload-time = "2026-11-23T09:54:55.781Z" },
 ]
 
 [[package]]
@@ -1192,7 +1154,7 @@ test = [
 requires-dist = [
     { name = "aspcompose", specifier = ">=0.1.0" },
     { name = "clorm", specifier = ">=1.6.3" },
-    { name = "momapy", editable = "../momapy" },
+    { name = "momapy", specifier = ">=0.17.0" },
     { name = "momapy-kb", extras = ["clingo"], specifier = ">=0.5.0" },
     { name = "pydot", specifier = ">=4.0.1" },
 ]
