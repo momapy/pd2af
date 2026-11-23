@@ -791,6 +791,4 @@ def make_auto_layout(
         operator_arc_resolver=operator_arc_resolver,
     )
     new_map = momapy.builder.object_from_builder(new_map_builder)
-    return dataclasses.replace(
-        new_map, layout=harmonize_root_layout(new_map.layout)
-    )
+    return dataclasses.replace(new_map, layout=harmonize_root_layout(new_map.layout))
